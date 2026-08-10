@@ -70,7 +70,9 @@ export default function ManufacturersPage() {
     const frequentCountries = useFrequentCountries('manufacturers')
     // Runs once before preview: creates any partner categories referenced by the file that don't
     // exist yet (when the user may create them), and returns a name→category map for parseRow.
-    const prepareImport = async (records) => {
+    // Called twice: `create: false` for the preview, `create: true` only once the user confirms, so
+    // choosing a file never creates partner categories the user might then cancel out of (finding N-010).
+    const prepareImport = async (records, { create = false } = {}) => {
         const byName = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c]))
         if (canCreateCategory) {
             const wanted = new Map()
@@ -79,17 +81,25 @@ export default function ManufacturersPage() {
                     if (!byName.has(nm.toLowerCase())) wanted.set(nm.toLowerCase(), nm)
                 }
             }
-            const created = []
-            for (const display of wanted.values()) {
-                try {
-                    const cat = await apiPost('/partner-categories', { name: display }, { suppressErrorToast: true })
-                    byName.set(display.toLowerCase(), cat)
-                    created.push(cat)
-                } catch { /* leave unresolved: the category is simply skipped for that row */ }
-            }
-            if (created.length) {
-                setCategories((prev) => [...prev, ...created])
-                toast.success(t('importModal.categoriesCreated', { count: created.length }))
+            if (!create) {
+                // Placeholders so the preview shows these categories being attached. They carry no id;
+                // ImportModal rebuilds every payload against the real ones after creating them.
+                for (const [key, display] of wanted) {
+                    byName.set(key, { id: null, name: display, pendingCreate: true })
+                }
+            } else {
+                const created = []
+                for (const display of wanted.values()) {
+                    try {
+                        const cat = await apiPost('/partner-categories', { name: display }, { suppressErrorToast: true })
+                        byName.set(display.toLowerCase(), cat)
+                        created.push(cat)
+                    } catch { /* leave unresolved: the category is simply skipped for that row */ }
+                }
+                if (created.length) {
+                    setCategories((prev) => [...prev, ...created])
+                    toast.success(t('importModal.categoriesCreated', { count: created.length }))
+                }
             }
         }
         return { categoriesByName: byName }

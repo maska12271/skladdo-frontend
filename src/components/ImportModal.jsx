@@ -24,8 +24,10 @@ const ENTITY_NAV_KEY = {
  *    Headers are matched against each field's label in every app language, so a file written in any
  *    language imports regardless of the current UI language. Records passed on are keyed by `key`.
  *  - `parseRow(record, context)`: maps one canonical-keyed record to `{ payload }` or `{ error }`.
- *  - `prepare(records)` (optional, async): runs once before preview — resolves/creates referenced
- *    relations (e.g. auto-creating missing categories) and returns the `context` handed to parseRow.
+ *  - `prepare(records, { create })` (optional, async): resolves referenced relations and returns the
+ *    `context` handed to parseRow. Called **twice**: with `create: false` for the preview, where it must
+ *    not write anything (the user may still cancel), and again with `create: true` on confirm, after
+ *    which every payload is rebuilt so newly created relations resolve to real ids.
  *  - `endpoint`: where each valid payload is POSTed.
  * Rows are created one at a time so a single failure never aborts the whole batch.
  */
@@ -48,6 +50,7 @@ export default function ImportModal({
     const [fileName, setFileName] = useState('')
     const [parseError, setParseError] = useState('')
     const [parsed, setParsed] = useState([]) // { rowNumber, record, payload, error }
+    const [rawRecords, setRawRecords] = useState([]) // kept so payloads can be rebuilt at import time
     const [dragOver, setDragOver] = useState(false)
     const [progress, setProgress] = useState({ done: 0, total: 0 })
     const [result, setResult] = useState(null) // { created, failed: [{ rowNumber, message }] }
@@ -104,11 +107,14 @@ export default function ImportModal({
             return
         }
 
-        // Resolve/create referenced relations (e.g. missing categories) before mapping, so the
-        // preview reflects what will actually be imported.
+        // Resolve referenced relations (e.g. categories) so the preview reflects what will be imported.
+        // `create: false` keeps this read-only: previewing a file must not change the user's data, since
+        // they may still cancel. Anything missing is resolved to a placeholder here and created for real
+        // in handleImport once they confirm.
+        setRawRecords(records)
         let context = {}
         try {
-            if (prepare) context = (await prepare(records)) || {}
+            if (prepare) context = (await prepare(records, { create: false })) || {}
         } catch {
             // A failed prepare step shouldn't abort: rows referencing unresolved relations will
             // simply surface their own row-level error below.
@@ -131,18 +137,45 @@ export default function ImportModal({
 
     const handleImport = async () => {
         setStage('importing')
-        setProgress({ done: 0, total: validRows.length })
+
+        // Now that the user has committed, create any referenced relations for real and rebuild the
+        // payloads against the result — the preview resolved them to placeholders with no id.
+        let rows = validRows
+        if (prepare) {
+            try {
+                const context = (await prepare(rawRecords, { create: true })) || {}
+                rows = validRows.map((row) => {
+                    let outcome
+                    try {
+                        outcome = parseRow(row.record, context) || {}
+                    } catch (err) {
+                        outcome = { error: err.message || t('importModal.invalidRow') }
+                    }
+                    return { ...row, payload: outcome.payload, error: outcome.error }
+                })
+            } catch {
+                // Creating relations failed; fall through with the preview's rows so each one reports
+                // its own server-side error rather than the whole import dying silently.
+            }
+        }
+
+        setProgress({ done: 0, total: rows.length })
         const failed = []
         let created = 0
 
-        for (let i = 0; i < validRows.length; i++) {
+        for (let i = 0; i < rows.length; i++) {
+            if (rows[i].error || !rows[i].payload) {
+                failed.push({ rowNumber: rows[i].rowNumber, message: rows[i].error || t('importModal.failed') })
+                setProgress({ done: i + 1, total: rows.length })
+                continue
+            }
             try {
-                await apiPost(endpoint, validRows[i].payload, { suppressErrorToast: true })
+                await apiPost(endpoint, rows[i].payload, { suppressErrorToast: true })
                 created++
             } catch (err) {
-                failed.push({ rowNumber: validRows[i].rowNumber, message: err.message || t('importModal.failed') })
+                failed.push({ rowNumber: rows[i].rowNumber, message: err.message || t('importModal.failed') })
             }
-            setProgress({ done: i + 1, total: validRows.length })
+            setProgress({ done: i + 1, total: rows.length })
         }
 
         setResult({ created, failed })

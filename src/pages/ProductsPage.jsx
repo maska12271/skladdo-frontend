@@ -181,9 +181,13 @@ export default function ProductsPage() {
         setTaxRates(safeArray(taxRatesRes))
     }
 
-    // Runs once before preview: creates any product categories referenced by the file that don't
-    // exist yet (when the user may create them), and returns name→entity maps for parseRow.
-    const prepareImport = async (records) => {
+    // Builds the name→entity maps parseRow resolves against.
+    //
+    // Called twice: once for the preview with `create: false`, and again with `create: true` only after
+    // the user confirms the import. Categories referenced by the file but not yet in the company are
+    // resolved to a placeholder during the preview and created for real on confirm — previewing a file
+    // must not change the user's data, because they may still cancel (finding N-010).
+    const prepareImport = async (records, { create = false } = {}) => {
         const catByName = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c]))
         const mfrByName = new Map(manufacturers.map((m) => [m.name.trim().toLowerCase(), m]))
         if (canCreateCategory) {
@@ -192,17 +196,26 @@ export default function ProductsPage() {
                 const nm = (r.category || '').trim()
                 if (nm && !catByName.has(nm.toLowerCase())) wanted.set(nm.toLowerCase(), nm)
             }
-            const created = []
-            for (const display of wanted.values()) {
-                try {
-                    const cat = await apiPost('/categories', { name: display }, { suppressErrorToast: true })
-                    catByName.set(display.toLowerCase(), cat)
-                    created.push(cat)
-                } catch { /* leave unresolved: the row then reports categoryNotFound */ }
-            }
-            if (created.length) {
-                setCategories((prev) => [...prev, ...created])
-                toast.success(t('importModal.categoriesCreated', { count: created.length }))
+            if (!create) {
+                // Placeholder so the row previews as importable rather than as categoryNotFound. It has
+                // no id on purpose — the payload it produces is never sent; handleImport rebuilds every
+                // payload against the real categories once they exist.
+                for (const [key, display] of wanted) {
+                    catByName.set(key, { id: null, name: display, pendingCreate: true })
+                }
+            } else {
+                const created = []
+                for (const display of wanted.values()) {
+                    try {
+                        const cat = await apiPost('/categories', { name: display }, { suppressErrorToast: true })
+                        catByName.set(display.toLowerCase(), cat)
+                        created.push(cat)
+                    } catch { /* leave unresolved: the row then reports categoryNotFound */ }
+                }
+                if (created.length) {
+                    setCategories((prev) => [...prev, ...created])
+                    toast.success(t('importModal.categoriesCreated', { count: created.length }))
+                }
             }
         }
         return { categoriesByName: catByName, manufacturersByName: mfrByName }
