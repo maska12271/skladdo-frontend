@@ -22,6 +22,8 @@ import { useToast } from '../context/ToastContext'
 import { formatDate, formatMoney, safeArray } from '../utils/format'
 import {FormField, FormSelect, TextareaField} from "../components/FormField.jsx";
 import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx";
+import CurrencyRateField from "../components/CurrencyRateField.jsx";
+import MoneyWithBase from "../components/MoneyWithBase.jsx";
 import { Info, Pencil, Trash2, Upload, FileText, X } from 'lucide-react'
 
 const exportColumns = [
@@ -53,6 +55,11 @@ const emptyForm = {
     deliveryAddress: '',
     notes: '',
     deliveryPrice: 0,
+    currency: '',
+    exchangeRate: 1,
+    rateSource: 'SAME',
+    rateAsOfDate: null,
+    tenderId: '',
     invoiceFileUrl: '',
     invoiceFileName: '',
     items: [
@@ -75,8 +82,9 @@ const todayStr = () => new Date().toISOString().slice(0, 10)
 export default function PurchaseOrdersPage() {
     const { t } = useTranslation()
     const { canCreate, canEdit, canDelete } = usePermissions('PURCHASE_ORDERS')
+    const tenderPerms = usePermissions('TENDERS')
     const { canSeePrices } = useAuth()
-    const { defaultWarehouseId } = useSettings()
+    const { defaultWarehouseId, currency: baseCurrency, currencies, currencySymbol } = useSettings()
     const navigate = useNavigate()
     const toast = useToast()
     const { quickCreate, openQuickCreate, closeQuickCreate, handleQuickCreated } = useQuickCreate()
@@ -87,6 +95,7 @@ export default function PurchaseOrdersPage() {
     const [manufacturers, setManufacturers] = useState([])
     const [products, setProducts] = useState([])
     const [warehouses, setWarehouses] = useState([])
+    const [tenders, setTenders] = useState([])
     const [form, setForm] = useState(emptyForm)
     const [editingId, setEditingId] = useState(null)
     const [suggestedOrderNumber, setSuggestedOrderNumber] = useState(null)
@@ -148,6 +157,13 @@ export default function PurchaseOrdersPage() {
         setManufacturers(safeArray(manufacturersRes))
         setProducts(safeArray(productsRes))
         setWarehouses(safeArray(warehousesRes))
+
+        // Tender options power the optional "part of a tender" picker; only for users who can view tenders.
+        if (tenderPerms.canView) {
+            try {
+                setTenders(safeArray(await apiGet('/tenders/options')))
+            } catch { /* leave the picker empty if tenders can't be loaded */ }
+        }
     }
 
     // Pre-select the company default warehouse (when it still exists) or the only warehouse, if one.
@@ -162,7 +178,7 @@ export default function PurchaseOrdersPage() {
         setEditingId(null)
         setFormError('')
         // Prefill what we sensibly can: today's date and the default warehouse.
-        setForm({ ...emptyForm, orderDate: todayStr(), warehouseId: pickDefaultWarehouse(), items: [emptyItem()] })
+        setForm({ ...emptyForm, orderDate: todayStr(), warehouseId: pickDefaultWarehouse(), currency: baseCurrency || 'EUR', items: [emptyItem()] })
         formModal.open()
         // Prefill a system-suggested order number the user can override (mirrors sales orders).
         try {
@@ -173,6 +189,13 @@ export default function PurchaseOrdersPage() {
         } catch {
             setSuggestedOrderNumber(null)
         }
+        // Preselect the most-used currency with its suggested rate (falls back to the base currency).
+        try {
+            const q = await apiGet('/exchange-rates/most-used?scope=PURCHASE_ORDER')
+            if (q?.currency) {
+                setForm((prev) => ({ ...prev, currency: q.currency, exchangeRate: q.rate ?? 1, rateSource: q.source, rateAsOfDate: q.asOfDate }))
+            }
+        } catch { /* keep the base currency default */ }
     }
 
     const openEdit = (item) => {
@@ -190,6 +213,11 @@ export default function PurchaseOrdersPage() {
             deliveryAddress: item.deliveryAddress || '',
             notes: item.notes || '',
             deliveryPrice: item.deliveryPrice ?? 0,
+            currency: item.currency || baseCurrency || 'EUR',
+            exchangeRate: item.exchangeRate ?? 1,
+            rateSource: 'SAVED',
+            rateAsOfDate: null,
+            tenderId: item.tenderId ?? '',
             invoiceFileUrl: item.invoiceFileUrl || '',
             invoiceFileName: item.invoiceFileName || '',
             items: item.items?.length
@@ -337,6 +365,9 @@ export default function PurchaseOrdersPage() {
             deliveryAddress: form.deliveryAddress,
             notes: form.notes,
             deliveryPrice: Number(form.deliveryPrice || 0),
+            currency: form.currency || baseCurrency || null,
+            exchangeRate: form.exchangeRate ? Number(form.exchangeRate) : null,
+            tenderId: form.tenderId ? Number(form.tenderId) : null,
             invoiceFileUrl: form.invoiceFileUrl || null,
             invoiceFileName: form.invoiceFileName || null,
             items: form.items.map((item) => ({
@@ -422,7 +453,7 @@ export default function PurchaseOrdersPage() {
             ),
         },
         { key: 'orderDate', label: t('purchaseOrders.cols.orderDate'), render: (row) => formatDate(row.orderDate) },
-        ...(canSeePrices ? [{ key: 'totalAmount', label: t('common.total'), render: (row) => formatMoney(row.totalAmount) }] : []),
+        ...(canSeePrices ? [{ key: 'totalAmount', label: t('common.total'), render: (row) => <MoneyWithBase amount={row.totalAmount} currency={row.currency} exchangeRate={row.exchangeRate} base={baseCurrency} /> }] : []),
         ...((canEdit || canDelete) ? [{
             key: 'actions',
             label: '',
@@ -624,7 +655,7 @@ export default function PurchaseOrdersPage() {
 
                         <FormField
                             id="purchase-order-delivery-price"
-                            label={t('purchaseOrders.form.deliveryPrice')}
+                            label={`${t('purchaseOrders.form.deliveryPrice')} (${currencySymbol(form.currency || baseCurrency)})`}
                             type="number"
                             step="0.01"
                             name="deliveryPrice"
@@ -632,6 +663,33 @@ export default function PurchaseOrdersPage() {
                             onChange={handleChange}
                             placeholder={t('purchaseOrders.form.deliveryPrice')}
                         />
+
+                        <CurrencyRateField
+                            value={{ currency: form.currency, exchangeRate: form.exchangeRate, source: form.rateSource, asOfDate: form.rateAsOfDate }}
+                            onChange={(next) => setForm((prev) => ({ ...prev, currency: next.currency, exchangeRate: next.exchangeRate, rateSource: next.source, rateAsOfDate: next.asOfDate }))}
+                            baseCurrency={baseCurrency}
+                            currencies={currencies}
+                        />
+
+                        {tenderPerms.canView && (
+                            <FormSelect
+                                id="purchase-order-tender"
+                                label={t('orders.form.tender')}
+                                name="tenderId"
+                                value={form.tenderId ? String(form.tenderId) : ''}
+                                onChange={handleChange}
+                                searchable
+                                placeholder={t('orders.form.noTender')}
+                                options={[
+                                    { value: '', label: t('orders.form.noTender') },
+                                    ...tenders.map((td) => ({
+                                        value: String(td.id),
+                                        label: td.tenderNumber ? `${td.title} · ${td.tenderNumber}` : td.title,
+                                        search: td.tenderNumber,
+                                    })),
+                                ]}
+                            />
+                        )}
 
                         <AddressAutocompleteField
                             id="purchase-order-delivery-address"
@@ -745,7 +803,7 @@ export default function PurchaseOrdersPage() {
 
                                 <FormField
                                     id={`purchase-order-item-unit-price-${index}`}
-                                    label={t('orderDetail.cols.unitPrice')}
+                                    label={`${t('orderDetail.cols.unitPrice')} (${currencySymbol(form.currency || baseCurrency)})`}
                                     type="number"
                                     step="0.01"
                                     name={`unitPrice-${index}`}

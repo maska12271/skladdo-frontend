@@ -104,6 +104,7 @@ export default function ClientDetailPage() {
                     <Fact label={t('common.email')} value={client.email || '—'} copyValue={client.email} />
                     <Fact label={t('common.phone')} value={client.phone || '—'} copyValue={client.phone} />
                     <Fact label={t('clientDetail.facts.contactPerson')} value={client.contactPerson || '—'} />
+                    <Fact label={t('common.country')} value={client.country || '—'} />
                     <Fact label={t('common.address')} value={client.address || '—'} />
                 </dl>
                 {client.notes && (

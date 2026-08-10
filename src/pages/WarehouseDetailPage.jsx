@@ -5,7 +5,9 @@ import { ChevronLeft, Pencil } from 'lucide-react'
 import { apiGet } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
 import LoadingBlock from '../components/LoadingBlock'
-import { usePermissions } from '../context/AuthContext'
+import WarehouseMovements from '../components/WarehouseMovements'
+import { useAuth, usePermissions } from '../context/AuthContext'
+import { useSettings } from '../context/SettingsContext'
 import { stockStatusOf } from '../utils/stock'
 
 export default function WarehouseDetailPage() {
@@ -13,6 +15,8 @@ export default function WarehouseDetailPage() {
     const { id } = useParams()
     const navigate = useNavigate()
     const { canEdit } = usePermissions('WAREHOUSES')
+    const { canSeePrices } = useAuth()
+    const { currency: baseCurrency, formatCurrency } = useSettings()
 
     const [warehouse, setWarehouse] = useState(null)
     const [stock, setStock] = useState([])
@@ -37,6 +41,17 @@ export default function WarehouseDetailPage() {
         return () => { cancelled = true }
     }, [id])
 
+    // Total value of stock held in this warehouse, kept per currency so a mix of product currencies is
+    // summed correctly (each currency shown separately rather than blindly added together).
+    const totalsByCurrency = stock.reduce((acc, item) => {
+        const cur = (item.currency || baseCurrency || 'EUR').toUpperCase()
+        acc[cur] = (acc[cur] || 0) + Number(item.unitPrice || 0) * item.quantity
+        return acc
+    }, {})
+    const totalValueLabel = Object.entries(totalsByCurrency)
+        .map(([cur, value]) => formatCurrency(value, cur))
+        .join(' + ')
+
     if (loading) return <LoadingBlock text={t('common.loading')} />
     if (error || !warehouse) {
         return (
@@ -58,7 +73,9 @@ export default function WarehouseDetailPage() {
                     {warehouse.address && (
                         <p className="text-sm text-slate-500 dark:text-slate-400">{warehouse.address}</p>
                     )}
-                    <StatusBadge status={warehouse.active ? 'ACTIVE' : 'INACTIVE'} />
+                    <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge status={warehouse.active ? 'ACTIVE' : 'INACTIVE'} />
+                    </div>
                 </div>
                 {canEdit && (
                     <button
@@ -72,7 +89,15 @@ export default function WarehouseDetailPage() {
 
             {/* Stock table */}
             <section className="space-y-3">
-                <h2 className="text-lg font-semibold">{t('warehouses.stock.title')}</h2>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h2 className="text-lg font-semibold">{t('warehouses.stock.title')}</h2>
+                    {canSeePrices && stock.length > 0 && (
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                            {t('warehouses.stock.totalValue')}{' '}
+                            <span className="font-semibold text-slate-800 dark:text-slate-100">{totalValueLabel}</span>
+                        </p>
+                    )}
+                </div>
 
                 {stock.length === 0 ? (
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
@@ -116,6 +141,9 @@ export default function WarehouseDetailPage() {
                     </div>
                 )}
             </section>
+
+            {/* Stock ledger for a single product in this warehouse */}
+            <WarehouseMovements warehouseId={id} products={stock} />
         </div>
     )
 }

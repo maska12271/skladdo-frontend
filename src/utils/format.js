@@ -1,15 +1,30 @@
-export function formatMoney(value) {
+export function formatMoney(value, currency = 'EUR') {
     const number = Number(value || 0)
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
-        currency: 'EUR',
-        minimumFractionDigits: 2,
+        currency: currency || 'EUR',
     }).format(number)
+}
+
+/**
+ * Converts an amount held in a transaction currency into the company base currency using the rate
+ * snapshotted on the record (`1 base = exchangeRate foreign`, so base = amount / rate). Returns null when
+ * the rate is missing/zero (unknown) so callers can hide the equivalent rather than divide by zero.
+ */
+export function toCompanyAmount(amount, exchangeRate) {
+    const rate = Number(exchangeRate)
+    if (!rate || rate <= 0) return null
+    return Number(amount || 0) / rate
 }
 
 export function formatDate(value) {
     if (!value) return '-'
     return new Date(value).toLocaleDateString()
+}
+
+export function formatDateTime(value) {
+    if (!value) return '-'
+    return new Date(value).toLocaleString()
 }
 
 export function safeArray(value) {

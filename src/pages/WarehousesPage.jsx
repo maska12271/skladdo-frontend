@@ -20,6 +20,12 @@ import AddressAutocompleteField from '../components/AddressAutocompleteField.jsx
 
 const emptyForm = { name: '', address: '', active: true }
 
+/**
+ * The company's warehouses. Every one of them is ours: a warehouse always belongs to the company whose
+ * stock is in it, and a warehouse partner is only ever given access to one — never ownership of it. So
+ * whether an outside company works here is not a property of the warehouse, and it is decided on the
+ * Connections page instead.
+ */
 export default function WarehousesPage() {
     const { t } = useTranslation()
     const { canCreate, canEdit, canDelete } = usePermissions('WAREHOUSES')
@@ -60,8 +66,7 @@ export default function WarehousesPage() {
     const loadData = async () => {
         setListLoading(true)
         try {
-            const response = await apiGet('/warehouses')
-            setRows(safeArray(response))
+            setRows(safeArray(await apiGet('/warehouses')))
         } finally {
             setListLoading(false)
         }
@@ -165,13 +170,11 @@ export default function WarehousesPage() {
             <PageHeader
                 title={t('warehouses.title')}
                 description={t('warehouses.description')}
-                action={
-                    canCreate && (
-                        <button onClick={openCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
-                            {t('warehouses.add')}
-                        </button>
-                    )
-                }
+                action={canCreate && (
+                    <button onClick={openCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
+                        {t('warehouses.add')}
+                    </button>
+                )}
             />
 
             <SearchFilters

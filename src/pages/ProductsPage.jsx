@@ -18,43 +18,34 @@ import { useAuth, usePermissions } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import QuickCreateModal from '../components/QuickCreateModal'
 import CategoryManagerModal from '../components/CategoryManagerModal'
+import ReorderSuggestions from '../components/ReorderSuggestions'
 import LotAdjustModal from '../components/LotAdjustModal'
 import { useToast } from '../context/ToastContext'
 import { safeArray, parseBool, toNumber } from '../utils/format'
 import {FormField, FormSelect, TextareaField} from "../components/FormField.jsx";
+import UnitSelect from "../components/UnitSelect.jsx";
 import { Eye, Pencil, Trash2, PackagePlus, Package } from 'lucide-react'
 import ImageUploadField, { resolveImageUrl } from '../components/ImageUploadField.jsx'
 import { stockStatusOf } from '../utils/stock'
 
-const exportColumns = [
-    { header: 'ID', value: (r) => r.id },
-    { header: 'Name', value: (r) => r.name },
-    { header: 'SKU', value: (r) => r.sku },
-    { header: 'Manufacturer', value: (r) => r.manufacturer?.name || '' },
-    { header: 'Category', value: (r) => r.category?.name || '' },
-    { header: 'Size', value: (r) => r.size },
-    { header: 'Unit', value: (r) => r.unit },
-    { header: 'Description', value: (r) => r.description },
-    { header: 'Images', value: (r) => (r.imageUrls || []).join('; ') },
-    { header: 'Price', value: (r) => r.price },
-    { header: 'Stock', value: (r) => r.stockQuantity },
-    { header: 'Min stock', value: (r) => r.minimumStock },
-    { header: 'Active', value: (r) => (r.active ? 'Active' : 'Inactive') },
-]
-
-const importColumns = [
-    { header: 'Name', required: true, example: 'A4 Paper 80g' },
-    { header: 'SKU', example: 'PAP-A4-80' },
-    { header: 'Manufacturer', required: true, example: 'Acme Industries' },
-    { header: 'Category', required: true, example: 'Office Supplies' },
-    { header: 'Size', example: 'A4' },
-    { header: 'Unit', example: 'box' },
-    { header: 'Description', example: '' },
-    { header: 'Images', example: 'https://... ; https://...' },
-    { header: 'Price', example: '4.50' },
-    { header: 'Stock', example: '120' },
-    { header: 'Min stock', example: '20' },
-    { header: 'Active', example: 'Active' },
+// One schema drives both export (headers localised to the current language) and import (headers
+// matched against each field's label in every app language). `id` is export-only. Manufacturer and
+// category are referenced by name; an unknown category is created on import, an unknown manufacturer
+// errors (we never invent suppliers from a typo).
+const PRODUCT_FIELDS = [
+    { key: 'id', labelKey: 'common.id', importable: false, value: (r) => r.id },
+    { key: 'name', labelKey: 'common.name', required: true, example: 'A4 Paper 80g', value: (r) => r.name },
+    { key: 'sku', labelKey: 'common.sku', example: 'PAP-A4-80', value: (r) => r.sku },
+    { key: 'manufacturer', labelKey: 'products.cols.manufacturer', required: true, example: 'Acme Industries', value: (r) => r.manufacturer?.name || '' },
+    { key: 'category', labelKey: 'products.cols.category', required: true, example: 'Office Supplies', value: (r) => r.category?.name || '' },
+    { key: 'size', labelKey: 'common.size', example: 'A4', value: (r) => r.size },
+    { key: 'unit', labelKey: 'common.unit', example: 'box', value: (r) => r.unit },
+    { key: 'description', labelKey: 'common.description', value: (r) => r.description },
+    { key: 'images', labelKey: 'imageUpload.label', example: 'https://... ; https://...', value: (r) => (r.imageUrls || []).join('; ') },
+    { key: 'price', labelKey: 'common.price', example: '4.50', value: (r) => r.price },
+    { key: 'stock', labelKey: 'products.cols.stock', example: '120', value: (r) => r.stockQuantity },
+    { key: 'minStock', labelKey: 'products.cols.minStock', example: '20', value: (r) => r.minimumStock },
+    { key: 'status', labelKey: 'common.status', aliasKeys: ['common.active'], example: 'Active', value: (r) => (r.active ? 'Active' : 'Inactive') },
 ]
 
 const emptyForm = {
@@ -67,8 +58,10 @@ const emptyForm = {
     description: '',
     images: [],
     price: '',
+    currency: '',
     taxRateId: '',
     minimumStock: 0,
+    reorderQuantity: '',
     warehouseMethod: 'FEFO',
     active: true,
 }
@@ -80,7 +73,7 @@ export default function ProductsPage() {
     const { canCreate: canCreateCategory, canEdit: canEditCategory, canDelete: canDeleteCategory } = usePermissions('CATEGORIES')
     const canManageCategories = canCreateCategory || canEditCategory || canDeleteCategory
     const { canSeePrices } = useAuth()
-    const { formatPrice, pricesIncludeTax, defaultTaxPercent } = useSettings()
+    const { formatPrice, pricesIncludeTax, defaultTaxPercent, currency: baseCurrency, currencies, currencySymbol } = useSettings()
     const toast = useToast()
     const { quickCreate, openQuickCreate, closeQuickCreate, handleQuickCreated } = useQuickCreate()
     const formModal = useModal()
@@ -149,6 +142,17 @@ export default function ProductsPage() {
 
     // Deep-link support: ?edit=<id> opens the edit modal once rows are loaded (used by the
     // detail page's Edit button), then clears the param so a refresh/back doesn't reopen it.
+    // List / Reorder tab, persisted in the URL (?tab=reorder) so it survives refresh and deep links.
+    const tab = searchParams.get('tab') === 'reorder' ? 'reorder' : 'list'
+    const setTab = (next) => {
+        setSearchParams((prev) => {
+            const p = new URLSearchParams(prev)
+            if (next === 'list') p.delete('tab')
+            else p.set('tab', next)
+            return p
+        }, { replace: true })
+    }
+
     const editId = searchParams.get('edit')
     useEffect(() => {
         if (!editId || rows.length === 0) return
@@ -177,43 +181,66 @@ export default function ProductsPage() {
         setTaxRates(safeArray(taxRatesRes))
     }
 
-    // Resolve manufacturer/category by name against loaded lists, erroring out (rather than
-    // silently dropping) when a referenced one does not exist yet.
-    const parseImportRow = (r) => {
-        const name = (r['Name'] || '').trim()
+    // Runs once before preview: creates any product categories referenced by the file that don't
+    // exist yet (when the user may create them), and returns name→entity maps for parseRow.
+    const prepareImport = async (records) => {
+        const catByName = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c]))
+        const mfrByName = new Map(manufacturers.map((m) => [m.name.trim().toLowerCase(), m]))
+        if (canCreateCategory) {
+            const wanted = new Map()
+            for (const r of records) {
+                const nm = (r.category || '').trim()
+                if (nm && !catByName.has(nm.toLowerCase())) wanted.set(nm.toLowerCase(), nm)
+            }
+            const created = []
+            for (const display of wanted.values()) {
+                try {
+                    const cat = await apiPost('/categories', { name: display }, { suppressErrorToast: true })
+                    catByName.set(display.toLowerCase(), cat)
+                    created.push(cat)
+                } catch { /* leave unresolved: the row then reports categoryNotFound */ }
+            }
+            if (created.length) {
+                setCategories((prev) => [...prev, ...created])
+                toast.success(t('importModal.categoriesCreated', { count: created.length }))
+            }
+        }
+        return { categoriesByName: catByName, manufacturersByName: mfrByName }
+    }
+
+    // Resolve manufacturer/category by name against the prepared maps, erroring out (rather than
+    // silently dropping) when a referenced one is still missing.
+    const parseImportRow = (r, ctx = {}) => {
+        const name = (r.name || '').trim()
         if (!name) return { error: t('products.import.nameRequired') }
 
-        const manufacturerName = (r['Manufacturer'] || '').trim()
+        const manufacturerName = (r.manufacturer || '').trim()
         if (!manufacturerName) return { error: t('products.import.manufacturerRequired') }
-        const manufacturer = manufacturers.find(
-            (m) => (m.name || '').toLowerCase() === manufacturerName.toLowerCase(),
-        )
+        const manufacturer = ctx.manufacturersByName?.get(manufacturerName.toLowerCase())
         if (!manufacturer) return { error: t('products.import.manufacturerNotFound', { name: manufacturerName }) }
 
-        const categoryName = (r['Category'] || '').trim()
+        const categoryName = (r.category || '').trim()
         if (!categoryName) return { error: t('products.import.categoryRequired') }
-        const category = categories.find(
-            (c) => (c.name || '').toLowerCase() === categoryName.toLowerCase(),
-        )
+        const category = ctx.categoriesByName?.get(categoryName.toLowerCase())
         if (!category) return { error: t('products.import.categoryNotFound', { name: categoryName }) }
 
         return {
             payload: {
                 name,
-                sku: r['SKU'] || '',
+                sku: r.sku || '',
                 manufacturer: { id: manufacturer.id },
                 category: { id: category.id },
-                size: r['Size'] || '',
-                unit: r['Unit'] || '',
-                description: r['Description'] || '',
-                imageUrls: (r['Images'] || '')
+                size: r.size || '',
+                unit: r.unit || '',
+                description: r.description || '',
+                imageUrls: (r.images || '')
                     .split(';')
                     .map((u) => u.trim())
                     .filter(Boolean),
-                price: toNumber(r['Price']),
-                stockQuantity: toNumber(r['Stock']),
-                minimumStock: toNumber(r['Min stock']),
-                active: parseBool(r['Active'], true),
+                price: toNumber(r.price),
+                stockQuantity: toNumber(r.stock),
+                minimumStock: toNumber(r.minStock),
+                active: parseBool(r.status, true),
             },
         }
     }
@@ -236,8 +263,10 @@ export default function ProductsPage() {
             description: item.description || '',
             images: item.imageUrls || [],
             price: item.price || '',
+            currency: item.currency || '',
             taxRateId: item.taxRate?.id ? String(item.taxRate.id) : '',
             minimumStock: item.minimumStock ?? 0,
+            reorderQuantity: item.reorderQuantity ?? '',
             warehouseMethod: item.warehouseMethod || 'FEFO',
             active: !!item.active,
         })
@@ -279,8 +308,11 @@ export default function ProductsPage() {
             description: form.description,
             imageUrls: form.images,
             price: Number(form.price),
+            currency: form.currency || baseCurrency || null,
             taxRate: form.taxRateId ? { id: Number(form.taxRateId) } : null,
             minimumStock: Number(form.minimumStock),
+            // Blank means "no fixed batch size" - the reorder view then suggests the shortfall instead.
+            reorderQuantity: form.reorderQuantity === '' ? null : Number(form.reorderQuantity),
             warehouseMethod: form.warehouseMethod,
             active: form.active,
         }
@@ -366,7 +398,7 @@ export default function ProductsPage() {
             ? [{
                 key: 'price',
                 label: `${t('common.price')} ${pricesIncludeTax ? t('settings.tax.inclShort') : t('settings.tax.exclShort')}`,
-                render: (row) => formatPrice(row.price, row.taxRate?.percentage),
+                render: (row) => formatPrice(row.price, row.taxRate?.percentage, row.currency),
             }, {
                 key: 'tax',
                 label: t('products.cols.tax'),
@@ -435,15 +467,15 @@ export default function ProductsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                         <DataToolbar
                             entityLabel="products"
-                            exportColumns={exportColumns}
+                            fields={PRODUCT_FIELDS}
                             rows={rows}
                             fetchRows={fetchAllProducts}
                             count={total}
                             importConfig={{
                                 canImport: canCreate,
                                 endpoint: '/products',
-                                templateColumns: importColumns,
                                 parseRow: parseImportRow,
+                                prepare: prepareImport,
                             }}
                             onImported={reload}
                         />
@@ -461,6 +493,27 @@ export default function ProductsPage() {
                 }
             />
 
+            {/* List / Reorder tabs */}
+            <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+                {['list', 'reorder'].map((tabKey) => (
+                    <button
+                        key={tabKey}
+                        onClick={() => setTab(tabKey)}
+                        className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+                            tab === tabKey
+                                ? 'border-teal-600 text-teal-700 dark:text-teal-400'
+                                : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                        }`}
+                    >
+                        {t(`products.tab.${tabKey}`)}
+                    </button>
+                ))}
+            </div>
+
+            {tab === 'reorder' && <ReorderSuggestions />}
+
+            {tab === 'list' && (
+            <>
             <SearchFilters
                 search={search}
                 onSearchChange={setSearch}
@@ -535,6 +588,8 @@ export default function ProductsPage() {
                     ) : null
                 }
             />
+            </>
+            )}
 
             <Modal isOpen={formModal.isOpen} title={editingId ? t('products.editTitle') : t('products.addTitle')} onClose={formModal.close}>
                 <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-4">
@@ -579,13 +634,12 @@ export default function ProductsPage() {
                             placeholder={t('common.sku')}
                         />
 
-                        <FormField
+                        <UnitSelect
                             id="product-unit"
                             label={t('common.unit')}
                             name="unit"
                             value={form.unit}
                             onChange={handleChange}
-                            placeholder={t('products.form.unitPlaceholder')}
                         />
                     </div>
 
@@ -635,7 +689,7 @@ export default function ProductsPage() {
 
                     <FormField
                         id="product-price"
-                        label={`${t('common.price')} ${t('settings.tax.exclShort')}`}
+                        label={`${t('common.price')} ${t('settings.tax.exclShort')} (${currencySymbol(form.currency || baseCurrency)})`}
                         type="number"
                         step="0.01"
                         name="price"
@@ -643,6 +697,17 @@ export default function ProductsPage() {
                         onChange={handleChange}
                         placeholder={t('common.price')}
                         className="md:col-span-2"
+                    />
+
+                    <FormSelect
+                        id="product-currency"
+                        label={t('common.currency')}
+                        name="currency"
+                        value={form.currency || baseCurrency || 'EUR'}
+                        onChange={handleChange}
+                        className="md:col-span-2"
+                        options={(currencies.length ? currencies : [{ code: baseCurrency || 'EUR', name: baseCurrency || 'EUR' }])
+                            .map((c) => ({ value: c.code, label: `${c.code} — ${c.name}` }))}
                     />
 
                     <FormSelect
@@ -690,6 +755,17 @@ export default function ProductsPage() {
                         value={form.minimumStock}
                         onChange={handleChange}
                         placeholder="0"
+                        className="md:col-span-2"
+                    />
+
+                    <FormField
+                        id="product-reorder-quantity"
+                        label={t('products.form.reorderQuantity')}
+                        type="number"
+                        name="reorderQuantity"
+                        value={form.reorderQuantity}
+                        onChange={handleChange}
+                        placeholder={t('products.form.reorderQuantityPlaceholder')}
                         className="md:col-span-2"
                     />
 

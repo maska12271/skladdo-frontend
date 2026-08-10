@@ -2,11 +2,34 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FileText, Package, ShoppingCart } from 'lucide-react'
 import StatusBadge from './StatusBadge'
+import { Donut } from './MicroCharts'
 import { formatMoney, formatDate } from '../utils/format'
 
 // Day-thresholds offered by the expiring-lots widget's selector.
 const EXPIRY_THRESHOLDS = [7, 30, 60, 90]
 const DAY_MS = 86400000
+
+// How many rows a dashboard list shows before deferring to its "view all" link. Short on purpose:
+// the widgets are meant to be glanced at, and the list pages exist for the full set.
+export const WIDGET_ROWS = 6
+
+// The activity feed's rows carry an icon and two lines each, so they run about half again as tall as a
+// table row — it shows one fewer to fit the same slot.
+const ACTIVITY_ROWS = 5
+
+/**
+ * The "showing 6 of 23" line under a truncated dashboard list. Renders nothing when the widget is
+ * already showing everything, so a short list carries no pointless footer.
+ */
+export function ShowingCount({ shown, total }) {
+    const { t } = useTranslation()
+    if (!total || total <= shown) return null
+    return (
+        <p className="mt-2 shrink-0 border-t border-slate-100 pt-2 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
+            {t('dashboard.showingOf', { shown, total })}
+        </p>
+    )
+}
 
 const ACTIVITY_META = {
     SALE: { icon: ShoppingCart, tone: 'bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-300', verbKey: 'sale', route: '/sales-orders' },
@@ -21,35 +44,39 @@ export function ActivityFeed({ items = [], onNavigate }) {
     if (items.length === 0) {
         return <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">{t('dashboard.activity.none')}</p>
     }
+    const visible = items.slice(0, ACTIVITY_ROWS)
     return (
-        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-            {items.map((item) => {
-                const meta = ACTIVITY_META[item.type] || ACTIVITY_META.SALE
-                const Icon = meta.icon
-                const verb = t(`dashboard.activity.${meta.verbKey}`)
-                return (
-                    <li key={`${item.type}-${item.id}`}>
-                        <button
-                            type="button"
-                            onClick={() => onNavigate?.(meta.route)}
-                            className="flex w-full items-center gap-3 py-2.5 text-left transition hover:opacity-80"
-                        >
-                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${meta.tone}`}>
-                                <Icon className="h-4 w-4" />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">{item.label || `${verb} #${item.id}`}</span>
-                                <span className="block text-xs text-slate-400 dark:text-slate-500">{verb} · {formatDate(item.date)}</span>
-                            </span>
-                            <span className="shrink-0 text-right">
-                                <span className="block text-sm font-semibold tabular-nums">{formatMoney(item.amount)}</span>
-                                <span className="mt-0.5 block"><StatusBadge status={item.status} /></span>
-                            </span>
-                        </button>
-                    </li>
-                )
-            })}
-        </ul>
+        <div className="flex h-full flex-col">
+            <ul className="min-h-0 flex-1 divide-y divide-slate-100 overflow-auto dark:divide-slate-800">
+                {visible.map((item) => {
+                    const meta = ACTIVITY_META[item.type] || ACTIVITY_META.SALE
+                    const Icon = meta.icon
+                    const verb = t(`dashboard.activity.${meta.verbKey}`)
+                    return (
+                        <li key={`${item.type}-${item.id}`}>
+                            <button
+                                type="button"
+                                onClick={() => onNavigate?.(meta.route)}
+                                className="flex w-full items-center gap-3 py-2.5 text-left transition hover:opacity-80"
+                            >
+                                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${meta.tone}`}>
+                                    <Icon className="h-4 w-4" />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">{item.label || `${verb} #${item.id}`}</span>
+                                    <span className="block text-xs text-slate-400 dark:text-slate-500">{verb} · {formatDate(item.date)}</span>
+                                </span>
+                                <span className="shrink-0 text-right">
+                                    <span className="block text-sm font-semibold tabular-nums">{formatMoney(item.amount)}</span>
+                                    <span className="mt-0.5 block"><StatusBadge status={item.status} /></span>
+                                </span>
+                            </button>
+                        </li>
+                    )
+                })}
+            </ul>
+            <ShowingCount shown={visible.length} total={items.length} />
+        </div>
     )
 }
 
@@ -72,7 +99,8 @@ export function ExpiringLots({ rows = [], onNavigate }) {
         .filter((r) => r.daysLeft != null)
     const expired = classified.filter((r) => r.expired)
     const soon = classified.filter((r) => !r.expired && r.daysLeft <= days)
-    const visible = [...expired, ...soon] // backend already sorts by expiry asc, so expired leads
+    const matching = [...expired, ...soon] // backend already sorts by expiry asc, so expired leads
+    const visible = matching.slice(0, WIDGET_ROWS)
 
     return (
         <div className="flex h-full flex-col">
@@ -102,6 +130,7 @@ export function ExpiringLots({ rows = [], onNavigate }) {
             {visible.length === 0 ? (
                 <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">{t('dashboard.expiry.none')}</p>
             ) : (
+                <>
                 <div className="min-h-0 flex-1 overflow-auto">
                     <table className="w-full text-sm">
                         <thead>
@@ -143,6 +172,8 @@ export function ExpiringLots({ rows = [], onNavigate }) {
                         </tbody>
                     </table>
                 </div>
+                <ShowingCount shown={visible.length} total={matching.length} />
+                </>
             )}
         </div>
     )
@@ -174,16 +205,43 @@ function ReceivableStat({ label, value, sub, tone }) {
 
 // Outstanding customer invoices: unpaid / overdue / penalty totals, plus the largest overdue balances.
 // Rows link to the related sales order (there is no standalone invoices page).
+// How late the overdue money is, in the order the backend buckets it.
+const AGING_COLORS = { D1_30: 'amber', D31_60: 'rose', D60_PLUS: 'slate' }
+
 export function Receivables({ data, onNavigate }) {
     const { t } = useTranslation()
     if (!data) return null
     const rows = data.topOverdue || []
+    const aging = (data.aging || []).map((b) => ({
+        key: b.bucket,
+        label: t(`dashboard.receivables.aging.${b.bucket}`),
+        value: Number(b.amount) || 0,
+        color: AGING_COLORS[b.bucket] || 'slate',
+    }))
     return (
         <div className="flex h-full flex-col">
-            <div className="grid grid-cols-3 gap-3">
-                <ReceivableStat label={t('dashboard.receivables.unpaid')} value={formatMoney(data.unpaidTotal)} sub={t('dashboard.receivables.countInvoices', { count: data.unpaidCount })} tone="slate" />
-                <ReceivableStat label={t('dashboard.receivables.overdue')} value={formatMoney(data.overdueTotal)} sub={t('dashboard.receivables.countInvoices', { count: data.overdueCount })} tone="rose" />
-                <ReceivableStat label={t('dashboard.receivables.penalty')} value={formatMoney(data.penaltyAccruedTotal)} sub={t('dashboard.receivables.accrued')} tone="amber" />
+            {/* Totals beside the aging split, so the widget leads with one compact band rather than two.
+                The donut covers every overdue invoice, not just the rows listed below it. */}
+            <div className="flex flex-wrap items-start gap-4">
+                <div className="grid min-w-[260px] flex-1 grid-cols-3 gap-3">
+                    <ReceivableStat label={t('dashboard.receivables.unpaid')} value={formatMoney(data.unpaidTotal)} sub={t('dashboard.receivables.countInvoices', { count: data.unpaidCount })} tone="slate" />
+                    <ReceivableStat label={t('dashboard.receivables.overdue')} value={formatMoney(data.overdueTotal)} sub={t('dashboard.receivables.countInvoices', { count: data.overdueCount })} tone="rose" />
+                    <ReceivableStat label={t('dashboard.receivables.penalty')} value={formatMoney(data.penaltyAccruedTotal)} sub={t('dashboard.receivables.accrued')} tone="amber" />
+                </div>
+                {aging.length > 0 && (
+                    <div className="shrink-0 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">{t('dashboard.receivables.agingTitle')}</div>
+                        <Donut
+                            segments={aging}
+                            centerValue={data.overdueCount ?? 0}
+                            centerLabel={t('dashboard.receivables.overdue')}
+                            emptyText={t('dashboard.receivables.none')}
+                            formatValue={(v) => formatMoney(v)}
+                            size={92}
+                            thickness={12}
+                        />
+                    </div>
+                )}
             </div>
 
             <div className="mt-4 min-h-0 flex-1 overflow-auto">
@@ -225,7 +283,29 @@ export function Receivables({ data, onNavigate }) {
                     </table>
                 )}
             </div>
+            <ShowingCount shown={rows.length} total={data.overdueCount} />
         </div>
+    )
+}
+
+// How much of the catalogue is below its minimum stock level, as a share of everything stocked.
+export function StockHealth({ products }) {
+    const { t } = useTranslation()
+    const total = Number(products?.total) || 0
+    // Guard the subtraction: the two figures come from the same snapshot, but a low count can never
+    // sensibly exceed the total.
+    const low = Math.min(total, Number(products?.lowStockCount) || 0)
+
+    return (
+        <Donut
+            segments={[
+                { key: 'low', label: t('dashboard.stock.belowMinimum'), value: low, color: 'rose' },
+                { key: 'healthy', label: t('dashboard.stock.healthy'), value: total - low, color: 'teal' },
+            ]}
+            centerValue={total}
+            centerLabel={t('dashboard.stock.products')}
+            emptyText={t('dashboard.stock.none')}
+        />
     )
 }
 

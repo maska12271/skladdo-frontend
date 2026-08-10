@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiDelete, apiGet, apiPost, apiPut } from '../api/client'
 import { useServerTable } from '../hooks/useServerTable'
@@ -13,69 +14,75 @@ import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import { useModal } from '../hooks/useModal'
 import { useQuickCreate } from '../hooks/useQuickCreate'
-import { usePermissions } from '../context/AuthContext'
+import { usePermissions, useAuth } from '../context/AuthContext'
 import QuickCreateModal from '../components/QuickCreateModal'
+import TenderDashboard from '../components/TenderDashboard'
 import { useToast } from '../context/ToastContext'
-import { formatDate, formatMoney, safeArray } from '../utils/format'
-import {FormField, FormSelect, TextareaField} from "../components/FormField.jsx";
-import { Pencil, Trash2, Users, ClipboardList } from 'lucide-react'
+import { formatDate, safeArray } from '../utils/format'
+import { FormField, FormSelect, TextareaField } from '../components/FormField.jsx'
+import { useSettings } from '../context/SettingsContext'
+import CurrencyRateField from '../components/CurrencyRateField.jsx'
+import { Pencil, Trash2, ClipboardList, Eye } from 'lucide-react'
 
 const emptyTenderForm = {
     title: '',
     tenderNumber: '',
-    customerName: '',
     clientId: '',
     status: 'OPEN',
     publishedAt: '',
     deadline: '',
     description: '',
     estimatedValue: '',
-}
-
-const emptyParticipantForm = {
-    manufacturerName: '',
-    offeredPrice: '',
-    notes: '',
-    winner: false,
+    currency: '',
+    exchangeRate: 1,
+    rateSource: 'SAME',
+    rateAsOfDate: null,
 }
 
 const exportColumns = [
     { header: 'ID', value: (r) => r.id },
     { header: 'Title', value: (r) => r.title },
     { header: 'Tender no.', value: (r) => r.tenderNumber },
-    { header: 'Customer', value: (r) => r.customerName },
-    { header: 'Client', value: (r) => r.clientName },
+    { header: 'Requester', value: (r) => r.clientName },
     { header: 'Status', value: (r) => r.status },
     { header: 'Published', value: (r) => r.publishedAt },
     { header: 'Deadline', value: (r) => r.deadline },
     { header: 'Estimated value', value: (r) => r.estimatedValue },
+    { header: 'Parts', value: (r) => r.partCount },
+    { header: 'Participating', value: (r) => r.participatingCount },
+    { header: 'Won', value: (r) => r.wonCount },
     { header: 'Description', value: (r) => r.description },
 ]
 
 export default function TendersPage() {
     const { t } = useTranslation()
     const { canCreate, canEdit, canDelete } = usePermissions('TENDERS')
+    const { canSeePrices } = useAuth()
     const toast = useToast()
+    const navigate = useNavigate()
+    const [searchParams, setSearchParams] = useSearchParams()
+    const { currency: baseCurrency, currencies, currencySymbol } = useSettings()
+
+    // List / Dashboard tab, persisted in the URL (?tab=dashboard) so it survives refresh and deep links.
+    const tab = searchParams.get('tab') === 'dashboard' ? 'dashboard' : 'list'
+    const setTab = (next) => {
+        setSearchParams((prev) => {
+            const p = new URLSearchParams(prev)
+            if (next === 'list') p.delete('tab')
+            else p.set('tab', next)
+            return p
+        }, { replace: true })
+    }
     const { quickCreate, openQuickCreate, closeQuickCreate, handleQuickCreated } = useQuickCreate()
     const formModal = useModal()
     const deleteModal = useModal()
     const bulkDeleteModal = useModal()
-    const participantsModal = useModal()
-    const participantFormModal = useModal()
-    const participantDeleteModal = useModal()
-    const participantBulkDeleteModal = useModal()
 
     const [clients, setClients] = useState([])
-    const [participants, setParticipants] = useState([])
     const [form, setForm] = useState(emptyTenderForm)
-    const [participantForm, setParticipantForm] = useState(emptyParticipantForm)
     const [editingId, setEditingId] = useState(null)
-    const [selectedTender, setSelectedTender] = useState(null)
-    const [editingParticipantId, setEditingParticipantId] = useState(null)
     const [deletingItem, setDeletingItem] = useState(null)
-    const [deletingParticipant, setDeletingParticipant] = useState(null)
     const [selectedIds, setSelectedIds] = useState([])
-    const [selectedParticipantIds, setSelectedParticipantIds] = useState([])
     const [loading, setLoading] = useState(false)
 
     const buildTendersQuery = ({ page, size, sortBy, sortDir, q, filters }) => {
@@ -116,15 +123,23 @@ export default function TendersPage() {
         setClients(safeArray(clientsRes))
     }
 
-    const loadParticipants = async (tenderId) => {
-        const response = await apiGet(`/tenders/${tenderId}/participants`)
-        setParticipants(safeArray(response))
-    }
-
-    const openCreate = () => {
+    const openCreate = async () => {
         setEditingId(null)
-        setForm(emptyTenderForm)
+        setForm({ ...emptyTenderForm, currency: baseCurrency || 'EUR' })
         formModal.open()
+        // Prefill a system-suggested tender number the user can override; the counter only advances when
+        // the tender is actually saved with it (see CompanySettingsService.allocateNextTenderNumber).
+        try {
+            const res = await apiGet('/tenders/next-number')
+            if (res?.number) setForm((prev) => ({ ...prev, tenderNumber: res.number }))
+        } catch { /* leave the number blank; the backend allocates one on save */ }
+        // Preselect the most-used currency with its suggested rate (falls back to the base currency).
+        try {
+            const q = await apiGet('/exchange-rates/most-used?scope=TENDER')
+            if (q?.currency) {
+                setForm((prev) => ({ ...prev, currency: q.currency, exchangeRate: q.rate ?? 1, rateSource: q.source, rateAsOfDate: q.asOfDate }))
+            }
+        } catch { /* keep the base currency default */ }
     }
 
     const openEdit = (item) => {
@@ -132,62 +147,45 @@ export default function TendersPage() {
         setForm({
             title: item.title || '',
             tenderNumber: item.tenderNumber || '',
-            customerName: item.customerName || '',
             clientId: item.clientId || '',
             status: item.status || 'OPEN',
             publishedAt: item.publishedAt || '',
             deadline: item.deadline || '',
             description: item.description || '',
             estimatedValue: item.estimatedValue ?? '',
+            currency: item.currency || baseCurrency || 'EUR',
+            exchangeRate: item.exchangeRate ?? 1,
+            rateSource: 'SAVED',
+            rateAsOfDate: null,
         })
         formModal.open()
     }
+
+    // Deep-link support: ?edit=<id> opens the edit modal once rows are loaded (used by the detail page's
+    // Edit button), then clears the param so a refresh/back doesn't reopen it.
+    const editId = searchParams.get('edit')
+    useEffect(() => {
+        if (!editId || rows.length === 0) return
+        const item = rows.find((r) => String(r.id) === String(editId))
+        if (item) {
+            openEdit(item)
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev)
+                next.delete('edit')
+                return next
+            }, { replace: true })
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editId, rows])
 
     const openDelete = (item) => {
         setDeletingItem(item)
         deleteModal.open()
     }
 
-    const openParticipants = async (item) => {
-        setSelectedTender(item)
-        setSelectedParticipantIds([])
-        await loadParticipants(item.id)
-        participantsModal.open()
-    }
-
-    const openParticipantCreate = () => {
-        setEditingParticipantId(null)
-        setParticipantForm(emptyParticipantForm)
-        participantFormModal.open()
-    }
-
-    const openParticipantEdit = (item) => {
-        setEditingParticipantId(item.id)
-        setParticipantForm({
-            manufacturerName: item.manufacturerName || '',
-            offeredPrice: item.offeredPrice ?? '',
-            notes: item.notes || '',
-            winner: !!item.winner,
-        })
-        participantFormModal.open()
-    }
-
-    const openParticipantDelete = (item) => {
-        setDeletingParticipant(item)
-        participantDeleteModal.open()
-    }
-
     const handleChange = (e) => {
         const { name, value } = e.target
         setForm((prev) => ({ ...prev, [name]: value }))
-    }
-
-    const handleParticipantChange = (e) => {
-        const { name, value, type, checked } = e.target
-        setParticipantForm((prev) => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value,
-        }))
     }
 
     const handleSubmit = async (e) => {
@@ -197,26 +195,31 @@ export default function TendersPage() {
         const payload = {
             title: form.title,
             tenderNumber: form.tenderNumber,
-            customerName: form.customerName,
             clientId: Number(form.clientId),
             status: form.status,
             publishedAt: form.publishedAt || null,
             deadline: form.deadline || null,
             description: form.description,
             estimatedValue: Number(form.estimatedValue || 0),
+            currency: form.currency || baseCurrency || null,
+            exchangeRate: form.exchangeRate ? Number(form.exchangeRate) : null,
         }
 
         try {
+            let saved
             if (editingId) {
                 await apiPut(`/tenders/${editingId}`, payload)
             } else {
-                await apiPost('/tenders', payload)
+                saved = await apiPost('/tenders', payload)
             }
             toast.success(editingId ? t('tenders.updated') : t('tenders.created'))
             formModal.close()
+            const createdId = saved?.id
             setEditingId(null)
             setForm(emptyTenderForm)
             await reload()
+            // Send the user straight to the new tender's detail page to set up its parts.
+            if (createdId) navigate(`/tenders/${createdId}`)
         } finally {
             setLoading(false)
         }
@@ -251,76 +254,29 @@ export default function TendersPage() {
         }
     }
 
-    const handleParticipantSubmit = async (e) => {
-        e.preventDefault()
-        if (!selectedTender) return
-        setLoading(true)
-
-        const payload = {
-            manufacturerName: participantForm.manufacturerName,
-            offeredPrice: Number(participantForm.offeredPrice || 0),
-            notes: participantForm.notes,
-            winner: participantForm.winner,
-        }
-
-        try {
-            if (editingParticipantId) {
-                await apiPut(`/tenders/${selectedTender.id}/participants/${editingParticipantId}`, payload)
-            } else {
-                await apiPost(`/tenders/${selectedTender.id}/participants`, payload)
-            }
-
-            toast.success(editingParticipantId ? t('tenders.participants.updated') : t('tenders.participants.added'))
-            participantFormModal.close()
-            setEditingParticipantId(null)
-            setParticipantForm(emptyParticipantForm)
-            await loadParticipants(selectedTender.id)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const handleParticipantDelete = async () => {
-        if (!selectedTender || !deletingParticipant) return
-        setLoading(true)
-        try {
-            await apiDelete(`/tenders/${selectedTender.id}/participants/${deletingParticipant.id}`)
-            toast.success(t('tenders.participants.deleted'))
-            participantDeleteModal.close()
-            setDeletingParticipant(null)
-            setSelectedParticipantIds((prev) => prev.filter((id) => id !== deletingParticipant.id))
-            await loadParticipants(selectedTender.id)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const handleParticipantBulkDelete = async () => {
-        if (!selectedTender || selectedParticipantIds.length === 0) return
-        setLoading(true)
-        try {
-            await Promise.all(
-                selectedParticipantIds.map((id) =>
-                    apiDelete(`/tenders/${selectedTender.id}/participants/${id}`)
-                )
-            )
-            toast.success(t('tenders.participants.bulkDeleted', { count: selectedParticipantIds.length }))
-            participantBulkDeleteModal.close()
-            setSelectedParticipantIds([])
-            await loadParticipants(selectedTender.id)
-        } finally {
-            setLoading(false)
-        }
+    const renderRollup = (row) => {
+        const parts = row.partCount ?? 0
+        if (!parts) return <span className="text-slate-400">—</span>
+        return (
+            <div className="text-sm">
+                <span className="font-medium text-slate-700 dark:text-slate-200">{t('tenders.rollup.parts', { n: parts })}</span>
+                <span className="text-slate-400"> · {t('tenders.rollup.in', { n: row.participatingCount ?? 0 })}</span>
+                {row.wonCount ? (
+                    <span className="ml-1 inline-block rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                        {t('tenders.rollup.won', { n: row.wonCount })}
+                    </span>
+                ) : null}
+            </div>
+        )
     }
 
     const columns = [
         { key: 'title', label: t('tenders.cols.title') },
         { key: 'tenderNumber', label: t('tenders.cols.tenderNo') },
-        { key: 'customerName', label: t('tenders.cols.customer') },
-        { key: 'clientName', label: t('tenders.cols.client') },
+        { key: 'clientName', label: t('tenders.cols.requester') },
         { key: 'status', label: t('common.status'), render: (row) => <StatusBadge status={row.status} /> },
         { key: 'deadline', label: t('tenders.cols.deadline'), render: (row) => formatDate(row.deadline) },
-        { key: 'estimatedValue', label: t('tenders.cols.estimatedValue'), render: (row) => formatMoney(row.estimatedValue) },
+        { key: 'parts', label: t('tenders.cols.parts'), render: renderRollup },
         {
             key: 'actions',
             label: '',
@@ -328,8 +284,8 @@ export default function TendersPage() {
                 <div className="flex justify-end">
                     <ActionMenu
                         actions={[
+                            { key: 'view', label: t('common.viewDetails'), icon: Eye, onClick: () => navigate(`/tenders/${row.id}`) },
                             ...(canEdit ? [{ key: 'edit', label: t('common.edit'), icon: Pencil, onClick: () => openEdit(row) }] : []),
-                            { key: 'participants', label: t('tenders.participants.title'), icon: Users, onClick: () => openParticipants(row) },
                             ...(canDelete ? [{ key: 'delete', label: t('common.delete'), icon: Trash2, danger: true, onClick: () => openDelete(row) }] : []),
                         ]}
                     />
@@ -345,13 +301,15 @@ export default function TendersPage() {
                 description={t('tenders.description')}
                 action={
                     <div className="flex flex-wrap items-center gap-2">
-                        <DataToolbar
-                            entityLabel="tenders"
-                            exportColumns={exportColumns}
-                            rows={rows}
-                            fetchRows={fetchAllTenders}
-                            count={total}
-                        />
+                        {tab === 'list' && (
+                            <DataToolbar
+                                entityLabel="tenders"
+                                exportColumns={exportColumns}
+                                rows={rows}
+                                fetchRows={fetchAllTenders}
+                                count={total}
+                            />
+                        )}
                         {canCreate && (
                             <button onClick={openCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
                                 {t('tenders.add')}
@@ -361,6 +319,27 @@ export default function TendersPage() {
                 }
             />
 
+            {/* List / Dashboard tabs */}
+            <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+                {['list', 'dashboard'].map((tabKey) => (
+                    <button
+                        key={tabKey}
+                        onClick={() => setTab(tabKey)}
+                        className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+                            tab === tabKey
+                                ? 'border-teal-600 text-teal-700 dark:text-teal-400'
+                                : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                        }`}
+                    >
+                        {t(`tenders.dashboard.tab.${tabKey}`)}
+                    </button>
+                ))}
+            </div>
+
+            {tab === 'dashboard' && <TenderDashboard canSeePrices={canSeePrices} baseCurrency={baseCurrency} />}
+
+            {tab === 'list' && (
+            <>
             <SearchFilters
                 search={search}
                 onSearchChange={setSearch}
@@ -388,6 +367,7 @@ export default function TendersPage() {
                 total={total}
                 loading={listLoading}
                 filtersActive={filtersActive}
+                onRowClick={(row) => navigate(`/tenders/${row.id}`)}
                 emptyState={
                     <EmptyState
                         icon={ClipboardList}
@@ -418,66 +398,8 @@ export default function TendersPage() {
                     ) : null
                 }
             />
-
-            <Modal
-                isOpen={participantsModal.isOpen}
-                title={selectedTender ? t('tenders.participants.titleFor', { title: selectedTender.title }) : t('tenders.participants.title')}
-                onClose={participantsModal.close}
-                width="max-w-5xl"
-            >
-                <div className="space-y-5">
-                    {canEdit && (
-                        <div className="flex justify-end">
-                            <button onClick={openParticipantCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
-                                {t('tenders.participants.add')}
-                            </button>
-                        </div>
-                    )}
-
-                    <DataTable
-                        tableId="tender-participants"
-                        paginate={false}
-                        columns={[
-                            { key: 'manufacturerName', label: t('tenders.participants.name') },
-                            { key: 'offeredPrice', label: t('tenders.participants.offeredPrice'), render: (row) => formatMoney(row.offeredPrice) },
-                            { key: 'notes', label: t('common.notes') },
-                            {
-                                key: 'winner',
-                                label: t('tenders.participants.winner'),
-                                render: (row) => (row.winner ? <StatusBadge status="WINNER" /> : <span className="text-slate-400">—</span>),
-                            },
-                            ...(canEdit ? [{
-                                key: 'actions',
-                                label: '',
-                                render: (row) => (
-                                    <div className="flex justify-end">
-                                        <ActionMenu
-                                            actions={[
-                                                { key: 'edit', label: t('common.edit'), icon: Pencil, onClick: () => openParticipantEdit(row) },
-                                                { key: 'delete', label: t('common.delete'), icon: Trash2, danger: true, onClick: () => openParticipantDelete(row) },
-                                            ]}
-                                        />
-                                    </div>
-                                ),
-                            }] : []),
-                        ]}
-                        rows={participants}
-                        selectable={canEdit}
-                        selectedIds={selectedParticipantIds}
-                        onSelectionChange={setSelectedParticipantIds}
-                        bulkActions={
-                            canEdit ? (
-                                <button
-                                    onClick={participantBulkDeleteModal.open}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700"
-                                >
-                                    <Trash2 className="h-4 w-4" /> Delete selected
-                                </button>
-                            ) : null
-                        }
-                    />
-                </div>
-            </Modal>
+            </>
+            )}
 
             <Modal
                 isOpen={formModal.isOpen}
@@ -505,24 +427,15 @@ export default function TendersPage() {
                         placeholder={t('tenders.form.tenderNumber')}
                     />
 
-                    <FormField
-                        id="tender-customer-name"
-                        label={t('tenders.form.customerName')}
-                        name="customerName"
-                        value={form.customerName}
-                        onChange={handleChange}
-                        placeholder={t('tenders.form.customerName')}
-                    />
-
                     <FormSelect
                         id="tender-client"
-                        label={t('tenders.form.client')}
+                        label={t('tenders.form.requester')}
                         name="clientId"
                         value={form.clientId}
                         onChange={handleChange}
                         required
                         searchable
-                        placeholder={t('tenders.form.selectClient')}
+                        placeholder={t('tenders.form.selectRequester')}
                         options={clients.map((item) => ({ value: String(item.id), label: item.name }))}
                         onQuickCreate={(name) => openQuickCreate('client', name, (item) => {
                             setClients((prev) => [...prev, item.raw])
@@ -548,7 +461,7 @@ export default function TendersPage() {
 
                     <FormField
                         id="tender-estimated-value"
-                        label={t('tenders.form.estimatedValue')}
+                        label={`${t('tenders.form.estimatedValue')} (${currencySymbol(form.currency || baseCurrency)})`}
                         type="number"
                         step="0.01"
                         min="0"
@@ -556,6 +469,13 @@ export default function TendersPage() {
                         value={form.estimatedValue}
                         onChange={handleChange}
                         placeholder={t('tenders.form.estimatedValue')}
+                    />
+
+                    <CurrencyRateField
+                        value={{ currency: form.currency, exchangeRate: form.exchangeRate, source: form.rateSource, asOfDate: form.rateAsOfDate }}
+                        onChange={(next) => setForm((prev) => ({ ...prev, currency: next.currency, exchangeRate: next.exchangeRate, rateSource: next.source, rateAsOfDate: next.asOfDate }))}
+                        baseCurrency={baseCurrency}
+                        currencies={currencies}
                     />
 
                     <FormField
@@ -616,29 +536,11 @@ export default function TendersPage() {
             />
 
             <ConfirmModal
-                isOpen={participantDeleteModal.isOpen}
-                title={t('tenders.participants.deleteTitle')}
-                message={t('tenders.participants.deleteConfirm', { name: deletingParticipant?.manufacturerName || '' })}
-                onClose={participantDeleteModal.close}
-                onConfirm={handleParticipantDelete}
-                loading={loading}
-            />
-
-            <ConfirmModal
                 isOpen={bulkDeleteModal.isOpen}
                 title={t('tenders.bulkDeleteTitle')}
                 message={t('tenders.bulkDeleteConfirm', { count: selectedIds.length })}
                 onClose={bulkDeleteModal.close}
                 onConfirm={handleBulkDelete}
-                loading={loading}
-            />
-
-            <ConfirmModal
-                isOpen={participantBulkDeleteModal.isOpen}
-                title={t('tenders.participants.bulkDeleteTitle')}
-                message={t('tenders.participants.bulkDeleteConfirm', { count: selectedParticipantIds.length })}
-                onClose={participantBulkDeleteModal.close}
-                onConfirm={handleParticipantBulkDelete}
                 loading={loading}
             />
 

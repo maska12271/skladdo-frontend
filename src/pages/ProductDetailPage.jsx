@@ -16,6 +16,7 @@ import TransferStockModal from '../components/TransferStockModal'
 import CopyButton from '../components/CopyButton'
 import { resolveImageUrl } from '../components/ImageUploadField.jsx'
 import { useAuth, usePermissions } from '../context/AuthContext'
+import { useSettings } from '../context/SettingsContext'
 import { useModal } from '../hooks/useModal'
 import { formatMoney, formatDate } from '../utils/format'
 import { stockStatusOf } from '../utils/stock'
@@ -93,6 +94,7 @@ export default function ProductDetailPage() {
     const { canEdit } = usePermissions('PRODUCTS')
     const { canCreate: canAdjustStock, canView: canViewInventory } = usePermissions('INVENTORY')
     const { canSeePrices } = useAuth()
+    const { formatCurrency } = useSettings()
     const adjustModal = useModal()
     const addModal = useModal()
     const editModal = useModal()
@@ -322,7 +324,13 @@ export default function ProductDetailPage() {
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
-                        {canSeePrices && <Fact label={t('productDetail.facts.price')} value={formatMoney(product.price)} />}
+                        {canSeePrices && <Fact label={t('productDetail.facts.price')} value={formatCurrency(product.price, product.currency)} />}
+                        {canSeePrices && (
+                            <Fact
+                                label={t('productDetail.facts.stockValue')}
+                                value={formatCurrency(Number(product.price || 0) * Number(product.stockQuantity || 0), product.currency)}
+                            />
+                        )}
                         <Fact label={t('productDetail.facts.unit')} value={product.unit || '—'} />
                         <Fact label={t('productDetail.facts.size')} value={product.size || '—'} />
                         <Fact

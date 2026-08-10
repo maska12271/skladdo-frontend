@@ -24,6 +24,11 @@ i18n
             ru: { translation: ru },
         },
         supportedLngs: ['en', 'et', 'ru'],
+        // Region-tagged locales must match their base language. Without this, i18next tests each detected
+        // code verbatim against supportedLngs, so 'en-US' misses and the NEXT language the browser lists
+        // wins instead — an en-US user with Russian also installed was served Russian, and an et-EE user
+        // likewise. Baltic users routinely have two or three of these configured, so this is the common case.
+        nonExplicitSupportedLngs: true,
         fallbackLng: 'en',
         detection: {
             order: ['localStorage', 'navigator', 'htmlTag'],

@@ -321,6 +321,14 @@ button:not(:disabled):active {
 /* ============================================================
    SCROLLBARS — slim, theme-aware, brighten on hover.
    ============================================================ */
+
+/* Keep the scrollbar's 10px reserved whether or not the page currently scrolls. Without this every
+   short page shifts the whole layout 10px wider than a long one, so navigating between them nudges the
+   header and content sideways — most visibly on a step that renders a brief loading card in between. */
+html {
+  scrollbar-gutter: stable;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

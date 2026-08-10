@@ -21,4 +21,5 @@ export const PERMISSION_MODULES = [
     // editor but has no sidebar link of its own.
     { module: 'INVENTORY', label: 'Inventory', navKey: 'inventory', path: null },
     { module: 'WAREHOUSES', label: 'Warehouses', navKey: 'warehouses', path: '/warehouses' },
+    { module: 'MANUFACTURER_EMAILS', label: 'Manufacturer Emails', navKey: 'manufacturerEmails', path: '/emails' },
 ]

@@ -14,40 +14,38 @@ import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import { useModal } from '../hooks/useModal'
 import { useQuickCreate } from '../hooks/useQuickCreate'
+import { useFrequentCountries } from '../hooks/useFrequentCountries'
 import { usePermissions } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { safeArray, parseBool } from '../utils/format'
 import {FormField, TextareaField} from "../components/FormField.jsx";
+import CountrySelectField from "../components/CountrySelectField.jsx";
 import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx";
 import CustomSelect from '../components/CustomSelect'
 import CategoryChips from '../components/CategoryChips'
 import QuickCreateModal from '../components/QuickCreateModal'
 import CategoryManagerModal from '../components/CategoryManagerModal'
-import { Eye, Pencil, Trash2, Factory } from 'lucide-react'
+import ComposeEmailModal from '../components/ComposeEmailModal'
+import { Eye, Pencil, Trash2, Factory, Mail } from 'lucide-react'
 
-const exportColumns = [
-    { header: 'ID', value: (r) => r.id },
-    { header: 'Name', value: (r) => r.name },
-    { header: 'Country', value: (r) => r.country },
-    { header: 'Address', value: (r) => r.address },
-    { header: 'Email', value: (r) => r.email },
-    { header: 'Phone', value: (r) => r.phone },
-    { header: 'Website', value: (r) => r.website },
-    { header: 'Categories', value: (r) => (r.categories || []).map((c) => c.name).join('; ') },
-    { header: 'Notes', value: (r) => r.notes },
-    { header: 'Active', value: (r) => (r.active ? 'Active' : 'Inactive') },
+// One schema drives both export (headers localised to the current language) and import (headers
+// matched against each field's label in every app language). `id` is export-only. Categories are a
+// semicolon-separated list of partner-category names; unknown ones are created on import.
+const MANUFACTURER_FIELDS = [
+    { key: 'id', labelKey: 'common.id', importable: false, value: (r) => r.id },
+    { key: 'name', labelKey: 'common.name', required: true, example: 'Acme Industries', value: (r) => r.name },
+    { key: 'country', labelKey: 'common.country', example: 'Germany', value: (r) => r.country },
+    { key: 'address', labelKey: 'common.address', value: (r) => r.address },
+    { key: 'email', labelKey: 'common.email', example: 'sales@acme.com', value: (r) => r.email },
+    { key: 'phone', labelKey: 'common.phone', example: '+49 30 1234567', value: (r) => r.phone },
+    { key: 'website', labelKey: 'common.website', example: 'https://acme.com', value: (r) => r.website },
+    { key: 'categories', labelKey: 'partnerCategories.label', example: 'Packaging; Electronics', value: (r) => (r.categories || []).map((c) => c.name).join('; ') },
+    { key: 'notes', labelKey: 'common.notes', value: (r) => r.notes },
+    { key: 'status', labelKey: 'common.status', aliasKeys: ['common.active'], example: 'Active', value: (r) => (r.active ? 'Active' : 'Inactive') },
 ]
 
-const importColumns = [
-    { header: 'Name', required: true, example: 'Acme Industries' },
-    { header: 'Country', example: 'Germany' },
-    { header: 'Address', example: '' },
-    { header: 'Email', example: 'sales@acme.com' },
-    { header: 'Phone', example: '+49 30 1234567' },
-    { header: 'Website', example: 'https://acme.com' },
-    { header: 'Notes', example: '' },
-    { header: 'Active', example: 'Active' },
-]
+/** Split a semicolon-separated category cell into trimmed, non-empty names. */
+const splitCategoryNames = (value) => (value || '').split(';').map((s) => s.trim()).filter(Boolean)
 
 const emptyForm = {
     name: '',
@@ -65,22 +63,55 @@ export default function ManufacturersPage() {
     const { t } = useTranslation()
     const { canCreate, canEdit, canDelete } = usePermissions('MANUFACTURERS')
     const { canCreate: canCreateCategory, canEdit: canEditCategory, canDelete: canDeleteCategory } = usePermissions('PARTNER_CATEGORIES')
+    const { canCreate: canSendEmail } = usePermissions('MANUFACTURER_EMAILS')
     const canManageCategories = canCreateCategory || canEditCategory || canDeleteCategory
     const toast = useToast()
     const navigate = useNavigate()
-    const parseImportRow = (r) => {
-        const name = (r['Name'] || '').trim()
+    const frequentCountries = useFrequentCountries('manufacturers')
+    // Runs once before preview: creates any partner categories referenced by the file that don't
+    // exist yet (when the user may create them), and returns a name→category map for parseRow.
+    const prepareImport = async (records) => {
+        const byName = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c]))
+        if (canCreateCategory) {
+            const wanted = new Map()
+            for (const r of records) {
+                for (const nm of splitCategoryNames(r.categories)) {
+                    if (!byName.has(nm.toLowerCase())) wanted.set(nm.toLowerCase(), nm)
+                }
+            }
+            const created = []
+            for (const display of wanted.values()) {
+                try {
+                    const cat = await apiPost('/partner-categories', { name: display }, { suppressErrorToast: true })
+                    byName.set(display.toLowerCase(), cat)
+                    created.push(cat)
+                } catch { /* leave unresolved: the category is simply skipped for that row */ }
+            }
+            if (created.length) {
+                setCategories((prev) => [...prev, ...created])
+                toast.success(t('importModal.categoriesCreated', { count: created.length }))
+            }
+        }
+        return { categoriesByName: byName }
+    }
+
+    const parseImportRow = (r, ctx = {}) => {
+        const name = (r.name || '').trim()
         if (!name) return { error: t('manufacturers.import.nameRequired') }
+        const linked = splitCategoryNames(r.categories)
+            .map((nm) => ctx.categoriesByName?.get(nm.toLowerCase()))
+            .filter(Boolean)
         return {
             payload: {
                 name,
-                country: r['Country'] || '',
-                address: r['Address'] || '',
-                email: r['Email'] || '',
-                phone: r['Phone'] || '',
-                website: r['Website'] || '',
-                notes: r['Notes'] || '',
-                active: parseBool(r['Active'], true),
+                country: r.country || '',
+                address: r.address || '',
+                email: r.email || '',
+                phone: r.phone || '',
+                website: r.website || '',
+                notes: r.notes || '',
+                categories: linked.map((c) => ({ id: c.id })),
+                active: parseBool(r.status, true),
             },
         }
     }
@@ -90,6 +121,7 @@ export default function ManufacturersPage() {
     const deleteModal = useModal()
     const bulkDeleteModal = useModal()
     const categoryModal = useModal()
+    const composeModal = useModal()
 
     const [categories, setCategories] = useState([])
     const [form, setForm] = useState(emptyForm)
@@ -285,15 +317,15 @@ export default function ManufacturersPage() {
                     <div className="flex flex-wrap items-center gap-2">
                         <DataToolbar
                             entityLabel="manufacturers"
-                            exportColumns={exportColumns}
+                            fields={MANUFACTURER_FIELDS}
                             rows={rows}
                             fetchRows={fetchAllManufacturers}
                             count={total}
                             importConfig={{
                                 canImport: canCreate,
                                 endpoint: '/manufacturers',
-                                templateColumns: importColumns,
                                 parseRow: parseImportRow,
+                                prepare: prepareImport,
                             }}
                             onImported={reload}
                         />
@@ -355,7 +387,7 @@ export default function ManufacturersPage() {
                         ) : null}
                     />
                 }
-                selectable={canDelete}
+                selectable={canDelete || canSendEmail}
                 selectedIds={selectedIds}
                 onSelectionChange={setSelectedIds}
                 onRowClick={(row) => navigate(`/manufacturers/${row.id}`)}
@@ -364,19 +396,30 @@ export default function ManufacturersPage() {
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
                 bulkActions={
-                    canDelete ? (
-                        <button
-                            onClick={bulkDeleteModal.open}
-                            className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700"
-                        >
-                            <Trash2 className="h-4 w-4" /> {t('common.deleteSelected')}
-                        </button>
-                    ) : null
+                    <>
+                        {canSendEmail && (
+                            <button
+                                onClick={composeModal.open}
+                                className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
+                            >
+                                <Mail className="h-4 w-4" /> {t('emails.emailSelected')}
+                            </button>
+                        )}
+                        {canDelete && (
+                            <button
+                                onClick={bulkDeleteModal.open}
+                                className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700"
+                            >
+                                <Trash2 className="h-4 w-4" /> {t('common.deleteSelected')}
+                            </button>
+                        )}
+                    </>
                 }
             />
 
             <Modal isOpen={formModal.isOpen} title={editingId ? t('manufacturers.editTitle') : t('manufacturers.addTitle')} onClose={formModal.close}>
                 <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-4">
+                    {/* Identity */}
                     <FormField
                         id="manufacturer-name"
                         label={t('common.name')}
@@ -389,15 +432,39 @@ export default function ManufacturersPage() {
                     />
 
                     <FormField
+                        id="manufacturer-website"
+                        label={t('common.website')}
+                        name="website"
+                        type="url"
+                        value={form.website}
+                        onChange={handleChange}
+                        placeholder="https://example.com"
+                        className="md:col-span-2"
+                    />
+
+                    {/* Location — country and address kept side by side */}
+                    <CountrySelectField
                         id="manufacturer-country"
                         label={t('common.country')}
                         name="country"
                         value={form.country}
                         onChange={handleChange}
+                        frequentCountries={frequentCountries}
                         placeholder={t('common.country')}
                         className="md:col-span-2"
                     />
 
+                    <AddressAutocompleteField
+                        id="manufacturer-address"
+                        label={t('common.address')}
+                        name="address"
+                        value={form.address}
+                        onChange={handleChange}
+                        placeholder={t('common.address')}
+                        className="md:col-span-2"
+                    />
+
+                    {/* Contact */}
                     <FormField
                         id="manufacturer-email"
                         label={t('common.email')}
@@ -416,27 +483,6 @@ export default function ManufacturersPage() {
                         value={form.phone}
                         onChange={handleChange}
                         placeholder={t('common.phone')}
-                        className="md:col-span-2"
-                    />
-
-                    <FormField
-                        id="manufacturer-website"
-                        label={t('common.website')}
-                        name="website"
-                        type="url"
-                        value={form.website}
-                        onChange={handleChange}
-                        placeholder="https://example.com"
-                        className="md:col-span-2"
-                    />
-
-                    <AddressAutocompleteField
-                        id="manufacturer-address"
-                        label={t('common.address')}
-                        name="address"
-                        value={form.address}
-                        onChange={handleChange}
-                        placeholder={t('common.address')}
                         className="md:col-span-2"
                     />
 
@@ -535,6 +581,13 @@ export default function ManufacturersPage() {
                 isOpen={!!quickCreate}
                 onClose={closeQuickCreate}
                 onCreated={handleQuickCreated}
+            />
+
+            <ComposeEmailModal
+                isOpen={composeModal.isOpen}
+                manufacturerIds={selectedIds}
+                onClose={composeModal.close}
+                onSent={() => setSelectedIds([])}
             />
         </div>
     )

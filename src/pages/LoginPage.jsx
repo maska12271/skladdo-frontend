@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate, Navigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -43,7 +43,9 @@ export default function LoginPage() {
 
             <div className="fade-in-up shadow-pop relative w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 dark:border-slate-800 dark:bg-slate-900">
                 <div className="mb-8 text-center">
-                    <img src="/kladdo-logo.svg" alt="" aria-hidden="true" className="mx-auto mb-3 h-12 w-auto" />
+                    <Link to="/" aria-label={t('common.backToHome')}>
+                        <img src="/kladdo-logo.svg" alt="" aria-hidden="true" className="mx-auto mb-3 h-12 w-auto" />
+                    </Link>
                     <h1 className="text-2xl font-bold tracking-tight text-teal-700 dark:text-teal-400">
                         {t('nav.appName')}
                     </h1>
@@ -93,8 +95,23 @@ export default function LoginPage() {
                     </button>
                 </form>
 
-                <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
-                    {t('login.demo')}
+                <p className="mt-6 text-center text-sm">
+                    <Link
+                        to="/forgot-password"
+                        className="font-medium text-teal-700 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"
+                    >
+                        {t('login.forgot')}
+                    </Link>
+                </p>
+
+                <p className="mt-2 text-center text-sm text-slate-500 dark:text-slate-400">
+                    {t('login.noAccount')}{' '}
+                    <Link
+                        to="/register"
+                        className="font-medium text-teal-700 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"
+                    >
+                        {t('login.signUp')}
+                    </Link>
                 </p>
             </div>
         </div>

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, User as UserIcon, ShieldCheck, BarChart3, Archive, ArchiveRestore } from 'lucide-react'
-import { apiGet, apiPut } from '../api/client'
+import { ChevronLeft, User as UserIcon, ShieldCheck, BarChart3, Archive, ArchiveRestore, Mail, KeyRound } from 'lucide-react'
+import { apiGet, apiPost, apiPut } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import StatCard from '../components/StatCard'
@@ -11,7 +11,8 @@ import DataTable from '../components/DataTable'
 import LoadingBlock from '../components/LoadingBlock'
 import TrendChart from '../components/TrendChart'
 import CopyButton from '../components/CopyButton'
-import { formatMoney, formatDate, safeArray } from '../utils/format'
+import SentEmailDetailModal from '../components/SentEmailDetailModal'
+import { formatMoney, formatDate, formatDateTime, safeArray } from '../utils/format'
 import { PERIOD_KEYS, periodRange } from '../utils/period'
 import { PERMISSION_MODULES } from '../constants/modules'
 
@@ -33,6 +34,7 @@ const TABS = [
     { key: 'general', labelKey: 'userDetail.tabs.general', icon: UserIcon },
     { key: 'settings', labelKey: 'userDetail.tabs.settings', icon: ShieldCheck },
     { key: 'performance', labelKey: 'userDetail.tabs.performance', icon: BarChart3 },
+    { key: 'emails', labelKey: 'userDetail.tabs.emails', icon: Mail },
 ]
 
 // Cancelled orders stay in the tables for completeness, but never count toward totals or the chart.
@@ -124,16 +126,24 @@ export default function UserDetailPage() {
     const [permError, setPermError] = useState('')
     const [savingPerms, setSavingPerms] = useState(false)
     const [archiving, setArchiving] = useState(false)
+    const [sendingReset, setSendingReset] = useState(false)
+    // Copyable setup/reset link, shown when the email couldn't be delivered (company SMTP not set up).
+    const [resetLink, setResetLink] = useState(null)
     const [allWarehouses, setAllWarehouses] = useState([])
     const [assignedWarehouseIds, setAssignedWarehouseIds] = useState([])
     const [savingWarehouses, setSavingWarehouses] = useState(false)
+
+    // Emails tab (manager-facing; the whole page is admin-only). Lazily loaded when the tab is opened.
+    const [emailData, setEmailData] = useState(null)
+    const [emailDetailId, setEmailDetailId] = useState(null)
 
     useEffect(() => {
         let cancelled = false
         setLoading(true)
         setError(false)
-        // Drop any cached permissions so a different user's rights are re-fetched, not shown stale.
+        // Drop any cached permissions / emails so a different user's data is re-fetched, not shown stale.
         setPermRows(null)
+        setEmailData(null)
         Promise.all([apiGet(`/users/${id}`), apiGet(`/users/${id}/details`)])
             .then(([userRes, detailsRes]) => {
                 if (cancelled) return
@@ -169,6 +179,14 @@ export default function UserDetailPage() {
         if (tab !== 'settings' || allWarehouses.length > 0) return
         apiGet('/warehouses').then((res) => setAllWarehouses(safeArray(res))).catch(() => {})
     }, [tab, allWarehouses.length])
+
+    // Load this user's sent emails the first time the Emails tab is opened.
+    useEffect(() => {
+        if (tab !== 'emails' || emailData !== null) return
+        apiGet(`/sent-emails?senderId=${id}&size=100&sortBy=sentAt&sortDir=desc`)
+            .then((res) => setEmailData(res || { content: [], totalElements: 0 }))
+            .catch(() => setEmailData({ content: [], totalElements: 0 }))
+    }, [tab, id, emailData])
 
     const handleSaveWarehouses = async () => {
         setSavingWarehouses(true)
@@ -243,6 +261,19 @@ export default function UserDetailPage() {
         )
     }
 
+    // Emails is granted as a single capability ("can send emails") rather than the per-action CRUD
+    // grid: ON enables viewing sent history and sending; OFF revokes everything. Template management
+    // (canEdit/canDelete) is not separately grantable and stays off for regular users.
+    const toggleEmailAccess = (module, checked) => {
+        setPermRows((prev) =>
+            (prev || []).map((row) =>
+                row.module === module
+                    ? { ...row, canView: checked, canCreate: checked, canEdit: false, canDelete: false }
+                    : row,
+            ),
+        )
+    }
+
     const handleSavePermissions = async () => {
         if (!canEditRights || !permRows) return
         setSavingPerms(true)
@@ -268,6 +299,25 @@ export default function UserDetailPage() {
             toast.error?.(err.message || t('userDetail.settings.couldNotUpdate'))
         } finally {
             setArchiving(false)
+        }
+    }
+
+    // (Re)sends the user their password setup/reset link. Never changes an existing password: an active
+    // user keeps their current one until they actually reset. Falls back to a copyable link if email fails.
+    const handleSendResetLink = async () => {
+        setSendingReset(true)
+        setResetLink(null)
+        try {
+            const res = await apiPost(`/users/${id}/setup-email`, {})
+            if (res?.emailSent) {
+                toast.success(t('userDetail.settings.resetEmailSent', { email: user.email }))
+            } else if (res?.setupLink) {
+                setResetLink(res.setupLink)
+            }
+        } catch (err) {
+            toast.error?.(err.message || t('userDetail.settings.couldNotUpdate'))
+        } finally {
+            setSendingReset(false)
         }
     }
 
@@ -375,19 +425,41 @@ export default function UserDetailPage() {
                             )}
                         </dl>
                         {isAdmin && !isOwner && !isSelf && (
-                            <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
-                                <button
-                                    type="button"
-                                    onClick={handleArchiveToggle}
-                                    disabled={archiving}
-                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
-                                >
-                                    {user.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-                                    {user.archived ? t('userDetail.settings.unarchiveAccount') : t('userDetail.settings.archiveAccount')}
-                                </button>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    {t('userDetail.settings.editHint')}
-                                </p>
+                            <div className="mt-5 space-y-4 border-t border-slate-200 pt-4 dark:border-slate-800">
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={handleArchiveToggle}
+                                        disabled={archiving}
+                                        className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                                    >
+                                        {user.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                                        {user.archived ? t('userDetail.settings.unarchiveAccount') : t('userDetail.settings.archiveAccount')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleSendResetLink}
+                                        disabled={sendingReset}
+                                        className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                                    >
+                                        <KeyRound className="h-4 w-4" />
+                                        {user.passwordSetupPending ? t('userDetail.settings.resendSetup') : t('userDetail.settings.sendResetLink')}
+                                    </button>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        {user.passwordSetupPending
+                                            ? t('userDetail.settings.awaitingSetup')
+                                            : t('userDetail.settings.resetHint')}
+                                    </p>
+                                </div>
+                                {resetLink && (
+                                    <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">{t('userDetail.settings.setupLinkHint')}</p>
+                                        <div className="flex items-center gap-2">
+                                            <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">{resetLink}</span>
+                                            <CopyButton value={resetLink} />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                         {isSelf && (
@@ -488,9 +560,30 @@ export default function UserDetailPage() {
                                         <tbody>
                                             {(permRows || []).map((row) => {
                                                 const meta = PERMISSION_MODULES.find((m) => m.module === row.module)
+                                                const label = meta ? t(`nav.${meta.navKey}`) : row.module
+                                                // Emails is a single on/off capability, not a CRUD row.
+                                                if (row.module === 'MANUFACTURER_EMAILS') {
+                                                    return (
+                                                        <tr key={row.module} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
+                                                            <td className="px-4 py-3 font-medium">{label}</td>
+                                                            <td colSpan={PERMISSION_ACTIONS.length} className="px-4 py-3 text-center">
+                                                                <label className="inline-flex items-center gap-2">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!!row.canCreate}
+                                                                        disabled={!canEditRights}
+                                                                        onChange={(e) => toggleEmailAccess(row.module, e.target.checked)}
+                                                                        className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 disabled:opacity-50 dark:border-slate-700"
+                                                                    />
+                                                                    <span className="text-sm text-slate-600 dark:text-slate-300">{t('users.perm.emailAccess')}</span>
+                                                                </label>
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                }
                                                 return (
                                                     <tr key={row.module} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
-                                                        <td className="px-4 py-3 font-medium">{meta ? t(`nav.${meta.navKey}`) : row.module}</td>
+                                                        <td className="px-4 py-3 font-medium">{label}</td>
                                                         {PERMISSION_ACTIONS.map((action) => (
                                                             <td key={action.key} className="px-4 py-3 text-center">
                                                                 <input
@@ -599,9 +692,51 @@ export default function UserDetailPage() {
                     )}
                 </div>
             )}
+
+            {/* ---- Emails ---- */}
+            {tab === 'emails' && (
+                <div className="space-y-6">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <StatCard
+                            title={t('userDetail.emails.sent')}
+                            value={emailData?.totalElements ?? 0}
+                            hint={t('userDetail.general.allTime')}
+                            color="teal"
+                        />
+                    </div>
+
+                    <section className="space-y-3">
+                        <h2 className="text-lg font-semibold">{t('userDetail.emails.tableTitle', { count: emailData?.totalElements ?? 0 })}</h2>
+                        <DataTable
+                            tableId="user-sent-emails"
+                            columns={emailColumns(t)}
+                            rows={safeArray(emailData)}
+                            getRowId={(r) => r.id}
+                            onRowClick={(r) => setEmailDetailId(r.id)}
+                            loading={emailData === null}
+                            initialPageSize={10}
+                        />
+                    </section>
+                </div>
+            )}
+
+            <SentEmailDetailModal
+                emailId={emailDetailId}
+                isOpen={emailDetailId != null}
+                onClose={() => setEmailDetailId(null)}
+            />
         </div>
     )
 }
+
+const emailColumns = (t) => [
+    { key: 'manufacturerName', label: t('emails.cols.manufacturer'), render: (r) => r.manufacturerName || r.recipientEmail || '—' },
+    { key: 'subject', label: t('emails.cols.subject'), render: (r) => <span className="line-clamp-1">{r.subject}</span> },
+    { key: 'sentAt', label: t('emails.cols.sentAt'), render: (r) => formatDateTime(r.sentAt) },
+    { key: 'status', label: t('common.status'), render: (r) => <StatusBadge status={r.status} /> },
+    { key: 'viewed', label: t('emails.cols.viewed'), render: (r) => (r.viewed ? t('common.yes') : t('common.no')) },
+    { key: 'replied', label: t('emails.cols.replied'), render: (r) => (r.replied ? t('common.yes') : t('common.no')) },
+]
 
 const orderColumns = (t, counterpartyLabel) => [
     { key: 'orderNumber', label: t('userDetail.cols.orderNumber'), render: (r) => r.orderNumber || `#${r.orderId}` },

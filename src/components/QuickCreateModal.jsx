@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiGet, apiPost } from '../api/client'
 import { FormField, FormSelect } from './FormField'
+import CountrySelectField from './CountrySelectField'
+import { useFrequentCountries } from '../hooks/useFrequentCountries'
 import { useToast } from '../context/ToastContext'
+import { useSettings } from '../context/SettingsContext'
 import { safeArray } from '../utils/format'
 import { X } from 'lucide-react'
 
@@ -30,7 +33,7 @@ const CONFIGS = {
         titleKey: 'quickCreate.client',
         createdKey: 'clients.created',
         endpoint: '/clients',
-        toPayload: (f) => ({ name: f.name, email: f.email || '', phone: f.phone || '', active: true }),
+        toPayload: (f) => ({ name: f.name, country: f.country || '', email: f.email || '', phone: f.phone || '', active: true }),
     },
     product: {
         titleKey: 'quickCreate.product',
@@ -53,11 +56,16 @@ const CONFIGS = {
 export default function QuickCreateModal({ type, initialName = '', isOpen, onClose, onCreated }) {
     const { t } = useTranslation()
     const toast = useToast()
+    const { currencySymbol } = useSettings()
     const config = CONFIGS[type]
     const [form, setForm] = useState({ name: '' })
     const [categories, setCategories] = useState([])
     const [manufacturers, setManufacturers] = useState([])
     const [loading, setLoading] = useState(false)
+    // Only the manufacturer/client quick-creates show a country field; skip the fetch otherwise.
+    const frequentCountries = useFrequentCountries(
+        isOpen && (type === 'manufacturer' || type === 'client') ? `${type}s` : null,
+    )
 
     useEffect(() => {
         if (!isOpen) return
@@ -145,13 +153,14 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
 
                     {type === 'manufacturer' && (
                         <>
-                            <FormField id="qc-country" label={t('common.country')} name="country" value={form.country || ''} onChange={handleChange} placeholder={t('common.optional')} />
+                            <CountrySelectField id="qc-country" label={t('common.country')} name="country" value={form.country || ''} onChange={handleChange} frequentCountries={frequentCountries} placeholder={t('common.optional')} />
                             <FormField id="qc-contact-email" label={t('quickCreate.contactEmail')} name="contactEmail" type="email" value={form.contactEmail || ''} onChange={handleChange} placeholder={t('common.optional')} />
                         </>
                     )}
 
                     {type === 'client' && (
                         <>
+                            <CountrySelectField id="qc-country" label={t('common.country')} name="country" value={form.country || ''} onChange={handleChange} frequentCountries={frequentCountries} placeholder={t('common.optional')} />
                             <FormField id="qc-email" label={t('common.email')} name="email" type="email" value={form.email || ''} onChange={handleChange} placeholder={t('common.optional')} />
                             <FormField id="qc-phone" label={t('common.phone')} name="phone" value={form.phone || ''} onChange={handleChange} placeholder={t('common.optional')} />
                         </>
@@ -163,7 +172,7 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
                                 <FormField id="qc-sku" label={t('common.sku')} name="sku" value={form.sku || ''} onChange={handleChange} placeholder={t('common.optional')} />
                                 <FormField id="qc-unit" label={t('common.unit')} name="unit" value={form.unit || ''} onChange={handleChange} placeholder={t('quickCreate.unitPlaceholder')} />
                             </div>
-                            <FormField id="qc-price" label={t('common.price')} name="price" type="number" step="0.01" value={form.price || ''} onChange={handleChange} required placeholder="0.00" />
+                            <FormField id="qc-price" label={`${t('common.price')} (${currencySymbol()})`} name="price" type="number" step="0.01" value={form.price || ''} onChange={handleChange} required placeholder="0.00" />
                             <FormSelect
                                 id="qc-category"
                                 label={t('nav.categories')}

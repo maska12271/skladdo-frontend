@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Modal from './Modal'
 import { useToast } from '../context/ToastContext'
 import { apiPost } from '../api/client'
-import { buildCsv, downloadCsv, parseCsvToObjects } from '../utils/csv'
-import { Download, UploadCloud, FileText, CheckCircle2, AlertCircle } from 'lucide-react'
+import { buildCsv, downloadCsv } from '../utils/csv'
+import { buildHeaderResolver, parseFileToObjects, remapToCanonical } from '../utils/spreadsheet'
+import { Download, UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 
 // Maps the entity slug pages pass to a translated noun for messages.
 const ENTITY_NAV_KEY = {
@@ -18,12 +19,14 @@ const ENTITY_NAV_KEY = {
 }
 
 /**
- * Reusable CSV import modal. The page supplies:
- *  - `templateColumns`: `[{ header, required?, example? }]` (drives the downloadable template
- *    and required-column validation)
- *  - `parseRow(record)`: maps one parsed CSV record to `{ payload }` or `{ error }` (this is
- *    where the page resolves relations like manufacturer/category by name)
- *  - `endpoint`: where each valid payload is POSTed
+ * Reusable CSV / Excel import modal. The page supplies:
+ *  - `fields`: the entity's field schema (`[{ key, labelKey, required?, example?, importable? }]`).
+ *    Headers are matched against each field's label in every app language, so a file written in any
+ *    language imports regardless of the current UI language. Records passed on are keyed by `key`.
+ *  - `parseRow(record, context)`: maps one canonical-keyed record to `{ payload }` or `{ error }`.
+ *  - `prepare(records)` (optional, async): runs once before preview — resolves/creates referenced
+ *    relations (e.g. auto-creating missing categories) and returns the `context` handed to parseRow.
+ *  - `endpoint`: where each valid payload is POSTed.
  * Rows are created one at a time so a single failure never aborts the whole batch.
  */
 export default function ImportModal({
@@ -31,21 +34,31 @@ export default function ImportModal({
     onClose,
     entityLabel,
     endpoint,
-    templateColumns,
+    fields,
     parseRow,
+    prepare,
     onImported,
 }) {
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
     const entity = ENTITY_NAV_KEY[entityLabel] ? t(`nav.${ENTITY_NAV_KEY[entityLabel]}`) : entityLabel
     const toast = useToast()
     const fileInputRef = useRef(null)
     const [stage, setStage] = useState('select') // select | preview | importing | done
+    const [busy, setBusy] = useState(false) // reading/preparing the selected file
     const [fileName, setFileName] = useState('')
     const [parseError, setParseError] = useState('')
     const [parsed, setParsed] = useState([]) // { rowNumber, record, payload, error }
     const [dragOver, setDragOver] = useState(false)
     const [progress, setProgress] = useState({ done: 0, total: 0 })
     const [result, setResult] = useState(null) // { created, failed: [{ rowNumber, message }] }
+
+    // Importable columns, localised to the current language for the template + preview headers.
+    const importFields = useMemo(() => fields.filter((f) => f.importable !== false), [fields])
+    const templateColumns = useMemo(
+        () => importFields.map((f) => ({ key: f.key, header: t(f.labelKey), required: f.required, example: f.example })),
+        [importFields, t],
+    )
+    const resolveHeader = useMemo(() => buildHeaderResolver(importFields, i18n), [importFields, i18n])
 
     // The parent mounts this component only while open, so component state starts fresh on
     // every open and no reset effect is needed.
@@ -57,39 +70,54 @@ export default function ImportModal({
         if (!file) return
         setFileName(file.name)
         setParseError('')
+        setBusy(true)
 
-        let text
+        let raw
         try {
-            text = await file.text()
+            raw = await parseFileToObjects(file)
         } catch {
             setParseError(t('importModal.fileError'))
             setParsed([])
+            setBusy(false)
             setStage('preview')
             return
         }
 
-        const { headers, records } = parseCsvToObjects(text)
-        if (records.length === 0) {
+        if (raw.records.length === 0) {
             setParseError(t('importModal.noRows'))
             setParsed([])
+            setBusy(false)
             setStage('preview')
             return
         }
 
-        const missing = templateColumns
-            .filter((c) => c.required && !headers.includes(c.header))
-            .map((c) => c.header)
+        const { records, presentKeys } = remapToCanonical(raw.headers, raw.records, resolveHeader)
+
+        const missing = importFields
+            .filter((c) => c.required && !presentKeys.has(c.key))
+            .map((c) => t(c.labelKey))
         if (missing.length > 0) {
             setParseError(t('importModal.missingColumns', { count: missing.length, columns: missing.join(', ') }))
             setParsed([])
+            setBusy(false)
             setStage('preview')
             return
+        }
+
+        // Resolve/create referenced relations (e.g. missing categories) before mapping, so the
+        // preview reflects what will actually be imported.
+        let context = {}
+        try {
+            if (prepare) context = (await prepare(records)) || {}
+        } catch {
+            // A failed prepare step shouldn't abort: rows referencing unresolved relations will
+            // simply surface their own row-level error below.
         }
 
         const mapped = records.map((record, i) => {
             let outcome
             try {
-                outcome = parseRow(record) || {}
+                outcome = parseRow(record, context) || {}
             } catch (err) {
                 outcome = { error: err.message || t('importModal.invalidRow') }
             }
@@ -97,6 +125,7 @@ export default function ImportModal({
             return { rowNumber: i + 2, record, payload: outcome.payload, error: outcome.error }
         })
         setParsed(mapped)
+        setBusy(false)
         setStage('preview')
     }
 
@@ -167,7 +196,7 @@ export default function ImportModal({
                         <input
                             ref={fileInputRef}
                             type="file"
-                            accept=".csv,text/csv"
+                            accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                             className="hidden"
                             onChange={(e) => handleFile(e.target.files?.[0])}
                         />
@@ -194,7 +223,7 @@ export default function ImportModal({
                         <div className="mt-3 flex flex-wrap gap-2">
                             {templateColumns.map((c) => (
                                 <span
-                                    key={c.header}
+                                    key={c.key}
                                     className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
                                 >
                                     {c.header}
@@ -206,7 +235,13 @@ export default function ImportModal({
                 </div>
             )}
 
-            {stage === 'preview' && (
+            {stage === 'preview' && busy && (
+                <div className="flex items-center justify-center gap-3 py-10 text-sm text-slate-500 dark:text-slate-400">
+                    <Loader2 className="h-5 w-5 animate-spin" /> {t('importModal.reading')}
+                </div>
+            )}
+
+            {stage === 'preview' && !busy && (
                 <div className="space-y-4">
                     <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                         <FileText className="h-4 w-4" /> {fileName}
@@ -325,7 +360,7 @@ function PreviewTable({ templateColumns, parsed }) {
                     <tr>
                         <th className="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-300">#</th>
                         {templateColumns.map((c) => (
-                            <th key={c.header} className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-300">
+                            <th key={c.key} className="whitespace-nowrap px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-300">
                                 {c.header}
                             </th>
                         ))}
@@ -342,8 +377,8 @@ function PreviewTable({ templateColumns, parsed }) {
                         >
                             <td className="px-3 py-2 align-middle text-slate-400">{p.rowNumber}</td>
                             {templateColumns.map((c) => (
-                                <td key={c.header} className="whitespace-nowrap px-3 py-2 align-middle text-slate-700 dark:text-slate-200">
-                                    {p.record[c.header] || <span className="text-slate-300">—</span>}
+                                <td key={c.key} className="whitespace-nowrap px-3 py-2 align-middle text-slate-700 dark:text-slate-200">
+                                    {p.record[c.key] || <span className="text-slate-300">—</span>}
                                 </td>
                             ))}
                             <td className="whitespace-nowrap px-3 py-2 align-middle">

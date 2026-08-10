@@ -7,19 +7,53 @@ export { COLS }
 // minimum size. Order here is only a fallback; the real arrangement comes from the x/y of each item.
 // Grid is COLS (24) wide and rows are 40px, so widths snap to 1/24 and heights to ~half a card row
 // — fine enough to size widgets precisely without leaving gaps.
-export const DASHBOARD_WIDGETS = [
-    { key: 'kpis', label: 'Summary cards', x: 0, y: 0, w: 24, h: 4, minW: 8, minH: 3 },
-    { key: 'revenueChart', label: 'Revenue vs spend', x: 0, y: 4, w: 16, h: 8, minW: 8, minH: 5 },
-    { key: 'activity', label: 'Recent activity', x: 16, y: 4, w: 8, h: 11, minW: 6, minH: 6 },
-    { key: 'lowStock', label: 'Low stock products', x: 0, y: 11, w: 16, h: 8, minW: 8, minH: 5 },
-    { key: 'receivables', label: 'Outstanding invoices', x: 0, y: 19, w: 16, h: 8, minW: 8, minH: 5 },
-    { key: 'expiringLots', label: 'Expiring lots', x: 0, y: 27, w: 16, h: 8, minW: 8, minH: 5 },
-    { key: 'tenders', label: 'Latest tenders', x: 16, y: 15, w: 8, h: 6, minW: 6, minH: 4 },
-    { key: 'topClients', label: 'Top clients', x: 0, y: 27, w: 8, h: 6, minW: 6, minH: 4 },
-    { key: 'topProducts', label: 'Top products', x: 8, y: 27, w: 8, h: 6, minW: 6, minH: 4 },
+// Each headline figure is its own widget, so a user can drop the ones they don't care about and put the
+// rest wherever they like - the same add / move / resize / remove treatment as every other widget.
+export const KPI_KEYS = [
+    'kpiRevenue', 'kpiSpend', 'kpiCollected', 'kpiLowStock',
+    'kpiActiveSales', 'kpiActivePurchases', 'kpiActiveTenders',
 ]
 
-const STORAGE_PREFIX = 'dashboard-grid-v5'
+/**
+ * The default arrangement is two full-width KPI bands over a two-column body: a wide left column for
+ * the chart and the tables that need room for their columns, and a narrow right rail of at-a-glance
+ * widgets. Every widget in a band shares its neighbours' height so no row is left ragged, and the two
+ * columns are sized to finish within a row of each other rather than leaving one hanging.
+ *
+ * List widgets are deliberately short — they show the first few rows and link out for the rest — so
+ * the whole dashboard stays scannable instead of turning into stacked full-height tables.
+ */
+export const DASHBOARD_WIDGETS = [
+    // Band 1: the three money figures, given room for a big number and their 12-month sparkline.
+    { key: 'kpiRevenue', label: 'Revenue this month', x: 0, y: 0, w: 8, h: 4, minW: 5, minH: 4 },
+    { key: 'kpiSpend', label: 'Spend this month', x: 8, y: 0, w: 8, h: 4, minW: 5, minH: 4 },
+    { key: 'kpiCollected', label: 'Collected this month', x: 16, y: 0, w: 8, h: 4, minW: 5, minH: 4 },
+    // Band 2: the four plain counts, on half-height cards — a number and a label need no more.
+    { key: 'kpiLowStock', label: 'Low stock items', x: 0, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
+    { key: 'kpiActiveSales', label: 'Active sales orders', x: 6, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
+    { key: 'kpiActivePurchases', label: 'Active purchase orders', x: 12, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
+    { key: 'kpiActiveTenders', label: 'Active tenders', x: 18, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
+
+    // Left column: chart first, then the wide tables.
+    { key: 'revenueChart', label: 'Revenue vs spend', x: 0, y: 6, w: 16, h: 8, minW: 8, minH: 5 },
+    { key: 'lowStock', label: 'Low stock products', x: 0, y: 14, w: 16, h: 7, minW: 8, minH: 5 },
+    // Taller than the other tables: the totals and the aging donut sit above its list.
+    { key: 'receivables', label: 'Outstanding invoices', x: 0, y: 21, w: 16, h: 9, minW: 8, minH: 7 },
+    { key: 'expiringLots', label: 'Expiring lots', x: 0, y: 30, w: 16, h: 8, minW: 8, minH: 6 },
+
+    // Right rail: glanceable widgets, none of them wide enough to need many columns. Sized so the rail
+    // meets the left column at y=14 and y=21 and finishes level with it, instead of trailing off.
+    { key: 'activity', label: 'Recent activity', x: 16, y: 6, w: 8, h: 8, minW: 6, minH: 5 },
+    { key: 'tenders', label: 'Latest tenders', x: 16, y: 14, w: 8, h: 7, minW: 6, minH: 4 },
+    { key: 'stockHealth', label: 'Stock health', x: 16, y: 21, w: 8, h: 5, minW: 5, minH: 4 },
+    { key: 'topClients', label: 'Top clients', x: 16, y: 26, w: 8, h: 6, minW: 6, minH: 4 },
+    { key: 'topProducts', label: 'Top products', x: 16, y: 32, w: 8, h: 6, minW: 6, minH: 4 },
+]
+
+// v8: widgets were resized and rearranged into columns, and the KPI bands re-split into three large
+// cards over four small ones. An older layout would reproduce the previous, ragged arrangement, so the
+// key is bumped to hand everyone the new default; their own edits start again from it.
+const STORAGE_PREFIX = 'dashboard-grid-v8'
 
 export const widgetMeta = (key) => DASHBOARD_WIDGETS.find((w) => w.key === key)
 

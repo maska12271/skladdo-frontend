@@ -21,7 +21,7 @@ const hToPx = (h) => h * ROW_PX + (h - 1) * GAP
  * to resize. Collision/compaction math lives in utils/gridLayout. No external grid library (keeps it
  * React-19 / findDOMNode-free).
  */
-export default function DashboardGrid({ items, editing, onChange, onRemove, renderContent, titleOf }) {
+export default function DashboardGrid({ items, editing, onChange, onRemove, renderContent, titleOf, actionOf, plainOf }) {
     const containerRef = useRef(null)
     const [width, setWidth] = useState(0)
 
@@ -136,7 +136,7 @@ export default function DashboardGrid({ items, editing, onChange, onRemove, rend
         return (
             <div ref={containerRef} className="space-y-4">
                 {ordered.map((it) => (
-                    <WidgetFrame key={it.key} title={titleOf(it.key)} editing={false} style={{ height: hToPx(it.h) }}>
+                    <WidgetFrame key={it.key} title={titleOf(it.key)} plain={plainOf?.(it.key)} editing={false} style={{ height: hToPx(it.h) }}>
                         {renderContent(it.key)}
                     </WidgetFrame>
                 ))}
@@ -182,6 +182,8 @@ export default function DashboardGrid({ items, editing, onChange, onRemove, rend
                         >
                             <WidgetFrame
                                 title={titleOf(it.key)}
+                                action={actionOf?.(it.key)}
+                                plain={plainOf?.(it.key)}
                                 editing={editing}
                                 lifted={lifted}
                                 onRemove={() => onRemove(it.key)}
@@ -197,8 +199,14 @@ export default function DashboardGrid({ items, editing, onChange, onRemove, rend
     )
 }
 
-function WidgetFrame({ title, editing, lifted, onRemove, onDragStart, onResizeStart, children, style }) {
+/**
+ * The card around a widget: a title bar (which doubles as the drag handle while editing) over the
+ * widget's own content. `plain` widgets — the headline figures — carry their own label and link, so
+ * outside edit mode they get the bare card and skip the title bar entirely.
+ */
+function WidgetFrame({ title, action, plain, editing, lifted, onRemove, onDragStart, onResizeStart, children, style }) {
     const { t } = useTranslation()
+    const bare = plain && !editing
     return (
         <div
             style={style}
@@ -206,7 +214,7 @@ function WidgetFrame({ title, editing, lifted, onRemove, onDragStart, onResizeSt
                 lifted ? 'border-teal-400 shadow-2xl ring-2 ring-teal-400/40 dark:border-teal-400' : 'border-slate-200 shadow-sm dark:border-slate-800'
             }`}
         >
-            <div
+            {!bare && <div
                 onPointerDown={editing ? onDragStart : undefined}
                 style={editing ? { touchAction: 'none' } : undefined}
                 className={`flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5 dark:border-slate-800 ${
@@ -217,6 +225,8 @@ function WidgetFrame({ title, editing, lifted, onRemove, onDragStart, onResizeSt
                     {editing && <GripVertical className="h-4 w-4 shrink-0 text-slate-400" />}
                     <h3 className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</h3>
                 </div>
+                {/* While editing the header is the drag handle, so the link is hidden to keep it grabbable. */}
+                {!editing && action}
                 {editing && (
                     <button
                         type="button"
@@ -228,9 +238,9 @@ function WidgetFrame({ title, editing, lifted, onRemove, onDragStart, onResizeSt
                         <X className="h-4 w-4" />
                     </button>
                 )}
-            </div>
+            </div>}
 
-            <div className={`min-h-0 flex-1 overflow-auto p-4 ${editing ? 'pointer-events-none select-none' : ''}`}>{children}</div>
+            <div className={`min-h-0 flex-1 overflow-auto ${bare ? '' : 'p-4'} ${editing ? 'pointer-events-none select-none' : ''}`}>{children}</div>
 
             {editing && (
                 <div

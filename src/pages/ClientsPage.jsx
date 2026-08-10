@@ -13,34 +13,28 @@ import ActionMenu from '../components/ActionMenu'
 import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import { useModal } from '../hooks/useModal'
+import { useFrequentCountries } from '../hooks/useFrequentCountries'
 import { usePermissions } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { safeArray, parseBool } from '../utils/format'
 import {FormField, TextareaField} from "../components/FormField.jsx";
+import CountrySelectField from "../components/CountrySelectField.jsx";
 import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx";
 import { Eye, Pencil, Trash2, Archive, ArchiveRestore, Users } from 'lucide-react'
 
-const exportColumns = [
-    { header: 'ID', value: (r) => r.id },
-    { header: 'Name', value: (r) => r.name },
-    { header: 'Registration code', value: (r) => r.registrationCode },
-    { header: 'Email', value: (r) => r.email },
-    { header: 'Phone', value: (r) => r.phone },
-    { header: 'Address', value: (r) => r.address },
-    { header: 'Contact person', value: (r) => r.contactPerson },
-    { header: 'Notes', value: (r) => r.notes },
-    { header: 'Status', value: (r) => (r.archived ? 'Archived' : 'Active') },
-]
-
-const importColumns = [
-    { header: 'Name', required: true, example: 'City Hospital' },
-    { header: 'Registration code', example: '12345678' },
-    { header: 'Email', example: 'procurement@hospital.gov' },
-    { header: 'Phone', example: '+372 555 1234' },
-    { header: 'Address', example: '' },
-    { header: 'Contact person', example: 'Jane Doe' },
-    { header: 'Notes', example: '' },
-    { header: 'Active', example: 'Active' },
+// One schema drives both export (headers localised to the current language) and import (headers
+// matched against each field's label in every app language). `id` is export-only.
+const CLIENT_FIELDS = [
+    { key: 'id', labelKey: 'common.id', importable: false, value: (r) => r.id },
+    { key: 'name', labelKey: 'common.name', required: true, example: 'City Hospital', value: (r) => r.name },
+    { key: 'registrationCode', labelKey: 'clients.registrationCode', aliasKeys: ['clients.regCode'], example: '12345678', value: (r) => r.registrationCode },
+    { key: 'email', labelKey: 'common.email', example: 'procurement@hospital.gov', value: (r) => r.email },
+    { key: 'phone', labelKey: 'common.phone', example: '+372 555 1234', value: (r) => r.phone },
+    { key: 'country', labelKey: 'common.country', example: 'Estonia', value: (r) => r.country },
+    { key: 'address', labelKey: 'common.address', value: (r) => r.address },
+    { key: 'contactPerson', labelKey: 'clients.contactPerson', example: 'Jane Doe', value: (r) => r.contactPerson },
+    { key: 'notes', labelKey: 'common.notes', value: (r) => r.notes },
+    { key: 'status', labelKey: 'common.status', aliasKeys: ['common.active'], example: 'Active', value: (r) => (r.archived ? 'Archived' : 'Active') },
 ]
 
 const emptyForm = {
@@ -48,6 +42,7 @@ const emptyForm = {
     registrationCode: '',
     email: '',
     phone: '',
+    country: '',
     address: '',
     contactPerson: '',
     notes: '',
@@ -59,19 +54,21 @@ export default function ClientsPage() {
     const { canCreate, canEdit, canDelete } = usePermissions('CLIENTS')
     const toast = useToast()
     const navigate = useNavigate()
+    const frequentCountries = useFrequentCountries('clients')
     const parseImportRow = (r) => {
-        const name = (r['Name'] || '').trim()
+        const name = (r.name || '').trim()
         if (!name) return { error: t('clients.import.nameRequired') }
         return {
             payload: {
                 name,
-                registrationCode: r['Registration code'] || '',
-                email: r['Email'] || '',
-                phone: r['Phone'] || '',
-                address: r['Address'] || '',
-                contactPerson: r['Contact person'] || '',
-                notes: r['Notes'] || '',
-                active: parseBool(r['Active'], true),
+                registrationCode: r.registrationCode || '',
+                email: r.email || '',
+                phone: r.phone || '',
+                country: r.country || '',
+                address: r.address || '',
+                contactPerson: r.contactPerson || '',
+                notes: r.notes || '',
+                active: parseBool(r.status, true),
             },
         }
     }
@@ -145,6 +142,7 @@ export default function ClientsPage() {
             registrationCode: item.registrationCode || '',
             email: item.email || '',
             phone: item.phone || '',
+            country: item.country || '',
             address: item.address || '',
             contactPerson: item.contactPerson || '',
             notes: item.notes || '',
@@ -223,6 +221,7 @@ export default function ClientsPage() {
         { key: 'registrationCode', label: t('clients.regCode') },
         { key: 'email', label: t('common.email') },
         { key: 'phone', label: t('common.phone') },
+        { key: 'country', label: t('common.country') },
         { key: 'contactPerson', label: t('clients.contactPerson') },
         {
             key: 'active',
@@ -261,14 +260,13 @@ export default function ClientsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                         <DataToolbar
                             entityLabel="clients"
-                            exportColumns={exportColumns}
+                            fields={CLIENT_FIELDS}
                             rows={rows}
                             fetchRows={fetchAllClients}
                             count={total}
                             importConfig={{
                                 canImport: canCreate,
                                 endpoint: '/clients',
-                                templateColumns: importColumns,
                                 parseRow: parseImportRow,
                             }}
                             onImported={reload}
@@ -340,6 +338,7 @@ export default function ClientsPage() {
 
             <Modal isOpen={formModal.isOpen} title={editingId ? t('clients.editTitle') : t('clients.addTitle')} onClose={formModal.close}>
                 <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-4">
+                    {/* Identity */}
                     <FormField
                         id="client-name"
                         label={t('common.name')}
@@ -381,6 +380,29 @@ export default function ClientsPage() {
                         className="md:col-span-2"
                     />
 
+                    {/* Location — country and address kept side by side */}
+                    <CountrySelectField
+                        id="client-country"
+                        label={t('common.country')}
+                        name="country"
+                        value={form.country}
+                        onChange={handleChange}
+                        frequentCountries={frequentCountries}
+                        placeholder={t('common.country')}
+                        className="md:col-span-2"
+                    />
+
+                    <AddressAutocompleteField
+                        id="client-address"
+                        label={t('common.address')}
+                        name="address"
+                        value={form.address}
+                        onChange={handleChange}
+                        placeholder={t('common.address')}
+                        className="md:col-span-2"
+                    />
+
+                    {/* Contact */}
                     <FormField
                         id="client-email"
                         label={t('common.email')}
@@ -410,16 +432,6 @@ export default function ClientsPage() {
                         onChange={handleChange}
                         placeholder={t('clients.contactPerson')}
                         className="md:col-span-2"
-                    />
-
-                    <AddressAutocompleteField
-                        id="client-address"
-                        label={t('common.address')}
-                        name="address"
-                        value={form.address}
-                        onChange={handleChange}
-                        placeholder={t('common.address')}
-                        className="md:col-span-4"
                     />
 
                     <TextareaField

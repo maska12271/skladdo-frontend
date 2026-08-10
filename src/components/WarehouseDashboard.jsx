@@ -1,9 +1,34 @@
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
 import StatCard from './StatCard'
 import DataTable from './DataTable'
 import StatusBadge from './StatusBadge'
 import { formatDate } from '../utils/format'
+
+// The statuses the backend counts as "still open for fulfilment" (DashboardService.OPEN_FOR_FULFILMENT),
+// so a card and the list it links to always show the same orders.
+const OPEN_STATUSES = 'NEW,IN_PROGRESS,CONFIRMED'
+
+// Section heading with a "view all" link to the matching list page, already filtered to what the
+// section shows.
+function SectionHeader({ title, to }) {
+    const { t } = useTranslation()
+    return (
+        <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">{title}</h2>
+            <Link
+                to={to}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-teal-700 transition hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/40"
+            >
+                {t('dashboard.viewAll')} <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+        </div>
+    )
+}
+
+/** How many rows each dashboard card previews before deferring to its "view all" link. */
+const PREVIEW_ROWS = 5
 
 /**
  * Operational dashboard for warehouse staff: no revenue or money figures, just what needs working —
@@ -15,10 +40,14 @@ export default function WarehouseDashboard({ stats }) {
     const navigate = useNavigate()
 
     const fulfilment = stats?.fulfilment || {}
-    const salesToShip = fulfilment.salesToShip || []
-    const purchasesIncoming = fulfilment.purchasesIncoming || []
-    const lowStock = stats?.products?.lowStock || []
-    const lowStockCount = stats?.products?.lowStockCount ?? lowStock.length
+    // A dashboard card is a "what needs attention now" preview, not a list page: show the first few and
+    // let the section's "view all" link handle the rest. The KPI above each still counts everything, so
+    // trimming the table never hides how much work there actually is.
+    const salesToShip = (fulfilment.salesToShip || []).slice(0, PREVIEW_ROWS)
+    const purchasesIncoming = (fulfilment.purchasesIncoming || []).slice(0, PREVIEW_ROWS)
+    const allLowStock = stats?.products?.lowStock || []
+    const lowStock = allLowStock.slice(0, PREVIEW_ROWS)
+    const lowStockCount = stats?.products?.lowStockCount ?? allLowStock.length
 
     const today = new Date().toISOString().slice(0, 10)
 
@@ -55,16 +84,23 @@ export default function WarehouseDashboard({ stats }) {
 
     return (
         <div className="space-y-6">
+            {/* Each figure links to the list page filtered to exactly the orders/products it counts. */}
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-                <StatCard compact title={t('warehouseDash.kpi.toShip')} value={fulfilment.salesToShipCount ?? salesToShip.length} hint={t('warehouseDash.kpi.toShipHint')} color="teal" />
-                <StatCard compact title={t('warehouseDash.kpi.incoming')} value={fulfilment.purchasesIncomingCount ?? purchasesIncoming.length} hint={t('warehouseDash.kpi.incomingHint')} color="blue" />
-                <StatCard compact title={t('warehouseDash.kpi.lowStock')} value={lowStockCount} hint={t('warehouseDash.kpi.lowStockHint')} color="rose" />
+                <Link to={`/sales-orders?status=${OPEN_STATUSES}`} className="block">
+                    <StatCard compact title={t('warehouseDash.kpi.toShip')} value={fulfilment.salesToShipCount ?? salesToShip.length} hint={t('warehouseDash.kpi.toShipHint')} color="teal" />
+                </Link>
+                <Link to={`/purchase-orders?status=${OPEN_STATUSES}`} className="block">
+                    <StatCard compact title={t('warehouseDash.kpi.incoming')} value={fulfilment.purchasesIncomingCount ?? purchasesIncoming.length} hint={t('warehouseDash.kpi.incomingHint')} color="blue" />
+                </Link>
+                <Link to="/products?status=low" className="block">
+                    <StatCard compact title={t('warehouseDash.kpi.lowStock')} value={lowStockCount} hint={t('warehouseDash.kpi.lowStockHint')} color="rose" />
+                </Link>
             </div>
 
             <section className="space-y-3">
-                <h2 className="text-lg font-semibold">{t('warehouseDash.salesToShip')}</h2>
+                <SectionHeader title={t('warehouseDash.salesToShip')} to={`/sales-orders?status=${OPEN_STATUSES}`} />
+                {/* No tableId: the column picker belongs on the full list pages, not on a dashboard card. */}
                 <DataTable
-                    tableId="wh-sales-to-ship"
                     columns={salesColumns}
                     rows={salesToShip}
                     getRowId={(r) => r.id}
@@ -74,9 +110,8 @@ export default function WarehouseDashboard({ stats }) {
             </section>
 
             <section className="space-y-3">
-                <h2 className="text-lg font-semibold">{t('warehouseDash.incoming')}</h2>
+                <SectionHeader title={t('warehouseDash.incoming')} to={`/purchase-orders?status=${OPEN_STATUSES}`} />
                 <DataTable
-                    tableId="wh-incoming"
                     columns={purchaseColumns}
                     rows={purchasesIncoming}
                     getRowId={(r) => r.id}
@@ -87,9 +122,8 @@ export default function WarehouseDashboard({ stats }) {
 
             {lowStock.length > 0 && (
                 <section className="space-y-3">
-                    <h2 className="text-lg font-semibold">{t('dashboard.titles.lowStock', { count: lowStockCount })}</h2>
+                    <SectionHeader title={t('dashboard.titles.lowStock', { count: lowStockCount })} to="/products?status=low" />
                     <DataTable
-                        tableId="wh-low-stock"
                         columns={lowStockColumns}
                         rows={lowStock}
                         getRowId={(r) => r.id}

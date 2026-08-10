@@ -1,25 +1,60 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiDelete, apiDownloadPost, apiGet, apiPost, apiPut, apiUpload } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { useSettings } from '../context/SettingsContext'
+import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/PageHeader'
 import LoadingBlock from '../components/LoadingBlock'
 import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import { useModal } from '../hooks/useModal'
-import { FormField, FormSelect } from '../components/FormField.jsx'
+import { FormField, FormSelect, PasswordAwareInput } from '../components/FormField.jsx'
+import UnitSelect from '../components/UnitSelect.jsx'
+import { SUPPORTED_LANGUAGES } from '../i18n'
 import AddressAutocompleteField from '../components/AddressAutocompleteField.jsx'
+import EmailTemplatesManager from '../components/EmailTemplatesManager'
+import PlanBillingTab from '../components/PlanBillingTab'
+import CompanyDataExport from '../components/CompanyDataExport'
 import { resolveImageUrl } from '../components/ImageUploadField'
 import { PERMISSION_MODULES } from '../constants/modules'
-import { SlidersHorizontal, Percent, FileText, Users, Plus, Pencil, Trash2, Star, UploadCloud, X } from 'lucide-react'
+import ConnectionsTab from '../components/ConnectionsTab'
+import { SlidersHorizontal, Percent, FileText, Users, Plus, Pencil, Trash2, Star, UploadCloud, X, Mail, Send, Info, CreditCard, Building2, Handshake } from 'lucide-react'
 
 const TABS = [
     { key: 'general', icon: SlidersHorizontal },
+    { key: 'company', icon: Building2 },
+    { key: 'connections', icon: Handshake },
     { key: 'taxes', icon: Percent },
     { key: 'invoicing', icon: FileText },
+    { key: 'email', icon: Mail },
     { key: 'defaults', icon: Users },
+    { key: 'plan', icon: CreditCard },
 ]
+
+/**
+ * A warehouse account has no company of its own to run, so most of this page describes things it will
+ * never have: tax rates, invoice numbering and outbound email are all about selling goods, and the
+ * default-permission template governs nothing — at home every module is closed to it, and inside a client
+ * its staff get the connection's fixed grant rather than anything set here.
+ *
+ * What is left is the account itself: who it is, who it works for, and what it pays.
+ */
+const WAREHOUSE_ACCOUNT_TABS = new Set(['general', 'company', 'connections', 'plan'])
+
+// IANA timezone options for the General tab. Intl.supportedValuesOf gives the full canonical list without
+// a dependency; the short fallback keeps the field usable on an engine that lacks it. UTC is guaranteed
+// present because it is the backend's default when a company has not chosen one.
+const TIMEZONES = (() => {
+    let zones
+    try {
+        zones = Intl.supportedValuesOf('timeZone')
+    } catch {
+        zones = ['Europe/Tallinn', 'Europe/Helsinki', 'Europe/Riga', 'Europe/Stockholm', 'Europe/Berlin', 'Europe/London']
+    }
+    return zones.includes('UTC') ? zones : ['UTC', ...zones]
+})()
 
 const PENALTY_PERIODS = ['ONE_TIME', 'DAILY', 'WEEKLY', 'MONTHLY']
 
@@ -46,13 +81,25 @@ const emptyTaxForm = { name: '', percentage: '', isDefault: false, active: true 
 export default function SettingsPage() {
     const { t } = useTranslation()
     const toast = useToast()
-    const { refresh: refreshDisplaySettings } = useSettings()
+    const { refresh: refreshDisplaySettings, currencies } = useSettings()
+    const { updateUser, isWarehouseAccount } = useAuth()
 
-    const [tab, setTab] = useState('general')
+    const tabs = isWarehouseAccount ? TABS.filter(({ key }) => WAREHOUSE_ACCOUNT_TABS.has(key)) : TABS
+    // Kept in the URL so the company switcher can link straight to Connections, and so a refresh stays put.
+    const [searchParams, setSearchParams] = useSearchParams()
+    const requestedTab = searchParams.get('tab')
+    const tab = tabs.some(({ key }) => key === requestedTab) ? requestedTab : tabs[0].key
+    const setTab = (next) => setSearchParams((prev) => {
+        const params = new URLSearchParams(prev)
+        params.set('tab', next)
+        return params
+    }, { replace: true })
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
 
     const [settings, setSettings] = useState(null)
+    // The Company tab's identity half, which lives on the Company record rather than CompanySettings.
+    const [companyProfile, setCompanyProfile] = useState({})
     const [taxRates, setTaxRates] = useState([])
     const [permRows, setPermRows] = useState([])
     const [warehouses, setWarehouses] = useState([])
@@ -63,6 +110,13 @@ export default function SettingsPage() {
     const [editingTaxId, setEditingTaxId] = useState(null)
     const [deletingTax, setDeletingTax] = useState(null)
 
+    // Email/SMTP: a new password is only sent when the user explicitly enters one (a stored password is
+    // shown masked and kept unless changed).
+    const [smtpPasswordInput, setSmtpPasswordInput] = useState('')
+    const [changingPassword, setChangingPassword] = useState(false)
+    const [testRecipient, setTestRecipient] = useState('')
+    const [testing, setTesting] = useState(false)
+
     useEffect(() => {
         loadAll()
     }, [])
@@ -70,16 +124,21 @@ export default function SettingsPage() {
     const loadAll = async () => {
         setLoading(true)
         try {
-            const [settingsRes, taxRes, permRes, warehousesRes] = await Promise.all([
+            // The warehouse list only feeds the Invoicing tab's default-warehouse picker, which a
+            // warehouse account does not have — and asking for it there is a 403 that would hang the
+            // whole page on its way through Promise.all.
+            const [settingsRes, taxRes, permRes, warehousesRes, companyRes] = await Promise.all([
                 apiGet('/settings'),
                 apiGet('/settings/tax-rates'),
                 apiGet('/settings/default-permissions'),
-                apiGet('/warehouses'),
+                isWarehouseAccount ? Promise.resolve([]) : apiGet('/warehouses'),
+                apiGet('/company'),
             ])
             setSettings(settingsRes)
             setTaxRates(Array.isArray(taxRes) ? taxRes : [])
             setPermRows(Array.isArray(permRes) ? permRes : [])
             setWarehouses(Array.isArray(warehousesRes) ? warehousesRes : [])
+            setCompanyProfile(companyRes || {})
         } finally {
             setLoading(false)
         }
@@ -113,7 +172,9 @@ export default function SettingsPage() {
     const buildSettingsPayload = () => ({
         currency: (settings.currency || 'EUR').toUpperCase(),
         pricesIncludeTax: !!settings.pricesIncludeTax,
+        timezone: settings.timezone || 'UTC',
         invoiceNumberPrefix: settings.invoiceNumberPrefix || '',
+        tenderNumberPrefix: settings.tenderNumberPrefix || null,
         invoicePaymentTermDays: Number(settings.invoicePaymentTermDays) || 0,
         latePaymentPenaltyPercent: Number(settings.latePaymentPenaltyPercent) || 0,
         penaltyPeriod: settings.penaltyPeriod || 'DAILY',
@@ -135,7 +196,17 @@ export default function SettingsPage() {
         invoiceFooterText: settings.invoiceFooterText || null,
         defaultProductUnit: settings.defaultProductUnit || 'pcs',
         defaultMinimumStock: Number(settings.defaultMinimumStock) || 0,
+        defaultUserLanguage: settings.defaultUserLanguage || 'en',
         defaultWarehouseId: settings.defaultWarehouseId ? Number(settings.defaultWarehouseId) : null,
+        // Email / SMTP. These are passed through on every save so editing any tab never wipes them. The
+        // password is only sent when the user actually typed a new one (blank = keep the stored one).
+        smtpHost: settings.smtpHost || null,
+        smtpPort: settings.smtpPort ? Number(settings.smtpPort) : null,
+        smtpUsername: settings.smtpUsername || null,
+        smtpFromAddress: settings.smtpFromAddress || null,
+        smtpFromName: settings.smtpFromName || null,
+        smtpUseTls: settings.smtpUseTls !== false,
+        smtpPassword: smtpPasswordInput || '',
     })
 
     const saveSettings = async (e) => {
@@ -144,10 +215,53 @@ export default function SettingsPage() {
         try {
             const saved = await apiPut('/settings', buildSettingsPayload())
             setSettings(saved)
+            setSmtpPasswordInput('')
+            setChangingPassword(false)
             await refreshDisplaySettings()
             toast.success(t('settings.saved'))
         } finally {
             setSaving(false)
+        }
+    }
+
+    /**
+     * The Company tab spans two records — identity on Company, contact/bank/logo on CompanySettings — so
+     * one Save writes both. The identity goes first: if it is rejected (e.g. a duplicate registration
+     * code) the settings write is skipped rather than leaving the two half-applied.
+     */
+    const saveCompanyTab = async (e) => {
+        e?.preventDefault?.()
+        setSaving(true)
+        try {
+            const savedCompany = await apiPut('/company', {
+                name: companyProfile.name,
+                registrationCode: companyProfile.registrationCode || null,
+            }, { suppressErrorToast: true })
+            setCompanyProfile(savedCompany)
+            updateUser({ companyName: savedCompany.name })
+        } catch (err) {
+            toast.error(err.message || t('settings.company.error'))
+            setSaving(false)
+            return
+        }
+        setSaving(false)
+        await saveSettings() // owns the spinner and the success toast for the second half
+    }
+
+    // --- Email / SMTP test send --------------------------------------------------------------------
+
+    const sendTestEmail = async () => {
+        if (!testRecipient.trim()) {
+            toast.error(t('settings.email.testRecipientRequired'))
+            return
+        }
+        setTesting(true)
+        try {
+            const result = await apiPost('/settings/email/test-send', { recipient: testRecipient.trim() })
+            if (result.success) toast.success(t('settings.email.testSent'))
+            else toast.error(t('settings.email.testFailed', { reason: result.message || '' }))
+        } finally {
+            setTesting(false)
         }
     }
 
@@ -302,6 +416,18 @@ export default function SettingsPage() {
         )
     }
 
+    // Emails is granted as a single capability ("can send emails"): ON enables viewing sent history
+    // and sending; OFF revokes everything. Template management is not separately grantable here.
+    const toggleEmailAccess = (module, checked) => {
+        setPermRows((prev) =>
+            prev.map((row) =>
+                row.module === module
+                    ? { ...row, canView: checked, canCreate: checked, canEdit: false, canDelete: false }
+                    : row,
+            )
+        )
+    }
+
     const savePermissions = async () => {
         setSaving(true)
         try {
@@ -328,7 +454,7 @@ export default function SettingsPage() {
 
             {/* Tabs */}
             <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800">
-                {TABS.map(({ key, icon: Icon }) => (
+                {tabs.map(({ key, icon: Icon }) => (
                     <button
                         key={key}
                         onClick={() => setTab(key)}
@@ -347,56 +473,61 @@ export default function SettingsPage() {
             {/* General */}
             {tab === 'general' && (
                 <form onSubmit={saveSettings} className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+                    {/* Currency and tax-inclusive pricing price goods for sale. A warehouse account sells
+                        nothing — it only ever handles its clients' stock, priced in their currency. The
+                        timezone still matters: it is what dates and scheduled work are read in. */}
                     <div className="grid gap-4 md:grid-cols-2">
-                        <FormField
-                            id="currency"
-                            label={t('settings.general.currency')}
-                            name="currency"
-                            value={settings.currency || ''}
-                            onChange={handleSettingsChange}
-                            required
-                            placeholder="EUR"
-                            inputClassName="uppercase"
-                            maxLength={3}
-                        />
-                        <FormField
-                            id="invoice-prefix"
-                            label={t('settings.general.invoicePrefix')}
-                            name="invoiceNumberPrefix"
-                            value={settings.invoiceNumberPrefix || ''}
-                            onChange={handleSettingsChange}
-                            placeholder="INV-"
-                        />
+                        {!isWarehouseAccount && (currencies.length > 0 ? (
+                            <FormSelect
+                                id="currency"
+                                label={t('settings.general.currency')}
+                                name="currency"
+                                value={settings.currency || 'EUR'}
+                                onChange={handleSettingsChange}
+                                options={currencies.map((c) => ({ value: c.code, label: `${c.code} — ${c.name}` }))}
+                            />
+                        ) : (
+                            <FormField
+                                id="currency"
+                                label={t('settings.general.currency')}
+                                name="currency"
+                                value={settings.currency || ''}
+                                onChange={handleSettingsChange}
+                                required
+                                placeholder="EUR"
+                                inputClassName="uppercase"
+                                maxLength={3}
+                            />
+                        ))}
                         <div className="space-y-1">
                             <FormSelect
-                                id="default-warehouse"
-                                label={t('settings.general.defaultWarehouse')}
-                                name="defaultWarehouseId"
-                                value={settings.defaultWarehouseId ? String(settings.defaultWarehouseId) : ''}
+                                id="timezone"
+                                label={t('settings.general.timezone')}
+                                name="timezone"
+                                value={settings.timezone || 'UTC'}
                                 onChange={handleSettingsChange}
-                                placeholder={t('settings.general.noDefaultWarehouse')}
-                                options={[
-                                    { value: '', label: t('settings.general.noDefaultWarehouse') },
-                                    ...warehouses.map((w) => ({ value: String(w.id), label: w.name })),
-                                ]}
+                                searchable
+                                options={TIMEZONES.map((zone) => ({ value: zone, label: zone }))}
                             />
-                            <p className="text-xs text-slate-500 dark:text-slate-400">{t('settings.general.defaultWarehouseHint')}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{t('settings.general.timezoneHint')}</p>
                         </div>
                     </div>
 
-                    <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
-                        <span>
-                            <span className="block font-medium text-slate-700 dark:text-slate-200">{t('settings.general.pricesIncludeTax')}</span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400">{t('settings.general.pricesIncludeTaxHint')}</span>
-                        </span>
-                        <input
-                            type="checkbox"
-                            name="pricesIncludeTax"
-                            checked={!!settings.pricesIncludeTax}
-                            onChange={handleSettingsChange}
-                            className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                        />
-                    </label>
+                    {!isWarehouseAccount && (
+                        <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
+                            <span>
+                                <span className="block font-medium text-slate-700 dark:text-slate-200">{t('settings.general.pricesIncludeTax')}</span>
+                                <span className="text-xs text-slate-500 dark:text-slate-400">{t('settings.general.pricesIncludeTaxHint')}</span>
+                            </span>
+                            <input
+                                type="checkbox"
+                                name="pricesIncludeTax"
+                                checked={!!settings.pricesIncludeTax}
+                                onChange={handleSettingsChange}
+                                className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
+                            />
+                        </label>
+                    )}
 
                     <SaveBar saving={saving} label={t('settings.save')} />
                 </form>
@@ -631,61 +762,130 @@ export default function SettingsPage() {
                         </div>
                     </div>
 
-                    {/* Seller details printed on the invoice header. */}
-                    <div className="border-t border-slate-200 pt-5 dark:border-slate-800">
-                        <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            {t('settings.invoicing.sellerHeading')}
-                        </h3>
-                        <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">{t('settings.invoicing.sellerHint')}</p>
+                    {/* The seller block that used to live here now lives on the Company tab: address, VAT,
+                        bank and logo describe the business itself, not how the invoice is laid out. */}
 
-                        <div className="mb-4 flex items-center gap-4">
-                            <div className="flex h-16 w-32 items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-950">
-                                {settings.logoUrl ? (
-                                    <img src={resolveImageUrl(settings.logoUrl)} alt={t('settings.invoicing.logo')} className="max-h-full max-w-full object-contain" />
-                                ) : (
-                                    <span className="text-xs text-slate-400">{t('settings.invoicing.noLogo')}</span>
-                                )}
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                <input
-                                    ref={logoInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => uploadLogo(e.target.files?.[0])}
-                                    className="hidden"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => logoInputRef.current?.click()}
-                                    disabled={logoUploading}
-                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
-                                >
-                                    <UploadCloud className="h-4 w-4" /> {logoUploading ? t('common.saving') : t('settings.invoicing.uploadLogo')}
-                                </button>
-                                {settings.logoUrl && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setSettings((prev) => ({ ...prev, logoUrl: '' }))}
-                                        className="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-600"
-                                    >
-                                        <X className="h-3 w-3" /> {t('settings.invoicing.removeLogo')}
-                                    </button>
-                                )}
+                    <SaveBar saving={saving} label={t('settings.save')} savingLabel={t('common.saving')} />
+                </form>
+            )}
+
+            {/* Email / SMTP */}
+            {tab === 'email' && (
+                <div className="space-y-6">
+                    <form onSubmit={saveSettings} className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+                        <div>
+                            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {t('settings.email.smtpHeading')}
+                            </h3>
+                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('settings.email.smtpIntro')}</p>
+                        </div>
+
+                        {/* How-it-works guidance: what SMTP is and where an admin gets each value. */}
+                        <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm dark:border-sky-900/60 dark:bg-sky-950/30">
+                            <div className="flex items-start gap-2">
+                                <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                                <div className="space-y-2">
+                                    <p className="font-medium text-sky-900 dark:text-sky-200">{t('settings.email.helpTitle')}</p>
+                                    <p className="text-sky-800 dark:text-sky-300/90">{t('settings.email.helpHow')}</p>
+                                    <ul className="list-disc space-y-1 pl-4 text-sky-800 dark:text-sky-300/90">
+                                        <li>{t('settings.email.helpGmail')}</li>
+                                        <li>{t('settings.email.helpM365')}</li>
+                                        <li>{t('settings.email.helpOther')}</li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
 
                         <div className="grid gap-4 md:grid-cols-2">
-                            <AddressAutocompleteField id="company-address" label={t('settings.invoicing.companyAddress')} name="companyAddress" value={settings.companyAddress || ''} onChange={handleSettingsChange} />
-                            <FormField id="vat-number" label={t('settings.invoicing.vatNumber')} name="vatNumber" value={settings.vatNumber || ''} onChange={handleSettingsChange} />
-                            <FormField id="company-email" label={t('settings.invoicing.companyEmail')} type="email" name="companyEmail" value={settings.companyEmail || ''} onChange={handleSettingsChange} />
-                            <FormField id="company-phone" label={t('settings.invoicing.companyPhone')} name="companyPhone" value={settings.companyPhone || ''} onChange={handleSettingsChange} />
-                            <FormField id="bank-name" label={t('settings.invoicing.bankName')} name="bankName" value={settings.bankName || ''} onChange={handleSettingsChange} />
-                            <FormField id="bank-iban" label={t('settings.invoicing.bankIban')} name="bankIban" value={settings.bankIban || ''} onChange={handleSettingsChange} />
-                        </div>
-                    </div>
+                            <FormField id="smtp-host" label={t('settings.email.host')} name="smtpHost" value={settings.smtpHost || ''} onChange={handleSettingsChange} placeholder="smtp.example.com" />
+                            <FormField id="smtp-port" label={t('settings.email.port')} type="number" name="smtpPort" value={settings.smtpPort ?? ''} onChange={handleSettingsChange} placeholder="587" />
+                            <FormField id="smtp-username" label={t('settings.email.username')} name="smtpUsername" value={settings.smtpUsername || ''} onChange={handleSettingsChange} placeholder="user@example.com" />
 
-                    <SaveBar saving={saving} label={t('settings.save')} savingLabel={t('common.saving')} />
-                </form>
+                            {/* Password: masked when one is stored, unless the user chooses to change it. */}
+                            <div className="space-y-2">
+                                <label htmlFor="smtp-password" className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                    {t('settings.email.password')}
+                                </label>
+                                {settings.hasPassword && !changingPassword ? (
+                                    <div className="flex items-center gap-3">
+                                        <span className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-slate-400 dark:border-slate-700">••••••••</span>
+                                        <button type="button" onClick={() => { setChangingPassword(true); setSmtpPasswordInput('') }} className="text-sm font-medium text-teal-600 hover:underline dark:text-teal-400">
+                                            {t('settings.email.changePassword')}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1">
+                                        <PasswordAwareInput
+                                            id="smtp-password"
+                                            type="password"
+                                            value={smtpPasswordInput}
+                                            onChange={(e) => setSmtpPasswordInput(e.target.value)}
+                                            placeholder={t('settings.email.passwordPlaceholder')}
+                                            autoComplete="new-password"
+                                        />
+                                        {settings.hasPassword && (
+                                            <button type="button" onClick={() => { setChangingPassword(false); setSmtpPasswordInput('') }} className="text-xs text-slate-500 hover:underline">
+                                                {t('common.cancel')}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                                <p className="text-xs text-slate-500 dark:text-slate-400">{t('settings.email.passwordHelp')}</p>
+                            </div>
+
+                            <FormField id="smtp-from-address" label={t('settings.email.fromAddress')} type="email" name="smtpFromAddress" value={settings.smtpFromAddress || ''} onChange={handleSettingsChange} placeholder="sales@example.com" />
+                            <FormField id="smtp-from-name" label={t('settings.email.fromName')} name="smtpFromName" value={settings.smtpFromName || ''} onChange={handleSettingsChange} placeholder={t('settings.email.fromNamePlaceholder')} />
+                        </div>
+
+                        <p className="-mt-2 text-xs text-slate-500 dark:text-slate-400">{t('settings.email.fromHelp')}</p>
+
+                        <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
+                            <span className="font-medium text-slate-700 dark:text-slate-200">{t('settings.email.useTls')}</span>
+                            <input
+                                type="checkbox"
+                                name="smtpUseTls"
+                                checked={settings.smtpUseTls !== false}
+                                onChange={handleSettingsChange}
+                                className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
+                            />
+                        </label>
+
+                        <SaveBar saving={saving} label={t('settings.save')} savingLabel={t('common.saving')} />
+
+                        {/* Test send */}
+                        <div className="border-t border-slate-200 pt-5 dark:border-slate-800">
+                            <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {t('settings.email.testHeading')}
+                            </h3>
+                            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('settings.email.testHint')}</p>
+                            <div className="flex flex-wrap items-end gap-3">
+                                <FormField
+                                    id="test-recipient"
+                                    label={t('settings.email.testRecipient')}
+                                    type="email"
+                                    name="testRecipient"
+                                    value={testRecipient}
+                                    onChange={(e) => setTestRecipient(e.target.value)}
+                                    placeholder="you@example.com"
+                                    className="flex-1 min-w-[16rem]"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={sendTestEmail}
+                                    disabled={testing || !settings.smtpConfigured}
+                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                                >
+                                    <Send className="h-4 w-4" /> {testing ? t('settings.email.testSending') : t('settings.email.testSend')}
+                                </button>
+                            </div>
+                            {!settings.smtpConfigured && (
+                                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{t('settings.email.notConfiguredHint')}</p>
+                            )}
+                        </div>
+                    </form>
+
+                    <EmailTemplatesManager />
+                </div>
             )}
 
             {/* Defaults */}
@@ -696,13 +896,12 @@ export default function SettingsPage() {
                             {t('settings.defaults.productHeading')}
                         </h3>
                         <div className="grid gap-4 md:grid-cols-2">
-                            <FormField
+                            <UnitSelect
                                 id="default-unit"
                                 label={t('settings.defaults.productUnit')}
                                 name="defaultProductUnit"
                                 value={settings.defaultProductUnit || ''}
                                 onChange={handleSettingsChange}
-                                placeholder="pcs"
                             />
                             <FormField
                                 id="default-min-stock"
@@ -714,6 +913,68 @@ export default function SettingsPage() {
                                 min={0}
                             />
                         </div>
+
+                        {/* What new records are numbered with. Both prefixes live together so the two
+                            schemes are set side by side rather than in different tabs. */}
+                        <div className="border-t border-slate-200 pt-5 dark:border-slate-800">
+                            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {t('settings.defaults.numberingHeading')}
+                            </h3>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <FormField
+                                    id="invoice-prefix"
+                                    label={t('settings.defaults.invoicePrefix')}
+                                    name="invoiceNumberPrefix"
+                                    value={settings.invoiceNumberPrefix || ''}
+                                    onChange={handleSettingsChange}
+                                    placeholder="INV-"
+                                />
+                                <FormField
+                                    id="tender-prefix"
+                                    label={t('settings.defaults.tenderPrefix')}
+                                    name="tenderNumberPrefix"
+                                    value={settings.tenderNumberPrefix || ''}
+                                    onChange={handleSettingsChange}
+                                    placeholder="TND-"
+                                />
+                            </div>
+                        </div>
+
+                        {/* What new orders and new user accounts start with. */}
+                        <div className="border-t border-slate-200 pt-5 dark:border-slate-800">
+                            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {t('settings.defaults.recordsHeading')}
+                            </h3>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-1">
+                                    <FormSelect
+                                        id="default-warehouse"
+                                        label={t('settings.defaults.defaultWarehouse')}
+                                        name="defaultWarehouseId"
+                                        value={settings.defaultWarehouseId ? String(settings.defaultWarehouseId) : ''}
+                                        onChange={handleSettingsChange}
+                                        placeholder={t('settings.defaults.noDefaultWarehouse')}
+                                        options={[
+                                            { value: '', label: t('settings.defaults.noDefaultWarehouse') },
+                                            ...warehouses.map((w) => ({ value: String(w.id), label: w.name })),
+                                        ]}
+                                    />
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('settings.defaults.defaultWarehouseHint')}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <FormSelect
+                                        id="default-user-language"
+                                        label={t('settings.defaults.userLanguage')}
+                                        name="defaultUserLanguage"
+                                        value={settings.defaultUserLanguage || 'en'}
+                                        onChange={handleSettingsChange}
+                                        options={SUPPORTED_LANGUAGES.map((l) => ({ value: l.code, label: l.label }))}
+                                    />
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('settings.defaults.userLanguageHint')}</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <SaveBar saving={saving} label={t('settings.save')} savingLabel={t('common.saving')} />
                     </form>
 
@@ -738,9 +999,29 @@ export default function SettingsPage() {
                                 <tbody>
                                     {permRows.map((row) => {
                                         const meta = PERMISSION_MODULES.find((m) => m.module === row.module)
+                                        const label = meta ? t(`nav.${meta.navKey}`) : row.module
+                                        // Emails is a single on/off capability, not a CRUD row.
+                                        if (row.module === 'MANUFACTURER_EMAILS') {
+                                            return (
+                                                <tr key={row.module} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
+                                                    <td className="px-4 py-3 font-medium">{label}</td>
+                                                    <td colSpan={PERMISSION_ACTIONS.length} className="px-4 py-3 text-center">
+                                                        <label className="inline-flex items-center gap-2">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!row.canCreate}
+                                                                onChange={(e) => toggleEmailAccess(row.module, e.target.checked)}
+                                                                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
+                                                            />
+                                                            <span className="text-sm text-slate-600 dark:text-slate-300">{t('users.perm.emailAccess')}</span>
+                                                        </label>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        }
                                         return (
                                             <tr key={row.module} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
-                                                <td className="px-4 py-3 font-medium">{meta ? t(`nav.${meta.navKey}`) : row.module}</td>
+                                                <td className="px-4 py-3 font-medium">{label}</td>
                                                 {PERMISSION_ACTIONS.map((action) => (
                                                     <td key={action.key} className="px-4 py-3 text-center">
                                                         <input
@@ -770,6 +1051,120 @@ export default function SettingsPage() {
                     </div>
                 </div>
             )}
+
+            {/* Plan & Billing */}
+            {/* Company: who the business is. Identity lives on the Company record, the contact/bank/logo
+                details on CompanySettings — one Save covers both. */}
+            {tab === 'company' && (
+                <div className="space-y-6">
+                    <form onSubmit={saveCompanyTab} className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+                        <div>
+                            <h2 className="text-base font-semibold">{t('settings.company.heading')}</h2>
+                            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{t('settings.company.description')}</p>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <FormField
+                                id="company-name"
+                                label={t('settings.company.name')}
+                                name="name"
+                                value={companyProfile.name || ''}
+                                onChange={(e) => setCompanyProfile((p) => ({ ...p, name: e.target.value }))}
+                                required
+                            />
+                            <FormField
+                                id="company-registration-code"
+                                label={t('settings.company.registrationCode')}
+                                name="registrationCode"
+                                value={companyProfile.registrationCode || ''}
+                                onChange={(e) => setCompanyProfile((p) => ({ ...p, registrationCode: e.target.value }))}
+                                placeholder={t('common.optional')}
+                            />
+                        </div>
+
+                        {/* Chosen at signup and fixed for good — the server enforces the separation, so
+                            this is reported rather than edited. */}
+                        <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+                            <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                                {t('settings.company.accountType')}
+                            </span>
+                            <span className="mt-0.5 block text-sm text-slate-600 dark:text-slate-300">
+                                {companyProfile.type === 'WAREHOUSE'
+                                    ? t('settings.company.accountTypeWarehouse')
+                                    : t('settings.company.accountTypeBusiness')}
+                            </span>
+                            <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+                                {t('settings.company.accountTypeHint')}
+                            </span>
+                        </div>
+
+                        {/* Address, VAT number, bank and logo exist to be printed on an invoice, and the
+                            export is of business data. A warehouse account issues no invoices and owns no
+                            such data, so none of this describes anything it has. */}
+                        {!isWarehouseAccount && (
+                        <div className="border-t border-slate-200 pt-5 dark:border-slate-800">
+                            <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {t('settings.company.contactHeading')}
+                            </h3>
+                            <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">{t('settings.company.contactHint')}</p>
+
+                            <div className="mb-4 flex items-center gap-4">
+                                <div className="flex h-16 w-32 items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-950">
+                                    {settings.logoUrl ? (
+                                        <img src={resolveImageUrl(settings.logoUrl)} alt={t('settings.company.logo')} className="max-h-full max-w-full object-contain" />
+                                    ) : (
+                                        <span className="text-xs text-slate-400">{t('settings.company.noLogo')}</span>
+                                    )}
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <input
+                                        ref={logoInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => uploadLogo(e.target.files?.[0])}
+                                        className="hidden"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => logoInputRef.current?.click()}
+                                        disabled={logoUploading}
+                                        className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                                    >
+                                        <UploadCloud className="h-4 w-4" /> {logoUploading ? t('common.saving') : t('settings.company.uploadLogo')}
+                                    </button>
+                                    {settings.logoUrl && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setSettings((prev) => ({ ...prev, logoUrl: '' }))}
+                                            className="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-600"
+                                        >
+                                            <X className="h-3 w-3" /> {t('settings.company.removeLogo')}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <AddressAutocompleteField id="company-address" label={t('settings.company.address')} name="companyAddress" value={settings.companyAddress || ''} onChange={handleSettingsChange} />
+                                <FormField id="vat-number" label={t('settings.company.vatNumber')} name="vatNumber" value={settings.vatNumber || ''} onChange={handleSettingsChange} />
+                                <FormField id="company-email" label={t('settings.company.email')} type="email" name="companyEmail" value={settings.companyEmail || ''} onChange={handleSettingsChange} />
+                                <FormField id="company-phone" label={t('settings.company.phone')} name="companyPhone" value={settings.companyPhone || ''} onChange={handleSettingsChange} />
+                                <FormField id="bank-name" label={t('settings.company.bankName')} name="bankName" value={settings.bankName || ''} onChange={handleSettingsChange} />
+                                <FormField id="bank-iban" label={t('settings.company.bankIban')} name="bankIban" value={settings.bankIban || ''} onChange={handleSettingsChange} />
+                            </div>
+                        </div>
+                        )}
+
+                        <SaveBar saving={saving} label={t('settings.save')} savingLabel={t('common.saving')} />
+                    </form>
+
+                    {!isWarehouseAccount && <CompanyDataExport />}
+                </div>
+            )}
+
+            {tab === 'connections' && <ConnectionsTab />}
+
+            {tab === 'plan' && <PlanBillingTab />}
 
             {/* Tax rate create/edit modal */}
             <Modal

@@ -19,9 +19,11 @@ import { useAuth, usePermissions } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import QuickCreateModal from '../components/QuickCreateModal'
 import { useToast } from '../context/ToastContext'
-import { formatDate, formatMoney, safeArray } from '../utils/format'
+import { formatDate, formatMoney, safeArray, toCompanyAmount } from '../utils/format'
 import {FormField, FormSelect, TextareaField} from "../components/FormField.jsx";
 import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx";
+import CurrencyRateField from "../components/CurrencyRateField.jsx";
+import MoneyWithBase from "../components/MoneyWithBase.jsx";
 import { Pencil, Trash2, ShoppingCart } from 'lucide-react'
 
 const exportColumns = [
@@ -76,6 +78,11 @@ const emptyForm = {
     deliveryAddress: '',
     notes: '',
     deliveryPrice: 0,
+    currency: '',
+    exchangeRate: 1,
+    rateSource: 'SAME',
+    rateAsOfDate: null,
+    tenderId: '',
     items: [{ ...emptyItem }],
 }
 
@@ -83,8 +90,9 @@ export default function SalesOrdersPage() {
     const { t } = useTranslation()
     const { canCreate, canEdit, canDelete } = usePermissions('SALES_ORDERS')
     const invoicePerms = usePermissions('INVOICES')
+    const tenderPerms = usePermissions('TENDERS')
     const { canSeePrices } = useAuth()
-    const { defaultWarehouseId } = useSettings()
+    const { defaultWarehouseId, currency: baseCurrency, currencies, currencySymbol } = useSettings()
     const navigate = useNavigate()
     const toast = useToast()
     const { quickCreate, openQuickCreate, closeQuickCreate, handleQuickCreated } = useQuickCreate()
@@ -96,6 +104,7 @@ export default function SalesOrdersPage() {
     const [products, setProducts] = useState([])
     const [warehouses, setWarehouses] = useState([])
     const [taxRates, setTaxRates] = useState([])
+    const [tenders, setTenders] = useState([])
     const [form, setForm] = useState(emptyForm)
     const [editingId, setEditingId] = useState(null)
     const [suggestedOrderNumber, setSuggestedOrderNumber] = useState(null)
@@ -206,6 +215,13 @@ export default function SalesOrdersPage() {
         setWarehouses(safeArray(warehousesRes))
         setTaxRates(Array.isArray(taxRes) ? taxRes : [])
 
+        // Tender options power the optional "part of a tender" picker; only for users who can view tenders.
+        if (tenderPerms.canView) {
+            try {
+                setTenders(safeArray(await apiGet('/tenders/options')))
+            } catch { /* leave the picker empty if tenders can't be loaded */ }
+        }
+
         // Billing summaries drive the payment column and filter; only fetched when the user can see
         // invoices, so orders stay usable for staff without invoice access.
         if (invoicePerms.canView) {
@@ -256,7 +272,7 @@ export default function SalesOrdersPage() {
         setEditingId(null)
         setFormError('')
         setEditBaseline(null)
-        setForm({ ...emptyForm, orderDate: todayStr(), warehouseId: pickDefaultWarehouse(), items: [{ ...emptyItem }] })
+        setForm({ ...emptyForm, orderDate: todayStr(), warehouseId: pickDefaultWarehouse(), currency: baseCurrency || 'EUR', items: [{ ...emptyItem }] })
         formModal.open()
         // Prefill a system-suggested order number the user can override.
         try {
@@ -267,6 +283,13 @@ export default function SalesOrdersPage() {
         } catch {
             setSuggestedOrderNumber(null)
         }
+        // Preselect the most-used currency with its suggested rate (falls back to the base currency).
+        try {
+            const q = await apiGet('/exchange-rates/most-used?scope=SALES_ORDER')
+            if (q?.currency) {
+                setForm((prev) => ({ ...prev, currency: q.currency, exchangeRate: q.rate ?? 1, rateSource: q.source, rateAsOfDate: q.asOfDate }))
+            }
+        } catch { /* keep the base currency default */ }
     }
 
     const openEdit = (item) => {
@@ -294,6 +317,11 @@ export default function SalesOrdersPage() {
             deliveryAddress: item.deliveryAddress || '',
             notes: item.notes || '',
             deliveryPrice: item.deliveryPrice ?? 0,
+            currency: item.currency || baseCurrency || 'EUR',
+            exchangeRate: item.exchangeRate ?? 1,
+            rateSource: 'SAVED',
+            rateAsOfDate: null,
+            tenderId: item.tenderId ?? '',
             items: item.items?.length
                 ? item.items.map((it) => ({
                     productId: it.product?.id || '',
@@ -420,6 +448,9 @@ export default function SalesOrdersPage() {
             deliveryAddress: form.deliveryAddress,
             notes: form.notes,
             deliveryPrice: Number(form.deliveryPrice || 0),
+            currency: form.currency || baseCurrency || null,
+            exchangeRate: form.exchangeRate ? Number(form.exchangeRate) : null,
+            tenderId: form.tenderId ? Number(form.tenderId) : null,
             items: form.items.map((item) => ({
                 productId: Number(item.productId),
                 quantity: Number(item.quantity),
@@ -524,7 +555,7 @@ export default function SalesOrdersPage() {
             }]
             : []),
         { key: 'orderDate', label: t('salesOrders.cols.orderDate'), render: (row) => formatDate(row.orderDate) },
-        ...(canSeePrices ? [{ key: 'totalAmount', label: t('common.total'), render: (row) => formatMoney(row.totalAmount) }] : []),
+        ...(canSeePrices ? [{ key: 'totalAmount', label: t('common.total'), render: (row) => <MoneyWithBase amount={row.totalAmount} currency={row.currency} exchangeRate={row.exchangeRate} base={baseCurrency} /> }] : []),
         ...((canEdit || canDelete) ? [{
             key: 'actions',
             label: '',
@@ -726,7 +757,7 @@ export default function SalesOrdersPage() {
 
                         <FormField
                             id="sales-order-delivery-price"
-                            label={t('salesOrders.form.deliveryPrice')}
+                            label={`${t('salesOrders.form.deliveryPrice')} (${currencySymbol(form.currency || baseCurrency)})`}
                             type="number"
                             step="0.01"
                             name="deliveryPrice"
@@ -734,6 +765,33 @@ export default function SalesOrdersPage() {
                             onChange={handleChange}
                             placeholder={t('salesOrders.form.deliveryPrice')}
                         />
+
+                        <CurrencyRateField
+                            value={{ currency: form.currency, exchangeRate: form.exchangeRate, source: form.rateSource, asOfDate: form.rateAsOfDate }}
+                            onChange={(next) => setForm((prev) => ({ ...prev, currency: next.currency, exchangeRate: next.exchangeRate, rateSource: next.source, rateAsOfDate: next.asOfDate }))}
+                            baseCurrency={baseCurrency}
+                            currencies={currencies}
+                        />
+
+                        {tenderPerms.canView && (
+                            <FormSelect
+                                id="sales-order-tender"
+                                label={t('orders.form.tender')}
+                                name="tenderId"
+                                value={form.tenderId ? String(form.tenderId) : ''}
+                                onChange={handleChange}
+                                searchable
+                                placeholder={t('orders.form.noTender')}
+                                options={[
+                                    { value: '', label: t('orders.form.noTender') },
+                                    ...tenders.map((td) => ({
+                                        value: String(td.id),
+                                        label: td.tenderNumber ? `${td.title} · ${td.tenderNumber}` : td.title,
+                                        search: td.tenderNumber,
+                                    })),
+                                ]}
+                            />
+                        )}
 
                         <AddressAutocompleteField
                             id="sales-order-delivery-address"
@@ -833,7 +891,7 @@ export default function SalesOrdersPage() {
                                         />
                                         <FormField
                                             id={`sales-order-item-unit-price-${index}`}
-                                            label={t('orderDetail.cols.unitPrice')}
+                                            label={`${t('orderDetail.cols.unitPrice')} (${currencySymbol(form.currency || baseCurrency)})`}
                                             type="number"
                                             step="0.01"
                                             min={0}
@@ -867,7 +925,7 @@ export default function SalesOrdersPage() {
 
                                     {canSeePrices && (
                                         <div className="text-right text-sm text-slate-500 dark:text-slate-400">
-                                            {t('salesOrders.form.lineNet')}: <span className="font-medium text-slate-700 dark:text-slate-200">{formatMoney(net)}</span>
+                                            {t('salesOrders.form.lineNet')}: <span className="font-medium text-slate-700 dark:text-slate-200">{formatMoney(net, form.currency || baseCurrency)}</span>
                                         </div>
                                     )}
                                 </div>
@@ -877,12 +935,17 @@ export default function SalesOrdersPage() {
 
                     {canSeePrices && (
                         <div className="ml-auto w-full max-w-xs space-y-1.5 rounded-2xl border border-slate-200 p-4 text-sm dark:border-slate-800">
-                            <TotalRow label={t('salesOrders.form.subtotalExclTax')} value={formatMoney(totals.subtotal)} />
-                            <TotalRow label={t('salesOrders.form.taxTotal')} value={formatMoney(totals.tax)} />
-                            <TotalRow label={t('salesOrders.form.deliveryPrice')} value={formatMoney(totals.delivery)} />
+                            <TotalRow label={t('salesOrders.form.subtotalExclTax')} value={formatMoney(totals.subtotal, form.currency || baseCurrency)} />
+                            <TotalRow label={t('salesOrders.form.taxTotal')} value={formatMoney(totals.tax, form.currency || baseCurrency)} />
+                            <TotalRow label={t('salesOrders.form.deliveryPrice')} value={formatMoney(totals.delivery, form.currency || baseCurrency)} />
                             <div className="my-1 border-t border-slate-200 dark:border-slate-700" />
-                            <TotalRow label={t('salesOrders.form.totalExclTax')} value={formatMoney(totals.totalExcl)} />
-                            <TotalRow label={t('salesOrders.form.totalInclTax')} value={formatMoney(totals.totalIncl)} strong />
+                            <TotalRow label={t('salesOrders.form.totalExclTax')} value={formatMoney(totals.totalExcl, form.currency || baseCurrency)} />
+                            <TotalRow label={t('salesOrders.form.totalInclTax')} value={formatMoney(totals.totalIncl, form.currency || baseCurrency)} strong />
+                            {form.currency && form.currency !== baseCurrency && toCompanyAmount(totals.totalIncl, form.exchangeRate) != null && (
+                                <p className="pt-1 text-right text-xs text-slate-400 dark:text-slate-500">
+                                    {t('currency.approxIn', { amount: formatMoney(toCompanyAmount(totals.totalIncl, form.exchangeRate), baseCurrency) })}
+                                </p>
+                            )}
                         </div>
                     )}
 

@@ -13,11 +13,12 @@ import StatusBadge from '../components/StatusBadge'
 import ActionMenu from '../components/ActionMenu'
 import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
+import CopyButton from '../components/CopyButton'
 import { useModal } from '../hooks/useModal'
 import { safeArray } from '../utils/format'
 import { FormField, FormSelect } from '../components/FormField.jsx'
 import { PERMISSION_MODULES } from '../constants/modules'
-import { Pencil, Trash2, Archive, ArchiveRestore, ShieldCheck, User } from 'lucide-react'
+import { Pencil, Trash2, Archive, ArchiveRestore, ShieldCheck, User, KeyRound } from 'lucide-react'
 
 const PERMISSION_ACTIONS = [
     { key: 'canView', labelKey: 'users.perm.view' },
@@ -30,7 +31,6 @@ const emptyForm = {
     email: '',
     fullName: '',
     role: 'USER',
-    password: '',
     canSeePrices: true,
 }
 
@@ -69,6 +69,10 @@ export default function UsersPage() {
     const deleteModal = useModal()
     const bulkDeleteModal = useModal()
     const permModal = useModal()
+    const setupLinkModal = useModal()
+
+    // Holds the copyable one-time setup/reset link shown when an email couldn't be sent (no SMTP yet).
+    const [setupLinkInfo, setSetupLinkInfo] = useState(null)
 
     const [rows, setRows] = useState([])
     const [permUser, setPermUser] = useState(null)
@@ -132,7 +136,6 @@ export default function UsersPage() {
             email: item.email || '',
             fullName: item.fullName || '',
             role: item.role === 'OWNER' ? 'ADMINISTRATOR' : item.role || 'USER',
-            password: '',
             canSeePrices: item.canSeePrices !== false,
         })
         formModal.open()
@@ -159,27 +162,54 @@ export default function UsersPage() {
                 await apiPut(`/users/${editingId}`, {
                     fullName: form.fullName,
                     role: form.role,
-                    password: form.password ? form.password : null,
                     canSeePrices,
                 })
+                toast.success(t('users.updated'))
+                formModal.close()
+                setEditingId(null)
+                setForm(emptyForm)
+                await loadData()
             } else {
-                await apiPost('/users', {
+                // Create returns the invite outcome: the account is created "awaiting password setup"
+                // and a setup link is emailed automatically. If email isn't configured we surface the
+                // copyable link so the admin can share it manually.
+                const created = await apiPost('/users', {
                     email: form.email,
                     fullName: form.fullName,
                     role: form.role,
-                    password: form.password,
                     canSeePrices,
                 })
+                formModal.close()
+                setEditingId(null)
+                setForm(emptyForm)
+                await loadData()
+                handleInviteOutcome(created, form.email)
             }
-            toast.success(editingId ? t('users.updated') : t('users.created'))
-            formModal.close()
-            setEditingId(null)
-            setForm(emptyForm)
-            await loadData()
         } catch (err) {
             setError(err.message || t('users.couldNotSave'))
         } finally {
             setLoading(false)
+        }
+    }
+
+    // Shared handling for a setup/reset-link outcome ({ emailSent, setupLink }): confirm the email, or
+    // open the copyable-link dialog as a fallback when it couldn't be delivered.
+    const handleInviteOutcome = (outcome, email) => {
+        if (outcome?.emailSent) {
+            toast.success(t('users.inviteSent', { email }))
+        } else if (outcome?.setupLink) {
+            setSetupLinkInfo({ email, link: outcome.setupLink })
+            setupLinkModal.open()
+        }
+    }
+
+    // Row action: (re)send a user their setup/reset link. Never changes an existing password.
+    const handleSendSetupEmail = async (row) => {
+        try {
+            const res = await apiPost(`/users/${row.id}/setup-email`, {})
+            handleInviteOutcome(res, row.email)
+        } catch (err) {
+            toast.error?.(err.message || t('users.couldNotSave'))
         }
     }
 
@@ -236,6 +266,18 @@ export default function UsersPage() {
                 }
                 return next
             })
+        )
+    }
+
+    // Emails is granted as a single capability ("can send emails"): ON enables viewing sent history
+    // and sending; OFF revokes everything. Template management is not separately grantable here.
+    const toggleEmailAccess = (module, checked) => {
+        setPermRows((prev) =>
+            prev.map((row) =>
+                row.module === module
+                    ? { ...row, canView: checked, canCreate: checked, canEdit: false, canDelete: false }
+                    : row,
+            )
         )
     }
 
@@ -304,7 +346,16 @@ export default function UsersPage() {
         {
             key: 'archived',
             label: t('common.status'),
-            render: (row) => <StatusBadge status={row.archived ? 'ARCHIVED' : 'ACTIVE'} />,
+            render: (row) => (
+                <div className="flex flex-wrap items-center gap-1.5">
+                    <StatusBadge status={row.archived ? 'ARCHIVED' : 'ACTIVE'} />
+                    {row.passwordSetupPending && !row.archived && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                            {t('users.pendingBadge')}
+                        </span>
+                    )}
+                </div>
+            ),
         },
         {
             key: 'actions',
@@ -318,6 +369,12 @@ export default function UsersPage() {
                                 ? []
                                 : [
                                     { key: 'edit', label: t('common.edit'), icon: Pencil, onClick: () => openEdit(row) },
+                                    {
+                                        key: 'resetLink',
+                                        label: row.passwordSetupPending ? t('users.resendSetup') : t('users.sendResetLink'),
+                                        icon: KeyRound,
+                                        onClick: () => handleSendSetupEmail(row),
+                                    },
                                     ...(RESTRICTED_ROLES.includes(row.role)
                                         ? [{ key: 'permissions', label: t('users.permissions'), icon: ShieldCheck, onClick: () => openPermissions(row) }]
                                         : []),
@@ -500,17 +557,12 @@ export default function UsersPage() {
                         </label>
                     )}
 
-                    <FormField
-                        id="user-password"
-                        label={editingId ? t('users.form.newPassword') : t('users.form.password')}
-                        name="password"
-                        type="password"
-                        value={form.password}
-                        onChange={handleChange}
-                        required={!editingId}
-                        placeholder={editingId ? t('users.form.keepCurrent') : t('users.form.passwordHint')}
-                        autoComplete="new-password"
-                    />
+                    {!editingId && (
+                        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-200">
+                            <p className="font-medium">{t('users.form.inviteTitle')}</p>
+                            <p className="mt-1 text-teal-700 dark:text-teal-300/90">{t('users.form.inviteExplanation')}</p>
+                        </div>
+                    )}
 
                     <div className="flex justify-end gap-3">
                         <button
@@ -582,9 +634,29 @@ export default function UsersPage() {
                                 <tbody>
                                     {permRows.map((row) => {
                                         const meta = PERMISSION_MODULES.find((m) => m.module === row.module)
+                                        const label = meta ? t(`nav.${meta.navKey}`) : row.module
+                                        // Emails is a single on/off capability, not a CRUD row.
+                                        if (row.module === 'MANUFACTURER_EMAILS') {
+                                            return (
+                                                <tr key={row.module} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
+                                                    <td className="px-4 py-3 font-medium">{label}</td>
+                                                    <td colSpan={PERMISSION_ACTIONS.length} className="px-4 py-3 text-center">
+                                                        <label className="inline-flex items-center gap-2">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!row.canCreate}
+                                                                onChange={(e) => toggleEmailAccess(row.module, e.target.checked)}
+                                                                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
+                                                            />
+                                                            <span className="text-sm text-slate-600 dark:text-slate-300">{t('users.perm.emailAccess')}</span>
+                                                        </label>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        }
                                         return (
                                             <tr key={row.module} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
-                                                <td className="px-4 py-3 font-medium">{meta ? t(`nav.${meta.navKey}`) : row.module}</td>
+                                                <td className="px-4 py-3 font-medium">{label}</td>
                                                 {PERMISSION_ACTIONS.map((action) => (
                                                     <td key={action.key} className="px-4 py-3 text-center">
                                                         <input
@@ -618,6 +690,35 @@ export default function UsersPage() {
                             className="rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-60"
                         >
                             {permLoading ? t('common.saving') : t('users.perm.save')}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal
+                isOpen={setupLinkModal.isOpen}
+                title={t('users.setupLinkTitle')}
+                onClose={setupLinkModal.close}
+                width="max-w-lg"
+            >
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                        {t('users.setupLinkEmailFailed', { email: setupLinkInfo?.email || '' })}
+                    </p>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/60">
+                        <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">
+                            {setupLinkInfo?.link}
+                        </span>
+                        <CopyButton value={setupLinkInfo?.link || ''} />
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('users.setupLinkHint')}</p>
+                    <div className="flex justify-end">
+                        <button
+                            type="button"
+                            onClick={setupLinkModal.close}
+                            className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700"
+                        >
+                            {t('common.close')}
                         </button>
                     </div>
                 </div>

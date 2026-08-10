@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, Pencil } from 'lucide-react'
+import { ChevronLeft, Pencil, Mail } from 'lucide-react'
 import { apiGet } from '../api/client'
 import StatCard from '../components/StatCard'
 import StatusBadge from '../components/StatusBadge'
@@ -10,8 +10,11 @@ import LoadingBlock from '../components/LoadingBlock'
 import TrendChart from '../components/TrendChart'
 import CopyButton from '../components/CopyButton'
 import CategoryChips from '../components/CategoryChips'
+import ComposeEmailModal from '../components/ComposeEmailModal'
+import SentEmailDetailModal from '../components/SentEmailDetailModal'
 import { usePermissions } from '../context/AuthContext'
-import { formatMoney, formatDate } from '../utils/format'
+import { useModal } from '../hooks/useModal'
+import { formatMoney, formatDate, formatDateTime, safeArray } from '../utils/format'
 import { PERIOD_KEYS, periodRange } from '../utils/period'
 import { aggregateOrderLines } from '../utils/orderStats'
 
@@ -20,6 +23,10 @@ export default function ManufacturerDetailPage() {
     const { id } = useParams()
     const navigate = useNavigate()
     const { canEdit } = usePermissions('MANUFACTURERS')
+    const { canCreate: canSendEmail, canView: canViewEmails } = usePermissions('MANUFACTURER_EMAILS')
+    const composeModal = useModal()
+    const [emailRows, setEmailRows] = useState([])
+    const [emailDetailId, setEmailDetailId] = useState(null)
 
     // Manufacturers are suppliers: their activity is the purchase orders we place with them.
     const CHART_METRICS = {
@@ -49,6 +56,18 @@ export default function ManufacturerDetailPage() {
             cancelled = true
         }
     }, [id])
+
+    // Sent-email history for this manufacturer (only when the caller can view emails).
+    const loadEmails = () => {
+        if (!canViewEmails) return
+        apiGet(`/sent-emails?manufacturerId=${id}&size=100&sortBy=sentAt&sortDir=desc`)
+            .then((res) => setEmailRows(safeArray(res)))
+            .catch(() => {})
+    }
+    useEffect(() => {
+        loadEmails()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id, canViewEmails])
 
     // Period filtering (client-side, from the order lines the endpoint already returned).
     const range = periodRange(period)
@@ -88,14 +107,24 @@ export default function ManufacturerDetailPage() {
                     </p>
                     <StatusBadge status={manufacturer.active ? 'ACTIVE' : 'INACTIVE'} />
                 </div>
-                {canEdit && (
-                    <button
-                        onClick={() => navigate(`/manufacturers?edit=${manufacturer.id}`)}
-                        className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700"
-                    >
-                        <Pencil className="h-4 w-4" /> {t('manufacturerDetail.edit')}
-                    </button>
-                )}
+                <div className="flex flex-wrap gap-2">
+                    {canSendEmail && (
+                        <button
+                            onClick={composeModal.open}
+                            className="inline-flex items-center gap-2 rounded-xl border border-teal-600 px-4 py-2.5 text-sm font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/40"
+                        >
+                            <Mail className="h-4 w-4" /> {t('emails.sendEmail')}
+                        </button>
+                    )}
+                    {canEdit && (
+                        <button
+                            onClick={() => navigate(`/manufacturers?edit=${manufacturer.id}`)}
+                            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700"
+                        >
+                            <Pencil className="h-4 w-4" /> {t('manufacturerDetail.edit')}
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Facts */}
@@ -167,9 +196,44 @@ export default function ManufacturerDetailPage() {
                     initialPageSize={10}
                 />
             </section>
+
+            {/* Sent emails */}
+            {canViewEmails && (
+                <section className="space-y-3">
+                    <h2 className="text-lg font-semibold">{t('emails.manufacturerSection', { count: emailRows.length })}</h2>
+                    <DataTable
+                        tableId="manufacturer-emails"
+                        columns={emailColumns(t)}
+                        rows={emailRows}
+                        getRowId={(r) => r.id}
+                        onRowClick={(r) => setEmailDetailId(r.id)}
+                        initialPageSize={10}
+                    />
+                </section>
+            )}
+
+            <ComposeEmailModal
+                isOpen={composeModal.isOpen}
+                manufacturerIds={[Number(id)]}
+                onClose={composeModal.close}
+                onSent={loadEmails}
+            />
+            <SentEmailDetailModal
+                emailId={emailDetailId}
+                isOpen={emailDetailId != null}
+                onClose={() => setEmailDetailId(null)}
+            />
         </div>
     )
 }
+
+const emailColumns = (t) => [
+    { key: 'subject', label: t('emails.cols.subject'), render: (r) => <span className="line-clamp-1">{r.subject}</span> },
+    { key: 'sentAt', label: t('emails.cols.sentAt'), render: (r) => formatDateTime(r.sentAt) },
+    { key: 'status', label: t('common.status'), render: (r) => <StatusBadge status={r.status} /> },
+    { key: 'viewed', label: t('emails.cols.viewed'), render: (r) => (r.viewed ? t('common.yes') : t('common.no')) },
+    { key: 'replied', label: t('emails.cols.replied'), render: (r) => (r.replied ? t('common.yes') : t('common.no')) },
+]
 
 const orderColumns = (t) => [
     { key: 'orderNumber', label: t('manufacturerDetail.cols.orderNumber'), render: (r) => r.orderNumber || `#${r.orderId}` },

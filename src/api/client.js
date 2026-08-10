@@ -32,6 +32,7 @@ const STATUS_FALLBACK_KEYS = {
     403: 'errors.forbidden',
     404: 'errors.notFound',
     409: 'errors.conflict',
+    429: 'errors.tooManyRequests',
     500: 'errors.serverError',
     502: 'errors.unavailable',
     503: 'errors.unavailable',
@@ -146,10 +147,11 @@ export function apiPost(path, body, options = {}) {
     })
 }
 
-export function apiPut(path, body) {
+export function apiPut(path, body, options = {}) {
     return request(path, {
         method: 'PUT',
         body: JSON.stringify(body),
+        ...options,
     })
 }
 

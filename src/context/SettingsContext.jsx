@@ -25,6 +25,8 @@ const DEFAULTS = {
 export function SettingsProvider({ children }) {
     const { isAuthenticated } = useAuth()
     const [settings, setSettings] = useState(DEFAULTS)
+    // The currencies this deployment offers (code/symbol/name/decimals), for pickers. Loaded once.
+    const [currencies, setCurrencies] = useState([])
 
     const refresh = useCallback(async () => {
         try {
@@ -47,8 +49,15 @@ export function SettingsProvider({ children }) {
     }, [])
 
     useEffect(() => {
-        if (isAuthenticated) refresh()
-        else setSettings(DEFAULTS)
+        if (!isAuthenticated) {
+            setSettings(DEFAULTS)
+            setCurrencies([])
+            return
+        }
+        refresh()
+        apiGet('/currencies')
+            .then((list) => setCurrencies(Array.isArray(list) ? list : []))
+            .catch(() => { /* pickers fall back to a plain code input if the list is unavailable */ })
     }, [isAuthenticated, refresh])
 
     const value = useMemo(() => {
@@ -58,22 +67,34 @@ export function SettingsProvider({ children }) {
         const effectiveTaxPercent = (taxPercent) =>
             taxPercent == null || Number.isNaN(Number(taxPercent)) ? defaultTaxPercent : Number(taxPercent)
 
-        const formatCurrency = (amount) =>
+        // Formats an amount in a given currency, defaulting to the company base currency. Pass a record's
+        // own currency (e.g. an order's) to render foreign-currency amounts correctly. Fraction digits
+        // follow the currency (e.g. 0 for JPY) via Intl.
+        const formatCurrency = (amount, currencyOverride) =>
             new Intl.NumberFormat('en-US', {
                 style: 'currency',
-                currency: currency || 'EUR',
-                minimumFractionDigits: 2,
+                currency: (currencyOverride || currency || 'EUR').toUpperCase(),
             }).format(Number(amount || 0))
 
-        // Net price formatted in the company currency, made tax-inclusive when that preference is on.
-        const formatPrice = (netPrice, taxPercent) => {
+        // Net price formatted in a currency (base unless overridden), made tax-inclusive when the
+        // company preference is on.
+        const formatPrice = (netPrice, taxPercent, currencyOverride) => {
             const net = Number(netPrice || 0)
             const gross = pricesIncludeTax ? net * (1 + effectiveTaxPercent(taxPercent) / 100) : net
-            return formatCurrency(gross)
+            return formatCurrency(gross, currencyOverride)
+        }
+
+        // Short symbol for a currency code (e.g. "€", "$"), for labelling money inputs. Defaults to the
+        // company base currency and falls back to the code itself when the catalogue has no symbol.
+        const currencySymbol = (code) => {
+            const wanted = (code || currency || 'EUR').toUpperCase()
+            const match = currencies.find((c) => (c.code || '').toUpperCase() === wanted)
+            return match?.symbol || wanted
         }
 
         return {
             currency,
+            currencies,
             pricesIncludeTax,
             defaultTaxPercent,
             defaultWarehouseId,
@@ -84,9 +105,10 @@ export function SettingsProvider({ children }) {
             effectiveTaxPercent,
             formatCurrency,
             formatPrice,
+            currencySymbol,
             refresh,
         }
-    }, [settings, refresh])
+    }, [settings, currencies, refresh])
 
     return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
 }

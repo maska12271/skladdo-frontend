@@ -10,12 +10,13 @@ import LoadingBlock from '../components/LoadingBlock'
 import CopyButton from '../components/CopyButton'
 import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
+import OrderFulfilmentPanel from '../components/OrderFulfilmentPanel'
 import { FormField, FormSelect, TextareaField } from '../components/FormField.jsx'
 import { useModal } from '../hooks/useModal'
 import { useAuth, usePermissions } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { useToast } from '../context/ToastContext'
-import { formatMoney, formatDate } from '../utils/format'
+import { formatMoney, formatDate, toCompanyAmount } from '../utils/format'
 import { triggerDownload } from '../utils/download'
 
 // Invoices carry their own currency snapshot; format per-invoice rather than with the EUR-only helper.
@@ -59,8 +60,12 @@ export default function OrderDetailPage({ type = 'sales' }) {
     const navigate = useNavigate()
     const orderPerms = usePermissions(cfg.module) // gates the page + the invoice attach actions
     const { canSeePrices } = useAuth()
+    const { currency: baseCurrency } = useSettings()
     const isSales = type === 'sales'
     const invoicePerms = usePermissions('INVOICES')
+    // Warehouse staff fulfil orders without necessarily being able to edit them, so picking/receiving is
+    // open to the inventory permission too — matching the backend's gate on these endpoints.
+    const inventoryPerms = usePermissions('INVENTORY')
 
     const [details, setDetails] = useState(null)
     const [loading, setLoading] = useState(true)
@@ -104,6 +109,11 @@ export default function OrderDetailPage({ type = 'sales' }) {
 
     const tot = details.totals || {}
     const audit = details.audit
+    // This order's own currency; falls back to the company base currency handled inside formatMoney.
+    const orderCurrency = details.currency
+    // Company-currency equivalent of the order total, shown when the order is in a foreign currency.
+    const isForeign = orderCurrency && baseCurrency && orderCurrency.toUpperCase() !== baseCurrency.toUpperCase()
+    const companyTotal = isForeign ? toCompanyAmount(tot.total, details.exchangeRate) : null
 
     const counterpartyPath = details.counterpartyId
         ? isSales
@@ -117,8 +127,8 @@ export default function OrderDetailPage({ type = 'sales' }) {
         { key: 'quantity', label: t('common.qty') },
         ...(canSeePrices
             ? [
-                { key: 'unitPrice', label: t('orderDetail.cols.unitPrice'), render: (r) => formatMoney(r.unitPrice) },
-                { key: 'lineTotal', label: t('orderDetail.cols.lineTotal'), render: (r) => formatMoney(r.lineTotal) },
+                { key: 'unitPrice', label: t('orderDetail.cols.unitPrice'), render: (r) => formatMoney(r.unitPrice, orderCurrency) },
+                { key: 'lineTotal', label: t('orderDetail.cols.lineTotal'), render: (r) => formatMoney(r.lineTotal, orderCurrency) },
                 ...(isSales
                     ? [{ key: 'estUnitCost', label: t('orderDetail.cols.avgCostPerUnit'), render: (r) => (r.estUnitCost != null ? formatMoney(r.estUnitCost) : '—') }]
                     : []),
@@ -184,13 +194,13 @@ export default function OrderDetailPage({ type = 'sales' }) {
                 {canSeePrices && (
                     <StatCard
                         title={isSales ? t('orderDetail.stats.totalEarned') : t('orderDetail.stats.totalSpend')}
-                        value={formatMoney(tot.total)}
-                        hint={t('orderDetail.stats.inclDelivery')}
+                        value={formatMoney(tot.total, orderCurrency)}
+                        hint={companyTotal != null ? t('currency.approxIn', { amount: formatMoney(companyTotal, baseCurrency) }) : t('orderDetail.stats.inclDelivery')}
                         color={isSales ? 'teal' : 'amber'}
                     />
                 )}
-                {canSeePrices && <StatCard title={t('orderDetail.stats.subtotal')} value={formatMoney(tot.subtotal)} hint={t('orderDetail.stats.itemsOnly')} color="blue" />}
-                {canSeePrices && <StatCard title={t('orderDetail.stats.deliveryPrice')} value={formatMoney(tot.deliveryPrice)} hint={t('orderDetail.stats.perUnit', { value: formatMoney(tot.deliveryPerUnit) })} color="slate" />}
+                {canSeePrices && <StatCard title={t('orderDetail.stats.subtotal')} value={formatMoney(tot.subtotal, orderCurrency)} hint={t('orderDetail.stats.itemsOnly')} color="blue" />}
+                {canSeePrices && <StatCard title={t('orderDetail.stats.deliveryPrice')} value={formatMoney(tot.deliveryPrice, orderCurrency)} hint={t('orderDetail.stats.perUnit', { value: formatMoney(tot.deliveryPerUnit, orderCurrency) })} color="slate" />}
                 <StatCard title={t('orderDetail.stats.units')} value={tot.totalUnits ?? 0} hint={t('orderDetail.stats.productsCount', { count: tot.productCount ?? 0 })} color="blue" />
                 {isSales ? (
                     canSeePrices && (
@@ -240,6 +250,15 @@ export default function OrderDetailPage({ type = 'sales' }) {
                     paginate={false}
                 />
             </section>
+
+            {/* Picking / goods-receipt progress (never moves stock — see OrderFulfilmentPanel) */}
+            <OrderFulfilmentPanel
+                orderId={details.id}
+                type={type}
+                lines={details.items}
+                canFulfil={orderPerms.canEdit || inventoryPerms.canCreate}
+                onUpdated={setDetails}
+            />
 
             {/* Facts + timeline */}
             <div className="grid gap-6 lg:grid-cols-2">
@@ -442,6 +461,7 @@ function InvoiceSection({ orderId, orderStatus, invoices, setInvoices, perms, ca
                 orderId={orderId}
                 activeTypes={activeTypes}
                 orderGross={orderGross}
+                currency={orderCurrency}
                 onCreated={(created) => {
                     setInvoices((prev) => [created, ...prev])
                     createModal.close()
@@ -561,9 +581,10 @@ function InvoiceCard({ inv, perms, canSeePrices, busy, onDownload, onMarkPaid, o
  * penalty override, the deposit for a prepayment, and notes. Blank term/penalty fields fall back to the
  * order's or company's defaults on the server.
  */
-function CreateInvoiceModal({ isOpen, onClose, orderId, activeTypes, orderGross, onCreated }) {
+function CreateInvoiceModal({ isOpen, onClose, orderId, activeTypes, orderGross, currency, onCreated }) {
     const { t } = useTranslation()
     const settings = useSettings()
+    const invoiceCurrency = currency || settings.currency
     const finalTaken = activeTypes.has('FINAL')
     const prepaymentTaken = activeTypes.has('PREPAYMENT')
     const gross = Number(orderGross) || 0
@@ -658,7 +679,7 @@ function CreateInvoiceModal({ isOpen, onClose, orderId, activeTypes, orderGross,
                     {form.type === 'PREPAYMENT' && (
                         <>
                             <FormField id="inv-pre-pct" label={t('invoices.create.prepaymentPercent')} type="number" step="0.01" min={0} max={100} name="prepaymentPercent" value={form.prepaymentPercent} onChange={(e) => onPrepayPercentChange(e.target.value)} placeholder="0" />
-                            <FormField id="inv-pre-amt" label={t('invoices.create.prepaymentAmount')} type="number" step="0.01" min={0} name="prepaymentAmount" value={form.prepaymentAmount} onChange={(e) => onPrepayAmountChange(e.target.value)} placeholder="0.00" />
+                            <FormField id="inv-pre-amt" label={`${t('invoices.create.prepaymentAmount')} (${settings.currencySymbol(invoiceCurrency)})`} type="number" step="0.01" min={0} name="prepaymentAmount" value={form.prepaymentAmount} onChange={(e) => onPrepayAmountChange(e.target.value)} placeholder="0.00" />
                         </>
                     )}
                     <FormField id="inv-penalty" label={t('invoices.create.penaltyPercent')} type="number" step="0.01" min={0} name="penaltyPercent" value={form.penaltyPercent} onChange={(e) => set({ penaltyPercent: e.target.value })} placeholder={t('invoices.create.optionalDefault')} />

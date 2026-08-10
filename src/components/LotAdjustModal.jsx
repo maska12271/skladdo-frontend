@@ -30,6 +30,16 @@ export default function LotAdjustModal({ product, batches = [], isOpen, onClose,
 
     const setChange = (id, value) => setChanges((prev) => ({ ...prev, [id]: value }))
 
+    // The "Change" and "Resulting stock" inputs are two views of the same adjustment: editing the
+    // resulting count stores the equivalent signed change, so the submit payload (which always sends the
+    // change) stays the single source of truth.
+    const setResulting = (id, value, currentQty) => {
+        if (value === '') return setChange(id, '')
+        const num = Number(value)
+        if (Number.isNaN(num)) return
+        setChange(id, String(num - currentQty))
+    }
+
     const items = batches
         .map((b) => ({ batch: b, change: Number(changes[b.id]) || 0 }))
         .filter((row) => row.change !== 0)
@@ -90,8 +100,11 @@ export default function LotAdjustModal({ product, batches = [], isOpen, onClose,
                                 </thead>
                                 <tbody>
                                     {batches.map((b) => {
-                                        const change = Number(changes[b.id]) || 0
-                                        const resulting = (b.quantity ?? 0) + change
+                                        const raw = changes[b.id]
+                                        const entered = raw !== undefined && raw !== '' && raw !== '-'
+                                        const change = Number(raw) || 0
+                                        const currentQty = b.quantity ?? 0
+                                        const resulting = currentQty + change
                                         return (
                                             <tr key={b.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
                                                 <td className="px-3 py-2 font-medium">{b.lotNumber}</td>
@@ -101,14 +114,20 @@ export default function LotAdjustModal({ product, batches = [], isOpen, onClose,
                                                 <td className="px-3 py-2">
                                                     <input
                                                         type="number"
-                                                        value={changes[b.id] ?? ''}
+                                                        value={raw ?? ''}
                                                         onChange={(e) => setChange(b.id, e.target.value)}
                                                         placeholder="0"
-                                                        className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-right dark:border-slate-700 dark:bg-slate-950"
+                                                        className={`w-24 rounded-lg border px-2 py-1 text-right dark:bg-slate-950 ${resulting < 0 ? 'border-rose-400 dark:border-rose-700' : 'border-slate-300 dark:border-slate-700'}`}
                                                     />
                                                 </td>
-                                                <td className={`px-3 py-2 text-right font-semibold tabular-nums ${resulting < 0 ? 'text-rose-600 dark:text-rose-400' : change !== 0 ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`}>
-                                                    {resulting}
+                                                <td className="px-3 py-2">
+                                                    <input
+                                                        type="number"
+                                                        value={entered ? resulting : ''}
+                                                        onChange={(e) => setResulting(b.id, e.target.value, currentQty)}
+                                                        placeholder={String(currentQty)}
+                                                        className={`w-24 rounded-lg border px-2 py-1 text-right font-semibold tabular-nums dark:bg-slate-950 ${resulting < 0 ? 'border-rose-400 text-rose-600 dark:border-rose-700 dark:text-rose-400' : 'border-slate-300 dark:border-slate-700'}`}
+                                                    />
                                                 </td>
                                             </tr>
                                         )

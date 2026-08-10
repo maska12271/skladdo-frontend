@@ -57,6 +57,12 @@ const STATUS_TONE = {
     PREPAYMENT_OVERDUE: 'rose',
     AWAITING_FINAL: 'violet',
     INVOICED: 'sky',
+    // Sent-email send outcome.
+    SENT: 'emerald',
+    FAILED: 'rose',
+    // Warehouse-connection lifecycle.
+    PENDING: 'amber',
+    REVOKED: 'slate',
 }
 
 // i18n key per status (CANCELED maps to the CANCELLED label).
@@ -85,6 +91,10 @@ const STATUS_LABEL_KEY = {
     PREPAYMENT_OVERDUE: 'PREPAYMENT_OVERDUE',
     AWAITING_FINAL: 'AWAITING_FINAL',
     INVOICED: 'INVOICED',
+    SENT: 'SENT',
+    FAILED: 'FAILED',
+    PENDING: 'PENDING',
+    REVOKED: 'REVOKED',
 }
 
 function prettify(value) {
