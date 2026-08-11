@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  unit:
+    name: Build and unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # vitest: pure-logic suites in a node environment, component suites opting into jsdom per file.
+      - name: Unit and component tests
+        run: npm test
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Playwright drives the real app, so it needs the API too. kladdo-backend is public, so this needs
+      # no token. Pinning to master keeps a backend change from silently breaking the frontend build.
+      - name: Check out the backend
+        uses: actions/checkout@v4
+        with:
+          repository: maska12271/kladdo-backend
+          ref: master
+          path: backend
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      # A fresh checkout has no data/tenderdb.mv.db (deliberately uncommitted — it is a shared demo seed
+      # full of local QA data), so DataInitializer seeds a new one: the demo company with 80 products,
+      # 190 sales orders, 48 tenders, the owner accounts and the Baltic Logistics warehouse partner.
+      # That covers every spec except the sent-email body assertion, which skips itself when the dataset
+      # has no sent emails — the seeder does not create any.
+      - name: Start the backend
+        working-directory: backend
+        run: |
+          chmod +x mvnw
+          ./mvnw -B --no-transfer-progress spring-boot:run > ../backend.log 2>&1 &
+
+      - name: Start the frontend
+        run: npm run dev > frontend.log 2>&1 &
+
+      # curl without -f succeeds on any HTTP response, so a 401 from a protected route still means "up".
+      - name: Wait for both servers
+        run: |
+          for i in $(seq 1 120); do
+            curl -s -o /dev/null http://localhost:8080/api/auth/signin && break
+            sleep 2
+          done
+          for i in $(seq 1 60); do
+            curl -s -o /dev/null http://localhost:5173 && break
+            sleep 1
+          done
+          curl -s -o /dev/null http://localhost:8080/api/auth/signin || (echo "backend never came up"; tail -50 backend.log; exit 1)
+          curl -s -o /dev/null http://localhost:5173 || (echo "frontend never came up"; tail -50 frontend.log; exit 1)
+
+      - name: Run Playwright
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+      - name: Upload server logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-logs
+          path: |
+            backend.log
+            frontend.log
+          retention-days: 7
