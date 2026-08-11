@@ -315,7 +315,13 @@ export default function DataTable({
                                 value={pageSize}
                                 onChange={(e) => {
                                     setPageSize(Number(e.target.value))
-                                    setPage(1)
+                                    // Only reset the page ourselves in uncontrolled mode. A controlled
+                                    // parent keeps this state in the URL, and two setSearchParams calls in
+                                    // one tick both resolve against the params from the last render — the
+                                    // second would recompute from stale params and drop the size change,
+                                    // leaving the size silently unchanged. useServerTable already clears
+                                    // the page as part of its own size update.
+                                    if (!onPageSizeChange) setPage(1)
                                 }}
                                 className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                             >
