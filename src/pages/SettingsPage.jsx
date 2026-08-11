@@ -442,7 +442,7 @@ export default function SettingsPage() {
     if (loading || !settings) {
         return (
             <div className="space-y-6">
-                <PageHeader title={t('settings.title')} description={t('settings.description')} />
+                <PageHeader title={t('settings.title')} description={t(isWarehouseAccount ? 'settings.warehouseDescription' : 'settings.description')} />
                 <LoadingBlock />
             </div>
         )
@@ -450,7 +450,7 @@ export default function SettingsPage() {
 
     return (
         <div className="space-y-6">
-            <PageHeader title={t('settings.title')} description={t('settings.description')} />
+            <PageHeader title={t('settings.title')} description={t(isWarehouseAccount ? 'settings.warehouseDescription' : 'settings.description')} />
 
             {/* Tabs */}
             <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800">

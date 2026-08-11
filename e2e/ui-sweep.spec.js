@@ -61,6 +61,16 @@ test.describe('warehouse account settings tabs', () => {
         await expect(page.getByRole('button', { name: 'Taxes' })).toBeHidden()
     })
 
+    test('describes the page in terms of what this account can actually configure (N-011)', async ({ page }) => {
+        await ownCompanySettings(page)
+        const body = await page.locator('body').innerText()
+
+        // The generic description names taxes, invoicing, products and new users — every one of which is a
+        // tab this account does not have.
+        expect(body).toContain('Manage your account, the companies you work for, and your plan.')
+        expect(body).not.toContain('Configure company-wide defaults')
+    })
+
     test('a business account still sees the full tab set', async ({ page }) => {
         await login(page, OWNER)
         await page.goto('/settings')

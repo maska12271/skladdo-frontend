@@ -313,6 +313,7 @@ export default {
     settings: {
         title: 'Ettevõtte seaded',
         description: 'Seadista ettevõtteülesed vaikeväärtused maksudele, arvetele, toodetele ja uutele kasutajatele.',
+        warehouseDescription: 'Halda oma kontot, ettevõtteid, kelle heaks töötad, ja oma paketti.',
         save: 'Salvesta muudatused',
         saved: 'Seaded salvestatud',
         tabs: {

@@ -314,6 +314,9 @@ export default {
     settings: {
         title: 'Company settings',
         description: 'Configure company-wide defaults for taxes, invoicing, products and new users.',
+        // A warehouse account has no tabs for taxes, invoicing, products or user defaults — every noun in
+        // the description above names something WAREHOUSE_ACCOUNT_TABS removes. See N-011.
+        warehouseDescription: 'Manage your account, the companies you work for, and your plan.',
         save: 'Save changes',
         saved: 'Settings saved',
         tabs: {
