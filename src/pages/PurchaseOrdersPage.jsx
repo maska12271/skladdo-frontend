@@ -121,8 +121,8 @@ export default function PurchaseOrdersPage() {
     }
 
     const {
-        rows, total, loading: listLoading, page, pageSize, q: search, filters,
-        setSearch, setFilter, setPage, setPageSize, reload,
+        rows, total, loading: listLoading, page, pageSize, sortBy, sortDir, q: search, filters,
+        setSearch, setFilter, setPage, setPageSize, setSort, reload,
     } = useServerTable({
         filterKeys: ['manufacturer', 'status'],
         fetcher: (params) => apiGet(`/purchase-orders?${buildOrdersQuery(params).toString()}`),
@@ -437,10 +437,11 @@ export default function PurchaseOrdersPage() {
     }
 
     const columns = [
-        { key: 'orderNumber', label: t('purchaseOrders.cols.orderNo') },
-        { key: 'manufacturer', label: t('purchaseOrders.cols.manufacturer'), render: (row) => row.manufacturer?.name || '-' },
+        { key: 'orderNumber', label: t('purchaseOrders.cols.orderNo'), sortKey: 'orderNumber' },
+        { key: 'manufacturer', label: t('purchaseOrders.cols.manufacturer'), sortKey: 'manufacturer.name', render: (row) => row.manufacturer?.name || '-' },
         {
             key: 'status',
+            sortKey: 'status',
             label: t('common.status'),
             render: (row) => (
                 <span onClick={(e) => e.stopPropagation()}>
@@ -452,8 +453,8 @@ export default function PurchaseOrdersPage() {
                 </span>
             ),
         },
-        { key: 'orderDate', label: t('purchaseOrders.cols.orderDate'), render: (row) => formatDate(row.orderDate) },
-        ...(canSeePrices ? [{ key: 'totalAmount', label: t('common.total'), render: (row) => <MoneyWithBase amount={row.totalAmount} currency={row.currency} exchangeRate={row.exchangeRate} base={baseCurrency} /> }] : []),
+        { key: 'orderDate', label: t('purchaseOrders.cols.orderDate'), sortKey: 'orderDate', render: (row) => formatDate(row.orderDate) },
+        ...(canSeePrices ? [{ key: 'totalAmount', label: t('common.total'), sortKey: 'totalAmount', render: (row) => <MoneyWithBase amount={row.totalAmount} currency={row.currency} exchangeRate={row.exchangeRate} base={baseCurrency} /> }] : []),
         ...((canEdit || canDelete) ? [{
             key: 'actions',
             label: '',
@@ -549,6 +550,9 @@ export default function PurchaseOrdersPage() {
                 pageSize={pageSize}
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSortChange={setSort}
                 bulkActions={
                     canDelete ? (
                         <button

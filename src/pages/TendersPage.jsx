@@ -97,8 +97,8 @@ export default function TendersPage() {
     }
 
     const {
-        rows, total, loading: listLoading, page, pageSize, q: search, filters,
-        setSearch, setFilter, setPage, setPageSize, reload,
+        rows, total, loading: listLoading, page, pageSize, sortBy, sortDir, q: search, filters,
+        setSearch, setFilter, setPage, setPageSize, setSort, reload,
     } = useServerTable({
         filterKeys: ['status'],
         fetcher: (params) => apiGet(`/tenders?${buildTendersQuery(params).toString()}`),
@@ -271,11 +271,11 @@ export default function TendersPage() {
     }
 
     const columns = [
-        { key: 'title', label: t('tenders.cols.title') },
-        { key: 'tenderNumber', label: t('tenders.cols.tenderNo') },
-        { key: 'clientName', label: t('tenders.cols.requester') },
-        { key: 'status', label: t('common.status'), render: (row) => <StatusBadge status={row.status} /> },
-        { key: 'deadline', label: t('tenders.cols.deadline'), render: (row) => formatDate(row.deadline) },
+        { key: 'title', label: t('tenders.cols.title'), sortKey: 'title' },
+        { key: 'tenderNumber', label: t('tenders.cols.tenderNo'), sortKey: 'tenderNumber' },
+        { key: 'clientName', label: t('tenders.cols.requester'), sortKey: 'clientName' },
+        { key: 'status', label: t('common.status'), sortKey: 'status', render: (row) => <StatusBadge status={row.status} /> },
+        { key: 'deadline', label: t('tenders.cols.deadline'), sortKey: 'deadline', render: (row) => formatDate(row.deadline) },
         { key: 'parts', label: t('tenders.cols.parts'), render: renderRollup },
         {
             key: 'actions',
@@ -387,6 +387,9 @@ export default function TendersPage() {
                 pageSize={pageSize}
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSortChange={setSort}
                 bulkActions={
                     canDelete ? (
                         <button

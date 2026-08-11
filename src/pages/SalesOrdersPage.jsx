@@ -143,8 +143,8 @@ export default function SalesOrdersPage() {
     }
 
     const {
-        rows, total, loading: listLoading, page, pageSize, q: search, filters,
-        setSearch, setFilter, setPage, setPageSize, reload,
+        rows, total, loading: listLoading, page, pageSize, sortBy, sortDir, q: search, filters,
+        setSearch, setFilter, setPage, setPageSize, setSort, reload,
     } = useServerTable({
         filterKeys: ['client', 'status', 'paymentStatus'],
         fetcher: (params) => apiGet(`/sales-orders?${buildOrdersQuery(params).toString()}`),
@@ -517,10 +517,11 @@ export default function SalesOrdersPage() {
     }
 
     const columns = [
-        { key: 'orderNumber', label: t('salesOrders.cols.orderNo') },
-        { key: 'client', label: t('salesOrders.cols.client'), render: (row) => row.client?.name || '-' },
+        { key: 'orderNumber', label: t('salesOrders.cols.orderNo'), sortKey: 'orderNumber' },
+        { key: 'client', label: t('salesOrders.cols.client'), sortKey: 'client.name', render: (row) => row.client?.name || '-' },
         {
             key: 'status',
+            sortKey: 'status',
             label: t('common.status'),
             render: (row) => (
                 <span onClick={(e) => e.stopPropagation()}>
@@ -554,8 +555,8 @@ export default function SalesOrdersPage() {
                 },
             }]
             : []),
-        { key: 'orderDate', label: t('salesOrders.cols.orderDate'), render: (row) => formatDate(row.orderDate) },
-        ...(canSeePrices ? [{ key: 'totalAmount', label: t('common.total'), render: (row) => <MoneyWithBase amount={row.totalAmount} currency={row.currency} exchangeRate={row.exchangeRate} base={baseCurrency} /> }] : []),
+        { key: 'orderDate', label: t('salesOrders.cols.orderDate'), sortKey: 'orderDate', render: (row) => formatDate(row.orderDate) },
+        ...(canSeePrices ? [{ key: 'totalAmount', label: t('common.total'), sortKey: 'totalAmount', render: (row) => <MoneyWithBase amount={row.totalAmount} currency={row.currency} exchangeRate={row.exchangeRate} base={baseCurrency} /> }] : []),
         ...((canEdit || canDelete) ? [{
             key: 'actions',
             label: '',
@@ -660,6 +661,9 @@ export default function SalesOrdersPage() {
                 pageSize={pageSize}
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSortChange={setSort}
                 bulkActions={
                     canDelete ? (
                         <button

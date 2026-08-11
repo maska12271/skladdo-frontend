@@ -118,8 +118,8 @@ export default function ProductsPage() {
 
     // Server-driven table: page/size/sort/search/filters live in the URL; `rows` is just the current page.
     const {
-        rows, total, loading: listLoading, page, pageSize, q: search, filters,
-        setSearch, setFilter, setPage, setPageSize, reload,
+        rows, total, loading: listLoading, page, pageSize, sortBy, sortDir, q: search, filters,
+        setSearch, setFilter, setPage, setPageSize, setSort, reload,
     } = useServerTable({
         filterKeys: ['manufacturer', 'category', 'status'],
         fetcher: (params) => apiGet(`/products?${buildProductQuery(params).toString()}`),
@@ -403,13 +403,14 @@ export default function ProductsPage() {
                 )
             },
         },
-        { key: 'name', label: t('common.name') },
-        { key: 'sku', label: t('common.sku') },
-        { key: 'manufacturer', label: t('products.cols.manufacturer'), render: (row) => row.manufacturer?.name || '-' },
-        { key: 'category', label: t('products.cols.category'), render: (row) => row.category?.name || '-' },
+        { key: 'name', label: t('common.name'), sortKey: 'name' },
+        { key: 'sku', label: t('common.sku'), sortKey: 'sku' },
+        { key: 'manufacturer', label: t('products.cols.manufacturer'), sortKey: 'manufacturer.name', render: (row) => row.manufacturer?.name || '-' },
+        { key: 'category', label: t('products.cols.category'), sortKey: 'category.name', render: (row) => row.category?.name || '-' },
         ...(canSeePrices
             ? [{
                 key: 'price',
+                sortKey: 'price',
                 label: `${t('common.price')} ${pricesIncludeTax ? t('settings.tax.inclShort') : t('settings.tax.exclShort')}`,
                 render: (row) => formatPrice(row.price, row.taxRate?.percentage, row.currency),
             }, {
@@ -420,6 +421,7 @@ export default function ProductsPage() {
             : []),
         {
             key: 'stockQuantity',
+            sortKey: 'stockQuantity',
             label: t('products.cols.stock'),
             render: (row) => {
                 const status = stockStatusOf(row)
@@ -438,9 +440,10 @@ export default function ProductsPage() {
                 )
             },
         },
-        { key: 'minimumStock', label: t('products.cols.minStock') },
+        { key: 'minimumStock', label: t('products.cols.minStock'), sortKey: 'minimumStock' },
         {
             key: 'active',
+            sortKey: 'active',
             label: t('common.status'),
             render: (row) => {
                 const stock = stockStatusOf(row)
@@ -590,6 +593,9 @@ export default function ProductsPage() {
                 pageSize={pageSize}
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSortChange={setSort}
                 bulkActions={
                     canDelete ? (
                         <button

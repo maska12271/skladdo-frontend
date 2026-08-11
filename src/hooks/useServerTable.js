@@ -54,6 +54,22 @@ export function useServerTable({
         }, { replace: true })
     }, [setSearchParams])
 
+    // Sort writes both params in ONE setSearchParams call on purpose. Two updateParam calls in the same
+    // tick would each resolve against the params from the last render, and the second would discard the
+    // first — the bug that made the page-size control do nothing (F-016).
+    const setSort = useCallback((nextSortBy, nextSortDir) => {
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev)
+            if (nextSortBy && nextSortBy !== defaultSortBy) next.set('sortBy', nextSortBy)
+            else next.delete('sortBy')
+            if (nextSortDir && nextSortDir !== defaultSortDir) next.set('sortDir', nextSortDir)
+            else next.delete('sortDir')
+            // Re-sorting changes which records are on page 1, so an old page number is meaningless.
+            next.delete('page')
+            return next
+        }, { replace: true })
+    }, [setSearchParams, defaultSortBy, defaultSortDir])
+
     const setSearch = useCallback((value) => updateParam('q', value), [updateParam])
     const setFilter = useCallback((key, value) => updateParam(key, value), [updateParam])
     const setPage = useCallback((value) => updateParam('page', value > 1 ? value : '', { resetPage: false }), [updateParam])
@@ -120,6 +136,7 @@ export function useServerTable({
         setFilter,
         setPage,
         setPageSize,
+        setSort,
         reload,
     }
 }

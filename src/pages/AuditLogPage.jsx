@@ -49,8 +49,8 @@ export default function AuditLogPage() {
     }, [])
 
     const {
-        rows, total, loading, page, pageSize, q, filters,
-        setSearch, setFilter, setPage, setPageSize,
+        rows, total, loading, page, pageSize, sortBy, sortDir, q, filters,
+        setSearch, setFilter, setPage, setPageSize, setSort,
     } = useServerTable({
         filterKeys: ['entityType', 'action', 'actor'],
         fetcher,
@@ -75,10 +75,10 @@ export default function AuditLogPage() {
     }
 
     const columns = [
-        { key: 'createdAt', label: t('audit.cols.when'), render: (r) => formatDateTime(r.createdAt) },
-        { key: 'actorName', label: t('audit.cols.who'), render: (r) => r.actorName || t('audit.system') },
-        { key: 'action', label: t('audit.cols.action'), render: (r) => <ActionBadge action={r.action} /> },
-        { key: 'entityType', label: t('audit.cols.entity'), render: entityLabel },
+        { key: 'createdAt', label: t('audit.cols.when'), sortKey: 'createdAt', render: (r) => formatDateTime(r.createdAt) },
+        { key: 'actorName', label: t('audit.cols.who'), sortKey: 'actorName', render: (r) => r.actorName || t('audit.system') },
+        { key: 'action', label: t('audit.cols.action'), sortKey: 'action', render: (r) => <ActionBadge action={r.action} /> },
+        { key: 'entityType', label: t('audit.cols.entity'), sortKey: 'entityType', render: entityLabel },
         {
             key: 'details',
             label: t('audit.cols.details'),
@@ -141,6 +141,9 @@ export default function AuditLogPage() {
                 pageSize={pageSize}
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSortChange={setSort}
             />
         </div>
     )

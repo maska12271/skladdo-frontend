@@ -154,8 +154,8 @@ export default function ManufacturersPage() {
     }
 
     const {
-        rows, total, loading: listLoading, page, pageSize, q: search, filters,
-        setSearch, setFilter, setPage, setPageSize, reload,
+        rows, total, loading: listLoading, page, pageSize, sortBy, sortDir, q: search, filters,
+        setSearch, setFilter, setPage, setPageSize, setSort, reload,
     } = useServerTable({
         filterKeys: ['category', 'status'],
         fetcher: (params) => apiGet(`/manufacturers?${buildManufacturersQuery(params).toString()}`),
@@ -286,10 +286,10 @@ export default function ManufacturersPage() {
     }
 
     const columns = [
-        { key: 'name', label: t('common.name') },
-        { key: 'country', label: t('common.country') },
-        { key: 'email', label: t('common.email') },
-        { key: 'phone', label: t('common.phone') },
+        { key: 'name', label: t('common.name'), sortKey: 'name' },
+        { key: 'country', label: t('common.country'), sortKey: 'country' },
+        { key: 'email', label: t('common.email'), sortKey: 'email' },
+        { key: 'phone', label: t('common.phone'), sortKey: 'phone' },
         { key: 'website', label: t('common.website') },
         {
             key: 'categories',
@@ -298,6 +298,7 @@ export default function ManufacturersPage() {
         },
         {
             key: 'active',
+            sortKey: 'active',
             label: t('common.status'),
             render: (row) => <StatusBadge status={row.active ? 'ACTIVE' : 'INACTIVE'} />,
         },
@@ -405,6 +406,9 @@ export default function ManufacturersPage() {
                 pageSize={pageSize}
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSortChange={setSort}
                 bulkActions={
                     <>
                         {canSendEmail && (

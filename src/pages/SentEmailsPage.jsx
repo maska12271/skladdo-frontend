@@ -44,8 +44,8 @@ export default function SentEmailsPage() {
     }
 
     const {
-        rows, total, loading, page, pageSize, q: search,
-        setSearch, setPage, setPageSize,
+        rows, total, loading, page, pageSize, sortBy, sortDir, q: search,
+        setSearch, setPage, setPageSize, setSort,
     } = useServerTable({
         fetcher: (params) => apiGet(`/sent-email-batches?${buildQuery(params).toString()}`),
     })
@@ -67,11 +67,12 @@ export default function SentEmailsPage() {
                 ? <span className="inline-flex items-center gap-1.5 font-medium"><Users className="h-4 w-4 text-slate-400" />{t('emails.batch.recipients', { count: r.recipientCount })}</span>
                 : (r.manufacturerName || r.recipientEmail || '—')),
         },
-        { key: 'subject', label: t('emails.cols.subject'), render: (r) => <span className="line-clamp-1">{r.subject}</span> },
+        { key: 'subject', label: t('emails.cols.subject'), sortKey: 'subject', render: (r) => <span className="line-clamp-1">{r.subject}</span> },
         ...(isAdmin ? [{ key: 'sentById', label: t('emails.cols.sender'), render: (r) => userNames[r.sentById] || '—' }] : []),
-        { key: 'sentAt', label: t('emails.cols.sentAt'), render: (r) => formatDateTime(r.sentAt) },
+        { key: 'sentAt', label: t('emails.cols.sentAt'), sortKey: 'sentAt', render: (r) => formatDateTime(r.sentAt) },
         {
             key: 'status',
+            sortKey: 'status',
             label: t('common.status'),
             render: (r) => (r.recipientCount === 1
                 ? <StatusBadge status={r.failedCount > 0 ? 'FAILED' : 'SENT'} />
@@ -118,6 +119,9 @@ export default function SentEmailsPage() {
                 pageSize={pageSize}
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSortChange={setSort}
             />
 
             <SentEmailDetailModal

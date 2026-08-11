@@ -97,8 +97,8 @@ export default function ClientsPage() {
     }
 
     const {
-        rows, total, loading: listLoading, page, pageSize, q: search, filters,
-        setSearch, setFilter, setPage, setPageSize, reload,
+        rows, total, loading: listLoading, page, pageSize, sortBy, sortDir, q: search, filters,
+        setSearch, setFilter, setPage, setPageSize, setSort, reload,
     } = useServerTable({
         filterKeys: ['status'],
         fetcher: (params) => apiGet(`/clients?${buildClientsQuery(params).toString()}`),
@@ -217,14 +217,15 @@ export default function ClientsPage() {
     }
 
     const columns = [
-        { key: 'name', label: t('common.name') },
-        { key: 'registrationCode', label: t('clients.regCode') },
-        { key: 'email', label: t('common.email') },
-        { key: 'phone', label: t('common.phone') },
-        { key: 'country', label: t('common.country') },
+        { key: 'name', label: t('common.name'), sortKey: 'name' },
+        { key: 'registrationCode', label: t('clients.regCode'), sortKey: 'registrationCode' },
+        { key: 'email', label: t('common.email'), sortKey: 'email' },
+        { key: 'phone', label: t('common.phone'), sortKey: 'phone' },
+        { key: 'country', label: t('common.country'), sortKey: 'country' },
         { key: 'contactPerson', label: t('clients.contactPerson') },
         {
             key: 'active',
+            sortKey: 'archived',
             label: t('common.status'),
             render: (row) => <StatusBadge status={row.archived ? 'ARCHIVED' : 'ACTIVE'} />,
         },
@@ -324,6 +325,9 @@ export default function ClientsPage() {
                 pageSize={pageSize}
                 onPageChange={setPage}
                 onPageSizeChange={setPageSize}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSortChange={setSort}
                 bulkActions={
                     canDelete ? (
                         <button

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
@@ -95,6 +95,11 @@ export default function DataTable({
     // no filters are active. `filtersActive` tells "you have nothing yet" apart from "no match".
     emptyState = null,
     filtersActive = false,
+    // Sorting. Supply all three to make columns carrying a `sortKey` clickable; the parent owns the state
+    // (useServerTable keeps it in the URL) so a sorted view survives reload and Back.
+    sortBy,
+    sortDir,
+    onSortChange,
 }) {
     const { t } = useTranslation()
     const [internalPage, setInternalPage] = useState(1)
@@ -184,6 +189,7 @@ export default function DataTable({
         }
         : undefined
 
+    const sortingEnabled = typeof onSortChange === 'function'
     const totalColumns = visibleColumns.length + (selectionEnabled ? 1 : 0)
     const showBulkBar = selectionEnabled && selectedIds.length > 0
     const showColumnPicker = tableId && hideableColumns.length > 0
@@ -243,14 +249,36 @@ export default function DataTable({
                                 />
                             </th>
                         )}
-                        {visibleColumns.map((column) => (
-                            <th
-                                key={column.key}
-                                className="whitespace-nowrap px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300"
-                            >
-                                {column.label}
-                            </th>
-                        ))}
+                        {visibleColumns.map((column) => {
+                            // A column is sortable only if it opts in with `sortKey` — the name of a field
+                            // the API can actually sort on. Computed cells (stock status, payment status,
+                            // converted totals) have no such field and would 400, so they stay plain.
+                            const sortable = sortingEnabled && column.sortKey
+                            const active = sortable && sortBy === column.sortKey
+                            return (
+                                <th
+                                    key={column.key}
+                                    aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
+                                    className="whitespace-nowrap px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300"
+                                >
+                                    {sortable ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => onSortChange(
+                                                column.sortKey,
+                                                active && sortDir === 'asc' ? 'desc' : 'asc',
+                                            )}
+                                            className="group inline-flex items-center gap-1.5 font-semibold text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+                                        >
+                                            {column.label}
+                                            <SortIcon active={active} dir={sortDir} />
+                                        </button>
+                                    ) : (
+                                        column.label
+                                    )}
+                                </th>
+                            )
+                        })}
                     </tr>
                     </thead>
                     <tbody>
@@ -497,6 +525,18 @@ function TableSkeleton({ rows, columns }) {
             ))}
         </>
     )
+}
+
+/**
+ * Sort affordance in a column header. The inactive state stays visible but faint, so a sortable column
+ * advertises itself without a hover — the alternative (icon only on hover) hides the feature entirely from
+ * anyone who doesn't happen to sweep the mouse across the header.
+ */
+function SortIcon({ active, dir }) {
+    if (!active) return <ChevronsUpDown className="h-3.5 w-3.5 text-slate-300 transition group-hover:text-slate-500 dark:text-slate-600 dark:group-hover:text-slate-400" />
+    return dir === 'asc'
+        ? <ArrowUp className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+        : <ArrowDown className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
 }
 
 function PageButton({ onClick, disabled, ariaLabel, children }) {
