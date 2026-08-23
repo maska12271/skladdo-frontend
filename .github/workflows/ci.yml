@@ -60,6 +60,20 @@ jobs:
       - name: Install Playwright chromium
         run: npx playwright install --with-deps chromium
 
+      # Postgres + LocalStack (S3) - the backend needs both since the H2->Postgres and disk->S3
+      # migrations; same services as backend/docker-compose.yml starts for local dev.
+      - name: Start Postgres and LocalStack
+        run: |
+          docker compose -f backend/docker-compose.yml up -d
+          for i in $(seq 1 60); do
+            docker compose -f backend/docker-compose.yml exec -T postgres pg_isready -U skladdo && break
+            sleep 1
+          done
+          for i in $(seq 1 60); do
+            curl -s -o /dev/null http://localhost:4566/_localstack/health && break
+            sleep 1
+          done
+
       # A fresh checkout has no data/tenderdb.mv.db (deliberately uncommitted — it is a shared demo seed
       # full of local QA data), so DataInitializer seeds a new one: the demo company with 80 products,
       # 190 sales orders, 48 tenders, the owner accounts and the Baltic Logistics warehouse partner.
