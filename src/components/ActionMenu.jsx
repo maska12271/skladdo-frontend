@@ -4,8 +4,11 @@ import { MoreHorizontal } from 'lucide-react'
 
 // Wide enough for the longest action labels in every locale — et/ru run far wider than en, and a menu item
 // that has to wrap looks broken next to the ones that don't. The widest today ("Корректировать остаток")
-// renders at 179px, which with the item's padding, icon and gap needs 248.
-const MENU_WIDTH = 248
+// renders at 186px (buttons pick up the browser's default 16px/400 here rather than text-sm/font-medium —
+// see the `button { font: inherit }` reset in index.css, an unlayered rule that beats Tailwind's layered
+// utilities regardless of specificity), which with the item's padding, icon and gap needs at least 246;
+// 268 leaves real margin instead of the previous width's 2px.
+const MENU_WIDTH = 268
 
 /**
  * A compact "..." trigger that opens a dropdown listing row actions.
