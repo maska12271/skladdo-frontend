@@ -158,8 +158,23 @@ describe('DataTable — row click', () => {
 })
 
 describe('DataTable — column visibility', () => {
+    // The picker only appears once a table has enough columns to be worth managing — a two-column table
+    // has nothing to hide that would not fit anyway. These cases need a table above that threshold.
+    const manyColumns = [
+        ...columns,
+        { key: 'a', label: 'Country' },
+        { key: 'b', label: 'Phone' },
+        { key: 'c', label: 'Email' },
+        { key: 'd', label: 'Status' },
+    ]
+
+    it('does not offer the picker on a table with only a couple of columns', () => {
+        render(<DataTable columns={columns} rows={makeRows(3)} tableId="tiny" />)
+        expect(screen.queryByRole('button', { name: /Columns/ })).not.toBeInTheDocument()
+    })
+
     it('hides a column and persists the choice under the table id', async () => {
-        render(<DataTable columns={columns} rows={makeRows(3)} tableId="products" />)
+        render(<DataTable columns={manyColumns} rows={makeRows(3)} tableId="products" />)
 
         await userEvent.click(screen.getByRole('button', { name: /Columns/ }))
         await userEvent.click(within(screen.getByRole('menu')).getByLabelText('SKU'))
@@ -170,7 +185,7 @@ describe('DataTable — column visibility', () => {
 
     it('restores hidden columns from localStorage on mount', () => {
         localStorage.setItem('tableColumns:products', JSON.stringify(['sku']))
-        render(<DataTable columns={columns} rows={makeRows(3)} tableId="products" />)
+        render(<DataTable columns={manyColumns} rows={makeRows(3)} tableId="products" />)
         expect(screen.queryByRole('columnheader', { name: 'SKU' })).not.toBeInTheDocument()
         expect(screen.getByRole('columnheader', { name: 'Name' })).toBeInTheDocument()
     })

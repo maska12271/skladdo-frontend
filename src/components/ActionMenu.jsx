@@ -1,7 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { MoreHorizontal } from 'lucide-react'
 
-const MENU_WIDTH = 188
+// Wide enough for the longest action labels in every locale — et/ru run far wider than en, and a menu item
+// that has to wrap looks broken next to the ones that don't. The widest today ("Корректировать остаток")
+// renders at 179px, which with the item's padding, icon and gap needs 248.
+const MENU_WIDTH = 248
 
 /**
  * A compact "..." trigger that opens a dropdown listing row actions.
@@ -18,7 +22,8 @@ const MENU_WIDTH = 188
  * The menu is rendered with position: fixed so it is never clipped by the
  * table's overflow containers.
  */
-export default function ActionMenu({ actions = [], buttonLabel = 'Actions', emptyLabel }) {
+export default function ActionMenu({ actions = [], buttonLabel, emptyLabel }) {
+    const { t } = useTranslation()
     const [open, setOpen] = useState(false)
     const [coords, setCoords] = useState({ top: 0, left: 0 })
     const triggerRef = useRef(null)
@@ -84,8 +89,10 @@ export default function ActionMenu({ actions = [], buttonLabel = 'Actions', empt
                 onClick={() => setOpen((value) => !value)}
                 aria-haspopup="menu"
                 aria-expanded={open}
-                aria-label={buttonLabel}
-                className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition ${
+                aria-label={buttonLabel || t('common.actions')}
+                // 44px on touch, the original 36 back at `lg`. This is the primary per-row action on a
+                // phone, where it is the only way into view/edit/delete.
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-lg border transition lg:h-9 lg:w-9 ${
                     open
                         ? 'border-teal-500 bg-teal-50 text-teal-600 dark:border-teal-500 dark:bg-teal-500/10 dark:text-teal-300'
                         : 'border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'

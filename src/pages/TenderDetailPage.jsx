@@ -16,6 +16,7 @@ import MoneyWithBase from '../components/MoneyWithBase'
 import { FormField, TextareaField } from '../components/FormField.jsx'
 import UnitSelect from '../components/UnitSelect.jsx'
 import { formatDate, formatMoney, toCompanyAmount } from '../utils/format'
+import Checkbox from '../components/Checkbox'
 
 const emptyPart = { partNumber: '', title: '', description: '', estimatedValue: '', samplesRequired: false, requirements: [] }
 const emptyRequirementRow = () => ({ description: '', quantity: '', unit: '', sampleQuantity: '' })
@@ -413,12 +414,7 @@ export default function TenderDetailPage() {
                             </button>
                         </div>
                         <label className="inline-flex w-fit items-center gap-2 text-sm">
-                            <input
-                                type="checkbox"
-                                checked={partForm.samplesRequired}
-                                onChange={(e) => setPartForm((p) => ({ ...p, samplesRequired: e.target.checked }))}
-                                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                            />
+                            <Checkbox checked={partForm.samplesRequired} onChange={(e) => setPartForm((p) => ({ ...p, samplesRequired: e.target.checked }))} />
                             <span className="font-medium text-slate-700 dark:text-slate-200">{t('tenderDetail.part.samplesRequired')}</span>
                         </label>
                         {partForm.requirements.map((r, i) => (
@@ -499,7 +495,7 @@ export default function TenderDetailPage() {
                     <FormField id="participant-price" label={`${t('tenders.participants.offeredPrice')} (${currencySymbol(currency || baseCurrency)})`} type="number" step="0.01" min="0" name="offeredPrice" value={participantForm.offeredPrice} onChange={(e) => setParticipantForm((p) => ({ ...p, offeredPrice: e.target.value }))} />
                     <TextareaField id="participant-notes" label={t('common.notes')} name="notes" value={participantForm.notes} onChange={(e) => setParticipantForm((p) => ({ ...p, notes: e.target.value }))} rows={2} />
                     <label className="inline-flex w-fit items-center gap-2 text-sm">
-                        <input type="checkbox" checked={participantForm.participating} onChange={(e) => setParticipantForm((p) => ({ ...p, participating: e.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700" />
+                        <Checkbox checked={participantForm.participating} onChange={(e) => setParticipantForm((p) => ({ ...p, participating: e.target.checked }))} />
                         <span className="font-medium text-slate-700 dark:text-slate-200">{t('tenderDetail.participants.participating')}</span>
                     </label>
                     <ModalButtons onCancel={participantModal.close} saving={saving} t={t} />
@@ -611,7 +607,7 @@ function PartCard({ part, canEdit, currency, money, t, onEditPart, onDeletePart,
                                             </span>
                                         </td>
                                         <td className="px-3 py-2 text-center">
-                                            <input type="checkbox" checked={!!p.participating} disabled={!canEdit} onChange={() => onToggleParticipating(p)} className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 disabled:opacity-50 dark:border-slate-700" />
+                                            <Checkbox checked={!!p.participating} disabled={!canEdit} onChange={() => onToggleParticipating(p)} />
                                         </td>
                                         <td className="px-3 py-2">{p.offeredPrice != null ? money(p.offeredPrice) : <span className="text-slate-400">—</span>}</td>
                                         <td className="px-3 py-2">{perPiece != null ? formatMoney(perPiece, currency) : <span className="text-slate-400">—</span>}</td>

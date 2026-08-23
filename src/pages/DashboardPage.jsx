@@ -22,9 +22,10 @@ import DataTable from '../components/DataTable'
 import StatusBadge from '../components/StatusBadge'
 import LoadingBlock from '../components/LoadingBlock'
 import RevenueSpendChart from '../components/RevenueSpendChart'
-import { ActivityFeed, RankList, ExpiringLots, Receivables, StockHealth, ShowingCount, WIDGET_ROWS } from '../components/DashboardWidgets'
+import { ActivityFeed, RankList, ExpiringLots, Receivables, StockHealth, ShowingCount, WIDGET_ROWS, MOBILE_WIDGET_ROWS, MOBILE_CARD_ROWS } from '../components/DashboardWidgets'
 import { Sparkline } from '../components/MicroCharts'
 import DashboardGrid from '../components/DashboardGrid'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 import WarehouseDashboard from '../components/WarehouseDashboard'
 import { useDashboardLayout, resolveLayout, widgetMeta } from '../hooks/useDashboardLayout'
 import { compact, bottom } from '../utils/gridLayout'
@@ -47,6 +48,13 @@ export default function DashboardPage() {
 
     const [stats, setStats] = useState(null)
     const [loading, setLoading] = useState(true)
+    const isPhone = useBreakpoint() === 'mobile'
+    // Low stock and expiring lots draw their rows as cards on a phone, so they show fewer there.
+    const cardRows = isPhone ? MOBILE_CARD_ROWS : WIDGET_ROWS
+    // Tenders draws cards at every width, so it counts in cards at every width — a tender card runs about
+    // 109px, and four of them overflowed the widget on a desktop just as six did on a phone.
+    const tenderRows = MOBILE_CARD_ROWS
+
     const [editing, setEditing] = useState(false)
     const [draft, setDraft] = useState([]) // working copy of items while editing
 
@@ -141,11 +149,11 @@ export default function DashboardPage() {
             case 'activity':
                 return t('dashboard.titles.activity')
             case 'lowStock':
-                return t('dashboard.titles.lowStock', { count: stats?.products?.lowStockCount ?? 0 })
+                return t('dashboard.titles.lowStock')
             case 'receivables':
-                return t('dashboard.titles.receivables', { count: stats?.receivables?.overdueCount ?? 0 })
+                return t('dashboard.titles.receivables')
             case 'expiringLots':
-                return t('dashboard.titles.expiringLots', { count: stats?.expiry?.expiredCount ?? 0 })
+                return t('dashboard.titles.expiringLots')
             case 'tenders':
                 return t('dashboard.titles.tenders')
             case 'stockHealth':
@@ -189,13 +197,13 @@ export default function DashboardPage() {
             case 'revenueChart':
                 return <RevenueSpendChart bare data={stats.monthly || []} showRevenue={!!stats.sales} showSpend={!!stats.purchases} />
             case 'activity':
-                return <ActivityFeed items={stats.activity || []} onNavigate={navigate} />
+                return <ActivityFeed items={stats.activity || []} onNavigate={navigate} rowLimit={isPhone ? MOBILE_WIDGET_ROWS : undefined} />
             case 'lowStock': {
-                const rows = (stats.products?.lowStock || []).slice(0, WIDGET_ROWS)
+                const rows = (stats.products?.lowStock || []).slice(0, cardRows)
                 return (
                     // No tableId: the column picker belongs on the full list pages, not on a dashboard card.
                     <div className="flex h-full flex-col">
-                        <div className="min-h-0 flex-1 overflow-auto">
+                        <div className="min-h-0 flex-1 overflow-hidden">
                             <DataTable
                                 bare
                                 columns={lowStockColumns(t)}
@@ -212,14 +220,15 @@ export default function DashboardPage() {
             case 'receivables':
                 return <Receivables data={stats.receivables} onNavigate={editing ? undefined : navigate} />
             case 'expiringLots':
-                return <ExpiringLots rows={stats.expiry?.rows || []} onNavigate={editing ? undefined : navigate} />
+                return <ExpiringLots rows={stats.expiry?.rows || []} onNavigate={editing ? undefined : navigate} rowLimit={cardRows} />
             case 'tenders': {
-                const rows = (stats.tenders?.latest || []).slice(0, WIDGET_ROWS)
+                const rows = (stats.tenders?.latest || []).slice(0, tenderRows)
                 return (
                     <div className="flex h-full flex-col">
-                        <div className="min-h-0 flex-1 overflow-auto">
+                        <div className="min-h-0 flex-1 overflow-hidden">
                             <DataTable
                                 bare
+                                alwaysCards
                                 columns={tenderColumns(t)}
                                 rows={rows}
                                 getRowId={(r) => r.id}
@@ -249,7 +258,7 @@ export default function DashboardPage() {
                 description={editing ? t('dashboard.descEdit') : t('dashboard.descIdle')}
                 action={
                     editing ? (
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                             {hiddenKeys.length > 0 && <AddWidgetMenu hiddenKeys={hiddenKeys} onAdd={addWidget} labelOf={titleOf} />}
                             <button
                                 onClick={resetEdit}
@@ -439,6 +448,9 @@ const KPI_TONES = {
  */
 function KpiWidget({ icon: Icon, tone, title, to, value, hint, trend, spark, compact, linked }) {
     const badge = KPI_TONES[tone] || KPI_TONES.teal
+    // On a phone the card is sized by its content, so tightening the padding actually shortens it — and
+    // the sparkline can take the room that frees up, where at 120x40 it was a thin strip on a 333px card.
+    const isMobile = useBreakpoint() === 'mobile'
     const wrap = (className, children) =>
         !linked || !to ? (
             <div className={className}>{children}</div>
@@ -467,7 +479,11 @@ function KpiWidget({ icon: Icon, tone, title, to, value, hint, trend, spark, com
     // "Good" depends on the metric: rising revenue is good, rising spend is not.
     const positive = trend ? (trend.good ? up : !up) : false
 
-    return wrap(`flex h-full flex-col justify-center ${linked && to ? 'p-4' : ''}`, (
+    // A container query, not a media query: this widget is resizable, so its width is set by the
+    // dashboard layout rather than the viewport — the same card is 19.5rem wide at 1280 and 32.8rem at
+    // 1920. The figure is the reason the card exists, so the sparkline only appears once there is room
+    // for both; below that the number takes the whole line rather than being clipped.
+    return wrap(`@container flex h-full flex-col justify-center ${linked && to ? 'p-3 sm:p-4' : ''}`, (
         <>
             <div className="flex items-start justify-between gap-3">
                 {linked ? <p className="truncate text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p> : <span />}
@@ -475,9 +491,9 @@ function KpiWidget({ icon: Icon, tone, title, to, value, hint, trend, spark, com
                     <Icon className="h-5 w-5" />
                 </span>
             </div>
-            <div className="mt-3 flex items-end justify-between gap-3">
+            <div className="mt-2 flex items-end justify-between gap-3 sm:mt-3">
                 <div className="min-w-0">
-                    <div className="truncate text-3xl font-bold tracking-tight tabular-nums text-slate-900 dark:text-slate-50">{value}</div>
+                    <div className="truncate text-xl font-bold tracking-tight tabular-nums text-slate-900 @[26rem]:text-3xl dark:text-slate-50">{value}</div>
                     <div className="mt-1 flex items-center gap-1.5 text-xs">
                         {trend && Number.isFinite(trend.pct) && (
                             <span className={`font-semibold ${positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
@@ -487,7 +503,14 @@ function KpiWidget({ icon: Icon, tone, title, to, value, hint, trend, spark, com
                         <span className="truncate text-slate-400 dark:text-slate-500">{hint}</span>
                     </div>
                 </div>
-                {spark && <Sparkline values={spark} color={tone === 'teal' ? 'teal' : 'amber'} width={120} height={40} />}
+                {/* A quarter of the row, not a fixed strip: the graph stays beside the figure at every
+                    size and simply gets narrower on a small card, rather than being dropped (which left
+                    the card looking like it had lost something) or pushed underneath it. */}
+                {spark && (
+                    <div className={`shrink-0 ${isMobile ? 'h-12 w-1/2 max-w-[170px]' : 'h-10 w-1/3 min-w-[60px] max-w-[140px]'}`}>
+                        <Sparkline responsive values={spark} color={tone === 'teal' ? 'teal' : 'amber'} width={96} height={40} />
+                    </div>
+                )}
             </div>
         </>
     ))

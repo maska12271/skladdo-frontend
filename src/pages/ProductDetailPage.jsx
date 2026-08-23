@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, Pencil, ImageOff, PackagePlus, Plus, Minus, ArrowRightLeft } from 'lucide-react'
-import { apiGet } from '../api/client'
+import { ChevronLeft, Pencil, PackagePlus, Plus, Minus, ArrowRightLeft } from 'lucide-react'
+import { apiGet, apiPut } from '../api/client'
 import StatCard from '../components/StatCard'
 import StatusBadge from '../components/StatusBadge'
 import DataTable from '../components/DataTable'
@@ -14,9 +14,11 @@ import LotAdjustModal from '../components/LotAdjustModal'
 import EditLotModal from '../components/EditLotModal'
 import TransferStockModal from '../components/TransferStockModal'
 import CopyButton from '../components/CopyButton'
-import { resolveImageUrl } from '../components/ImageUploadField.jsx'
+import CustomSelect from '../components/CustomSelect'
+import ProductGalleryCard from '../components/ProductGalleryCard'
 import { useAuth, usePermissions } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
+import { useToast } from '../context/ToastContext'
 import { useModal } from '../hooks/useModal'
 import { formatMoney, formatDate } from '../utils/format'
 import { stockStatusOf } from '../utils/stock'
@@ -47,6 +49,29 @@ function periodRange(key, now = new Date()) {
         default:
             return null
     }
+}
+
+// Lot list controls (search + expiry filter) only appear past this many lots — see the section below.
+const LOT_FILTER_THRESHOLD = 10
+
+// Expiry buckets a lot can be filtered by. `expiringSoon` is the next 30 days, which is the window the
+// reorder and warning views already treat as "act on this now".
+const EXPIRY_BUCKETS = ['expired', 'expiringSoon', 'valid', 'noExpiry']
+const EXPIRING_SOON_DAYS = 30
+
+/** Today and the end of the "expiring soon" window, as the "YYYY-MM-DD" strings the API returns. */
+function expiryWindow(now = new Date()) {
+    return {
+        today: ymd(now),
+        soonCutoff: ymd(new Date(now.getTime() + EXPIRING_SOON_DAYS * 86400000)),
+    }
+}
+
+/** Which bucket a lot falls into. Dates are "YYYY-MM-DD" strings, compared lexicographically. */
+function expiryBucketOf(batch, today, soonCutoff) {
+    if (!batch.expiryDate) return 'noExpiry'
+    if (batch.expiryDate < today) return 'expired'
+    return batch.expiryDate <= soonCutoff ? 'expiringSoon' : 'valid'
 }
 
 // Cancelled orders are still listed in the tables, but never counted toward revenue/cost/profit.
@@ -95,6 +120,7 @@ export default function ProductDetailPage() {
     const { canCreate: canAdjustStock, canView: canViewInventory } = usePermissions('INVENTORY')
     const { canSeePrices } = useAuth()
     const { formatCurrency } = useSettings()
+    const toast = useToast()
     const adjustModal = useModal()
     const addModal = useModal()
     const editModal = useModal()
@@ -108,7 +134,8 @@ export default function ProductDetailPage() {
     const [warehouseStock, setWarehouseStock] = useState([])
     const [batches, setBatches] = useState([])
     const [transfers, setTransfers] = useState([])
-    const [activeImage, setActiveImage] = useState(0)
+    const [lotSearch, setLotSearch] = useState('')
+    const [expiryFilter, setExpiryFilter] = useState([])
     const [period, setPeriod] = useState('all')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(false)
@@ -146,7 +173,6 @@ export default function ProductDetailPage() {
                 if (cancelled) return
                 setProduct(productRes)
                 setDetails(detailsRes)
-                setActiveImage(0)
             })
             .catch(() => !cancelled && setError(true))
             .finally(() => !cancelled && setLoading(false))
@@ -168,6 +194,19 @@ export default function ProductDetailPage() {
         loadTransfers()
     }
 
+    // Images are edited straight from the gallery, so the change is shown at once and rolled back if the
+    // save fails (the request itself has already raised an error toast by then).
+    const handleImagesChange = async (imageKeys) => {
+        const previous = product.imageKeys || []
+        setProduct((prev) => ({ ...prev, imageKeys }))
+        try {
+            await apiPut(`/products/${product.id}/images`, { imageKeys })
+            toast.success(t('productDetail.imagesUpdated'))
+        } catch {
+            setProduct((prev) => ({ ...prev, imageKeys: previous }))
+        }
+    }
+
     const openLotAdjust = (list) => {
         setAdjustBatches(list)
         adjustModal.open()
@@ -187,9 +226,57 @@ export default function ProductDetailPage() {
         )
     }
 
-    const images = product.imageUrls || []
+    const images = product.imageKeys || []
     const stock = stockStatusOf(product)
     const audit = details?.audit
+
+    // Lots, filtered client-side: the endpoint returns every in-stock lot of this product in one go,
+    // already in FEFO order (expiry first, no-expiry last), which is the order stock is consumed in —
+    // so the list is filtered and paged but never re-sorted.
+    const { today, soonCutoff } = expiryWindow()
+    const lotQuery = lotSearch.trim().toLowerCase()
+    const lotFiltersActive = lotQuery !== '' || expiryFilter.length > 0
+    const lotRows = batches.filter((b) => {
+        if (lotQuery && !String(b.lotNumber || '').toLowerCase().includes(lotQuery)) return false
+        if (expiryFilter.length > 0 && !expiryFilter.includes(expiryBucketOf(b, today, soonCutoff))) return false
+        return true
+    })
+
+    const lotColumns = [
+        { key: 'lotNumber', label: t('productDetail.lots.lot'), render: (b) => <span className="font-medium">{b.lotNumber}</span> },
+        { key: 'warehouseName', label: t('productDetail.lots.warehouse') },
+        { key: 'quantity', label: t('productDetail.lots.qty'), render: (b) => <span className="font-semibold">{b.quantity}</span> },
+        { key: 'productionDate', label: t('productDetail.lots.produced'), render: (b) => b.productionDate ? formatDate(b.productionDate) : '—' },
+        {
+            key: 'expiryDate',
+            label: t('productDetail.lots.expires'),
+            render: (b) => {
+                const bucket = expiryBucketOf(b, today, soonCutoff)
+                if (bucket === 'noExpiry') return <span className="text-slate-400">{t('productDetail.lots.noExpiry')}</span>
+                const tone = bucket === 'expired'
+                    ? 'font-medium text-rose-600 dark:text-rose-400'
+                    : bucket === 'expiringSoon' ? 'font-medium text-amber-600 dark:text-amber-400' : ''
+                return <span className={tone}>{formatDate(b.expiryDate)}</span>
+            },
+        },
+        ...(canAdjustStock
+            ? [{
+                key: 'actions',
+                label: '',
+                hideable: false,
+                render: (b) => (
+                    <div className="flex justify-end">
+                        <ActionMenu
+                            actions={[
+                                { key: 'adjust', label: t('inventory.adjustLotAction'), icon: PackagePlus, onClick: () => openLotAdjust([b]) },
+                                { key: 'edit', label: t('common.edit'), icon: Pencil, onClick: () => openEditLot(b) },
+                            ]}
+                        />
+                    </div>
+                ),
+            }]
+            : []),
+    ]
 
     // Period filtering (client-side, from the order lines the endpoint already returned).
     const range = periodRange(period)
@@ -253,29 +340,17 @@ export default function ProductDetailPage() {
                         {stock === 'low' && <StatusBadge status="LOW_STOCK" />}
                     </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                {/* Two buttons, then an overflow: four labelled actions overflowed the header in Estonian
+                    and Russian, where these labels run 40-70% wider than in English. Adjusting and
+                    transferring stock are the rarer pair, and adjusting is also offered on the history
+                    section below, so they are the ones that move into the menu. */}
+                <div className="flex flex-wrap items-center gap-2 md:justify-end">
                     {canAdjustStock && (
                         <button
                             onClick={addModal.open}
                             className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700"
                         >
                             <PackagePlus className="h-4 w-4" /> {t('inventory.addStock')}
-                        </button>
-                    )}
-                    {canAdjustStock && (
-                        <button
-                            onClick={() => openLotAdjust(batches)}
-                            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                            <PackagePlus className="h-4 w-4" /> {t('inventory.adjustStock')}
-                        </button>
-                    )}
-                    {canAdjustStock && warehouseStock.length > 0 && (
-                        <button
-                            onClick={transferModal.open}
-                            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                            <ArrowRightLeft className="h-4 w-4" /> {t('transfer.button')}
                         </button>
                     )}
                     {canEdit && (
@@ -286,44 +361,37 @@ export default function ProductDetailPage() {
                             <Pencil className="h-4 w-4" /> {t('productDetail.edit')}
                         </button>
                     )}
+                    <ActionMenu
+                        actions={[
+                            canAdjustStock && {
+                                key: 'adjust',
+                                label: t('inventory.adjustStock'),
+                                icon: PackagePlus,
+                                onClick: () => openLotAdjust(batches),
+                            },
+                            canAdjustStock && warehouseStock.length > 0 && {
+                                key: 'transfer',
+                                label: t('transfer.button'),
+                                icon: ArrowRightLeft,
+                                onClick: transferModal.open,
+                            },
+                        ]}
+                    />
                 </div>
             </div>
 
             {/* Gallery + facts */}
             <div className="grid gap-6 lg:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                    {images.length > 0 ? (
-                        <div className="space-y-3">
-                            <div className="aspect-video overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-                                <img src={resolveImageUrl(images[activeImage])} alt={product.name} className="h-full w-full object-contain" />
-                            </div>
-                            {images.length > 1 && (
-                                <div className="flex flex-wrap gap-2">
-                                    {images.map((url, i) => (
-                                        <button
-                                            key={`${url}-${i}`}
-                                            type="button"
-                                            onClick={() => setActiveImage(i)}
-                                            className={`h-16 w-16 overflow-hidden rounded-lg border-2 transition ${
-                                                i === activeImage ? 'border-teal-500' : 'border-transparent hover:border-slate-300 dark:hover:border-slate-600'
-                                            }`}
-                                        >
-                                            <img src={resolveImageUrl(url)} alt={`${product.name} ${i + 1}`} className="h-full w-full object-cover" />
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 text-slate-400 dark:text-slate-500">
-                            <ImageOff className="h-8 w-8" />
-                            <span className="text-sm">{t('productDetail.noImages')}</span>
-                        </div>
-                    )}
-                </div>
+                <ProductGalleryCard
+                    key={product.id}
+                    images={images}
+                    alt={product.name}
+                    editable={canEdit}
+                    onChange={handleImagesChange}
+                />
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
+                    <dl className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
                         {canSeePrices && <Fact label={t('productDetail.facts.price')} value={formatCurrency(product.price, product.currency)} />}
                         {canSeePrices && (
                             <Fact
@@ -374,48 +442,38 @@ export default function ProductDetailPage() {
                         {t('productDetail.lots.empty')}
                     </div>
                 ) : (
-                    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-slate-200 bg-slate-50 text-left dark:border-slate-800 dark:bg-slate-900/60">
-                                    <th className="px-4 py-3 font-semibold">{t('productDetail.lots.lot')}</th>
-                                    <th className="px-4 py-3 font-semibold">{t('productDetail.lots.warehouse')}</th>
-                                    <th className="px-4 py-3 font-semibold">{t('productDetail.lots.qty')}</th>
-                                    <th className="px-4 py-3 font-semibold">{t('productDetail.lots.produced')}</th>
-                                    <th className="px-4 py-3 font-semibold">{t('productDetail.lots.expires')}</th>
-                                    {canAdjustStock && <th className="px-4 py-3" />}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {batches.map((b) => {
-                                    const expired = b.expiryDate && b.expiryDate < ymd(new Date())
-                                    return (
-                                        <tr key={b.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
-                                            <td className="px-4 py-3 font-medium">{b.lotNumber}</td>
-                                            <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{b.warehouseName}</td>
-                                            <td className="px-4 py-3 font-semibold">{b.quantity}</td>
-                                            <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{b.productionDate ? formatDate(b.productionDate) : '—'}</td>
-                                            <td className={`px-4 py-3 ${expired ? 'font-medium text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                                                {b.expiryDate ? formatDate(b.expiryDate) : t('productDetail.lots.noExpiry')}
-                                            </td>
-                                            {canAdjustStock && (
-                                                <td className="px-4 py-3 text-right">
-                                                    <div className="flex justify-end">
-                                                        <ActionMenu
-                                                            actions={[
-                                                                { key: 'adjust', label: t('inventory.adjustLotAction'), icon: PackagePlus, onClick: () => openLotAdjust([b]) },
-                                                                { key: 'edit', label: t('common.edit'), icon: Pencil, onClick: () => openEditLot(b) },
-                                                            ]}
-                                                        />
-                                                    </div>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                    <>
+                        {/* Only worth the space once there are enough lots that scanning the list by eye stops
+                            working; a product with a handful of lots keeps the plain table it always had. */}
+                        {batches.length > LOT_FILTER_THRESHOLD && (
+                            <div className="flex flex-col gap-3 sm:flex-row">
+                                <input
+                                    value={lotSearch}
+                                    onChange={(e) => setLotSearch(e.target.value)}
+                                    placeholder={t('productDetail.lots.searchPlaceholder')}
+                                    aria-label={t('productDetail.lots.searchPlaceholder')}
+                                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-950 sm:max-w-xs"
+                                />
+                                <CustomSelect
+                                    multiple
+                                    options={EXPIRY_BUCKETS.map((key) => ({ value: key, label: t(`productDetail.lots.expiry.${key}`) }))}
+                                    value={expiryFilter}
+                                    onChange={setExpiryFilter}
+                                    placeholder={t('productDetail.lots.allExpiry')}
+                                    ariaLabel={t('productDetail.lots.allExpiry')}
+                                    className="sm:w-64"
+                                />
+                            </div>
+                        )}
+                        <DataTable
+                            tableId="product-lots"
+                            columns={lotColumns}
+                            rows={lotRows}
+                            getRowId={(b) => b.id}
+                            initialPageSize={10}
+                            filtersActive={lotFiltersActive}
+                        />
+                    </>
                 )}
             </section>
 

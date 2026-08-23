@@ -5,6 +5,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../api/client'
 import { useServerTable } from '../hooks/useServerTable'
 import PageHeader from '../components/PageHeader'
 import SearchFilters from '../components/SearchFilters'
+import { sortOptionsFromColumns } from '../utils/sortOptions'
 import EmptyState from '../components/EmptyState'
 import DataTable from '../components/DataTable'
 import DataToolbar from '../components/DataToolbar'
@@ -25,8 +26,10 @@ import { safeArray, parseBool, toNumber } from '../utils/format'
 import {FormField, FormSelect, TextareaField} from "../components/FormField.jsx";
 import UnitSelect from "../components/UnitSelect.jsx";
 import { Eye, Pencil, Trash2, PackagePlus, Package } from 'lucide-react'
-import ImageUploadField, { resolveImageUrl } from '../components/ImageUploadField.jsx'
+import ImageUploadField from '../components/ImageUploadField.jsx'
+import { usePresignedUrl } from '../hooks/usePresignedUrl'
 import { stockStatusOf } from '../utils/stock'
+import Checkbox from '../components/Checkbox'
 
 // One schema drives both export (headers localised to the current language) and import (headers
 // matched against each field's label in every app language). `id` is export-only. Manufacturer and
@@ -41,12 +44,25 @@ const PRODUCT_FIELDS = [
     { key: 'size', labelKey: 'common.size', example: 'A4', value: (r) => r.size },
     { key: 'unit', labelKey: 'common.unit', example: 'box', value: (r) => r.unit },
     { key: 'description', labelKey: 'common.description', value: (r) => r.description },
-    { key: 'images', labelKey: 'imageUpload.label', example: 'https://... ; https://...', value: (r) => (r.imageUrls || []).join('; ') },
+    // Image values are internal storage keys, not clickable links - they only round-trip meaningfully
+    // through export/reimport of this same system, not as URLs to paste in from elsewhere.
+    { key: 'images', labelKey: 'imageUpload.label', example: 'images/<file>.jpg', value: (r) => (r.imageKeys || []).join('; ') },
     { key: 'price', labelKey: 'common.price', example: '4.50', value: (r) => r.price },
     { key: 'stock', labelKey: 'products.cols.stock', example: '120', value: (r) => r.stockQuantity },
     { key: 'minStock', labelKey: 'products.cols.minStock', example: '20', value: (r) => r.minimumStock },
     { key: 'status', labelKey: 'common.status', aliasKeys: ['common.active'], example: 'Active', value: (r) => (r.active ? 'Active' : 'Inactive') },
 ]
+
+// Its own component (rather than resolved inline in the column's render function) so
+// usePresignedUrl (a hook) can resolve each row's key independently across the table.
+function ProductThumbnail({ imageKey }) {
+    const url = usePresignedUrl(imageKey)
+    return url ? (
+        <img src={url} alt="" className="h-8 w-8 rounded object-cover" />
+    ) : (
+        <div className="h-8 w-8 rounded bg-slate-100 dark:bg-slate-800" />
+    )
+}
 
 const emptyForm = {
     name: '',
@@ -246,7 +262,7 @@ export default function ProductsPage() {
                 size: r.size || '',
                 unit: r.unit || '',
                 description: r.description || '',
-                imageUrls: (r.images || '')
+                imageKeys: (r.images || '')
                     .split(';')
                     .map((u) => u.trim())
                     .filter(Boolean),
@@ -274,7 +290,7 @@ export default function ProductsPage() {
             size: item.size || '',
             unit: item.unit || '',
             description: item.description || '',
-            images: item.imageUrls || [],
+            images: item.imageKeys || [],
             price: item.price || '',
             currency: item.currency || '',
             taxRateId: item.taxRate?.id ? String(item.taxRate.id) : '',
@@ -319,7 +335,7 @@ export default function ProductsPage() {
             size: form.size,
             unit: form.unit,
             description: form.description,
-            imageUrls: form.images,
+            imageKeys: form.images,
             price: Number(form.price),
             currency: form.currency || baseCurrency || null,
             taxRate: form.taxRateId ? { id: Number(form.taxRateId) } : null,
@@ -389,20 +405,20 @@ export default function ProductsPage() {
         return defaultTaxPercent ? `${defaultTaxPercent}%` : t('common.none')
     }
 
+    // A column of nothing but grey placeholders is worse than no column: it reads as broken rather than
+    // as "these products have no picture". It appears only once something on the page actually has one.
+    const anyImages = rows.some((r) => r.imageKeys?.[0])
+
     const columns = [
-        {
+        ...(anyImages ? [{
             key: 'image',
             label: '',
             name: t('products.cols.image'),
-            render: (row) => {
-                const url = resolveImageUrl(row.imageUrls?.[0])
-                return url ? (
-                    <img src={url} alt="" className="h-8 w-8 rounded object-cover" />
-                ) : (
-                    <div className="h-8 w-8 rounded bg-slate-100 dark:bg-slate-800" />
-                )
-            },
-        },
+            // On a card, a product with no picture shows nothing rather than an empty frame. In the table
+            // the placeholder still earns its place: it is what keeps the column aligned down the rows.
+            render: (row, ctx) =>
+                ctx?.card && !row.imageKeys?.[0] ? null : <ProductThumbnail imageKey={row.imageKeys?.[0]} />,
+        }] : []),
         { key: 'name', label: t('common.name'), sortKey: 'name' },
         { key: 'sku', label: t('common.sku'), sortKey: 'sku' },
         { key: 'manufacturer', label: t('products.cols.manufacturer'), sortKey: 'manufacturer.name', render: (row) => row.manufacturer?.name || '-' },
@@ -480,7 +496,7 @@ export default function ProductsPage() {
                 title={t('products.title')}
                 description={t('products.description')}
                 action={
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                         <DataToolbar
                             entityLabel="products"
                             fields={PRODUCT_FIELDS}
@@ -500,13 +516,13 @@ export default function ProductsPage() {
                                 {t('common.configureCategories')}
                             </button>
                         )}
-                        {canCreate && (
-                            <button onClick={openCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
-                                {t('products.add')}
-                            </button>
-                        )}
                     </div>
                 }
+                primaryAction={canCreate && (
+                        <button onClick={openCreate} className="min-h-11 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700 lg:min-h-0">
+                            {t('products.add')}
+                        </button>
+                    )}
             />
 
             {/* List / Reorder tabs */}
@@ -564,6 +580,7 @@ export default function ProductsPage() {
                         ],
                     },
                 ]}
+                sort={{ sortBy, sortDir, onSortChange: setSort, options: sortOptionsFromColumns(columns) }}
             />
 
             <DataTable
@@ -596,6 +613,7 @@ export default function ProductsPage() {
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSortChange={setSort}
+                hideCardSort
                 bulkActions={
                     canDelete ? (
                         <button
@@ -835,13 +853,7 @@ export default function ProductsPage() {
                     {/* Active is a lifecycle toggle, only meaningful once a record exists — new records are active. */}
                     {editingId && (
                         <label className="md:col-span-4 inline-flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
-                            <input
-                                type="checkbox"
-                                name="active"
-                                checked={form.active}
-                                onChange={handleChange}
-                                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                            />
+                            <Checkbox name="active" checked={form.active} onChange={handleChange} />
                             <span className="font-medium text-slate-700 dark:text-slate-200">{t('common.active')}</span>
                         </label>
                     )}

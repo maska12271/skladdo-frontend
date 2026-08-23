@@ -393,6 +393,23 @@ html {
   }
 }
 
+/* Below `sm` the dialog is a sheet anchored to the bottom edge, so it enters by sliding up from that edge
+   instead of easing in on the spot — an 8px nudge reads as a glitch on something attached to the screen.
+   Redefining the keyframes inside the query leaves the desktop animation untouched, and the global
+   prefers-reduced-motion rule still collapses both. */
+@media (width < 40rem) {
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
 .overlay-enter {
   animation: overlay-in 0.18s ease-out;
 }

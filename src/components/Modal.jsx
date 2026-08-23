@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
+import { OVERLAY_BACKDROP } from '../constants/overlay'
 
 function getFocusableElements(container) {
     if (!container) return []
@@ -81,24 +82,37 @@ export default function Modal({ isOpen, title, children, onClose, width = 'max-w
 
     if (!isOpen) return null
 
+    // The caller's width cap is a desktop concern. Below `sm` the dialog is a sheet the full width of the
+    // screen, so the cap only takes effect from `sm` up — a `max-w-lg` box floating in the middle of a
+    // phone wastes the screen and leaves a form squeezed into it.
+    const widthFromSm = width
+        .split(' ')
+        .filter(Boolean)
+        .map((cls) => (cls.includes(':') ? cls : `sm:${cls}`))
+        .join(' ')
+
     return (
         <div
-            className="overlay-enter fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+            className={`overlay-enter fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4 ${OVERLAY_BACKDROP}`}
             onMouseDown={(e) => {
                 // Click on the dim backdrop (outside the dialog) dismisses the modal.
                 if (e.target === e.currentTarget) onClose()
             }}
         >
+            {/* A column with a scrolling body rather than a block with a tall child: it keeps the title and
+                the close button pinned while the content moves, which matters most on the screen where the
+                content is longest relative to the viewport. */}
             <div
-                className={`dialog-enter shadow-pop w-full ${width} rounded-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900`}
+                className={`dialog-enter shadow-pop flex max-h-[92vh] w-full flex-col rounded-t-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 sm:max-h-[85vh] sm:rounded-3xl ${widthFromSm}`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="modal-title"
                 ref={dialogRef}
                 tabIndex={-1}
             >
-                <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4 dark:border-slate-800">
-                    <h2 id="modal-title" className="text-xl font-semibold tracking-tight">{title}</h2>
+                <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 px-4 py-3.5 dark:border-slate-800 sm:px-6 sm:py-4">
+                    {/* Truncated: a long title on a narrow sheet would otherwise push the close button off. */}
+                    <h2 id="modal-title" className="truncate text-lg font-semibold tracking-tight sm:text-xl">{title}</h2>
                     <button
                         type="button"
                         onClick={onClose}
@@ -109,7 +123,10 @@ export default function Modal({ isOpen, title, children, onClose, width = 'max-w
                     </button>
                 </div>
 
-                <div className="max-h-[80vh] overflow-y-auto p-6">
+                {/* Every edge spelled out rather than a `p-*` shorthand, so the safe-area allowance below
+                    cannot be overridden by the `sm` padding depending on which utility Tailwind emits last.
+                    The allowance keeps the last field clear of a phone's home indicator. */}
+                <div className="flex-1 overflow-y-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 sm:pb-6">
                     {children}
                 </div>
             </div>

@@ -25,9 +25,9 @@ export const KPI_KEYS = [
  */
 export const DASHBOARD_WIDGETS = [
     // Band 1: the three money figures, given room for a big number and their 12-month sparkline.
-    { key: 'kpiRevenue', label: 'Revenue this month', x: 0, y: 0, w: 8, h: 4, minW: 5, minH: 4 },
-    { key: 'kpiSpend', label: 'Spend this month', x: 8, y: 0, w: 8, h: 4, minW: 5, minH: 4 },
-    { key: 'kpiCollected', label: 'Collected this month', x: 16, y: 0, w: 8, h: 4, minW: 5, minH: 4 },
+    { key: 'kpiRevenue', label: 'Revenue this month', x: 0, y: 0, w: 8, h: 3, minW: 5, minH: 3 },
+    { key: 'kpiSpend', label: 'Spend this month', x: 8, y: 0, w: 8, h: 3, minW: 5, minH: 3 },
+    { key: 'kpiCollected', label: 'Collected this month', x: 16, y: 0, w: 8, h: 3, minW: 5, minH: 3 },
     // Band 2: the four plain counts, on half-height cards — a number and a label need no more.
     { key: 'kpiLowStock', label: 'Low stock items', x: 0, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
     { key: 'kpiActiveSales', label: 'Active sales orders', x: 6, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
@@ -35,17 +35,17 @@ export const DASHBOARD_WIDGETS = [
     { key: 'kpiActiveTenders', label: 'Active tenders', x: 18, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
 
     // Left column: chart first, then the wide tables.
-    { key: 'revenueChart', label: 'Revenue vs spend', x: 0, y: 6, w: 16, h: 8, minW: 8, minH: 5 },
-    { key: 'lowStock', label: 'Low stock products', x: 0, y: 14, w: 16, h: 7, minW: 8, minH: 5 },
+    { key: 'revenueChart', label: 'Revenue vs spend', x: 0, y: 6, w: 16, h: 6, minW: 8, minH: 5, chart: true },
+    { key: 'lowStock', label: 'Low stock products', x: 0, y: 14, w: 16, h: 8, minW: 8, minH: 8 },
     // Taller than the other tables: the totals and the aging donut sit above its list.
     { key: 'receivables', label: 'Outstanding invoices', x: 0, y: 21, w: 16, h: 9, minW: 8, minH: 7 },
     { key: 'expiringLots', label: 'Expiring lots', x: 0, y: 30, w: 16, h: 8, minW: 8, minH: 6 },
 
     // Right rail: glanceable widgets, none of them wide enough to need many columns. Sized so the rail
     // meets the left column at y=14 and y=21 and finishes level with it, instead of trailing off.
-    { key: 'activity', label: 'Recent activity', x: 16, y: 6, w: 8, h: 8, minW: 6, minH: 5 },
-    { key: 'tenders', label: 'Latest tenders', x: 16, y: 14, w: 8, h: 7, minW: 6, minH: 4 },
-    { key: 'stockHealth', label: 'Stock health', x: 16, y: 21, w: 8, h: 5, minW: 5, minH: 4 },
+    { key: 'activity', label: 'Recent activity', x: 16, y: 6, w: 8, h: 8, minW: 6, minH: 8 },
+    { key: 'tenders', label: 'Latest tenders', x: 16, y: 14, w: 8, h: 8, minW: 6, minH: 8 },
+    { key: 'stockHealth', label: 'Stock health', x: 16, y: 21, w: 8, h: 4, minW: 5, minH: 4 },
     { key: 'topClients', label: 'Top clients', x: 16, y: 26, w: 8, h: 6, minW: 6, minH: 4 },
     { key: 'topProducts', label: 'Top products', x: 16, y: 32, w: 8, h: 6, minW: 6, minH: 4 },
 ]

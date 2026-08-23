@@ -34,12 +34,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Playwright drives the real app, so it needs the API too. kladdo-backend is public, so this needs
+      # Playwright drives the real app, so it needs the API too. skladdo-backend is public, so this needs
       # no token. Pinning to master keeps a backend change from silently breaking the frontend build.
       - name: Check out the backend
         uses: actions/checkout@v4
         with:
-          repository: maska12271/kladdo-backend
+          repository: maska12271/skladdo-backend
           ref: master
           path: backend
 

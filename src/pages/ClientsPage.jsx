@@ -5,6 +5,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../api/client'
 import { useServerTable } from '../hooks/useServerTable'
 import PageHeader from '../components/PageHeader'
 import SearchFilters from '../components/SearchFilters'
+import { sortOptionsFromColumns } from '../utils/sortOptions'
 import EmptyState from '../components/EmptyState'
 import DataTable from '../components/DataTable'
 import DataToolbar from '../components/DataToolbar'
@@ -258,7 +259,7 @@ export default function ClientsPage() {
                 title={t('clients.title')}
                 description={t('clients.description')}
                 action={
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                         <DataToolbar
                             entityLabel="clients"
                             fields={CLIENT_FIELDS}
@@ -272,13 +273,13 @@ export default function ClientsPage() {
                             }}
                             onImported={reload}
                         />
-                        {canCreate && (
-                            <button onClick={openCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
-                                {t('clients.add')}
-                            </button>
-                        )}
                     </div>
                 }
+                primaryAction={canCreate && (
+                        <button onClick={openCreate} className="min-h-11 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700 lg:min-h-0">
+                            {t('clients.add')}
+                        </button>
+                    )}
             />
 
             <SearchFilters
@@ -296,6 +297,7 @@ export default function ClientsPage() {
                         ],
                     },
                 ]}
+                sort={{ sortBy, sortDir, onSortChange: setSort, options: sortOptionsFromColumns(columns) }}
             />
 
             <DataTable
@@ -328,6 +330,7 @@ export default function ClientsPage() {
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSortChange={setSort}
+                hideCardSort
                 bulkActions={
                     canDelete ? (
                         <button

@@ -1,166 +1,131 @@
-# Kladdo Frontend
+# Skladdo Frontend
 
-Kladdo Frontend is a React + Vite single‑page application that provides a dashboard UI for the Kladdo backend. It is focused on managing companies, clients, products, tenders, and orders through a clean, admin-style interface.
+The React + Vite single-page app for Skladdo — the wholesale/distribution platform whose REST API lives in
+the **`skladdo-backend`** repository. It serves both the public marketing site (landing, signup, password
+flows) and the authenticated product: catalogue, inventory, orders, invoices, tenders, supplier email,
+analytics, settings and administration.
 
 ## Features
 
-- **Dashboard-style SPA**
-  - Modern React app with client-side routing via `react-router-dom`.
-- **Entity management**
-  - Pages for listing and editing entities such as clients, products, categories, manufacturers, tenders, and orders (mirrors the backend domain).
-- **Reusable UI components**
-  - Shared layout, table, and modal patterns for CRUD screens.
-  - Iconography via `lucide-react`.
-- **API integration**
-  - Communicates with the Spring Boot backend over REST.
-  - Centralized API helper module for HTTP calls.
-- **Styling**
-  - Tailwind CSS v4 via `@tailwindcss/vite` integration.
-- **Developer experience**
-  - Vite dev server with fast HMR.
-  - ESLint configuration for React and hooks.
+- **Public + product in one app.** `/` is the landing page (features, free warehouse account, comparison,
+  pricing, FAQ), `/register` is a step wizard whose steps depend on the account type, and everything else
+  sits behind `ProtectedLayout`.
+- **Permission-aware UI.** `AuthContext.can()` mirrors the backend's per-module view/create/edit/delete
+  grants, so navigation and actions disappear for users who would be refused anyway. `RequirePermission`
+  and `RequireAdmin` guard the routes.
+- **Two account types.** A BUSINESS account gets the full app. A WAREHOUSE (3PL) account gets a trimmed
+  shell plus a `CompanySwitcher`: it works *inside* its client companies, and switching company is an
+  ordinary SPA navigation.
+- **Three languages.** English, Estonian and Russian via i18next, detected from the browser and persisted
+  in `localStorage` under `lang`. `src/i18n/locales/{en,et,ru}.js` are hand-edited and kept in parity by a
+  test (see below).
+- **Light and dark themes** (`ThemeContext`), toast notifications, a notification bell, and a dashboard of
+  draggable widgets.
+- **Server-side tables.** `useServerTable` + `DataTable` give paging, sorting, filtering and column
+  visibility, with the state synced to the URL.
+- **Import / export.** Client-side CSV and Excel (lazy-loaded ExcelJS) per entity, matching column headers
+  in all three languages.
+- Tailwind CSS v4 via `@tailwindcss/vite`, icons from `lucide-react`.
 
 ## Tech Stack
 
-- React 19
-- React DOM 19
-- React Router DOM 7 for routing
-- Vite 8 as build/dev tooling
-- Tailwind CSS 4 + `@tailwindcss/vite` plugin
-- Lucide React icons
-- ESLint 10 with React + hooks plugins
+React 19 · React Router 7 · Vite 8 · Tailwind CSS 4 · i18next / react-i18next · ExcelJS · lucide-react ·
+Vitest + Testing Library · Playwright · ESLint 10
 
 ## Project Structure
 
 ```text
-kladdo-frontend/
-├── index.html
-├── package.json
-├── vite.config.js
-├── eslint.config.js
-├── public/
-└── src/
-    ├── main.jsx
-    ├── App.jsx
-    ├── components/   # shared UI components (layout, tables, modals, forms, buttons)
-    ├── pages/        # route pages (Clients, Products, Tenders, Orders, Auth, etc.)
-    ├── api/          # API client / fetch helpers
-    ├── hooks/        # custom hooks
-    ├── context/      # auth/app context
-    └── styles/       # Tailwind / global styles
+src/
+├── main.jsx          # entry: providers + router
+├── App.jsx           # route table, public + protected
+├── api/client.js     # fetch wrapper: base URL, JWT header, error translation
+├── components/       # shared UI (DataTable, Modal, Sidebar, Header, modals, charts…)
+├── config/plans.js   # plan ids, prices and caps shared by landing + register
+├── constants/        # permission modules, audit actions, notification types, units
+├── context/          # Auth, Settings, Theme, Toast
+├── data/countries.js
+├── hooks/            # useServerTable, useModal, useQuickCreate, dashboard layout…
+├── i18n/             # i18next setup + locales/{en,et,ru}.js
+├── pages/            # one file per route
+└── utils/            # formatting, CSV/spreadsheet, stock, period helpers
 ```
-
-*(Folder names under `src/` reflect the intended organization; adjust if your structure differs.)*
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js ≥ 18
-- npm (comes with Node)
+- Node.js ≥ 20 (CI uses 24)
+- The backend running on `http://localhost:8080`
 
-### Install dependencies
+### Install and run
 
 ```bash
-cd kladdo-frontend
 npm install
 ```
-
-### Run the dev server
 
 ```bash
 npm run dev
 ```
 
-By default, Vite starts on:
+Vite prints the URL (usually `http://localhost:5173`).
 
-```text
-http://localhost:5173
-```
+### Connecting to the backend
 
-(See the terminal output for the exact URL.)
-
-### Build for production
-
-```bash
-npm run build
-```
-
-To preview the production build locally:
-
-```bash
-npm run preview
-```
-
-## Connecting to the Backend
-
-By default, the frontend should point to the Kladdo backend running on:
-
-```text
-http://localhost:8080
-```
-
-A typical API helper might look like:
-
-```js
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api';
-
-async function apiGet(path) {
-  const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include' });
-  if (!response.ok) throw new Error('Request failed');
-  return response.json();
-}
-```
-
-You can configure the base URL via `VITE_API_BASE_URL` in a `.env` file:
+`src/api/client.js` reads `VITE_API_BASE_URL`, falling back to `http://localhost:8080/api`. Copy
+`.env.example` to `.env` to point it somewhere else:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8080/api
 ```
 
+### Demo login
+
+`owner@demo.com` / `owner123` for the seeded business account, `owner@balticlogistics.ee` /
+`logistics123` for the warehouse partner. See the backend README for the rest.
+
 ## Scripts
 
-From `package.json`:
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Vite dev server with HMR |
+| `npm run build` | Production build into `dist/` |
+| `npm run preview` | Serve the production build locally |
+| `npm run lint` | ESLint |
+| `npm test` | Vitest, once |
+| `npm run test:watch` | Vitest in watch mode |
+| `npm run test:e2e` | Playwright (needs both servers running) |
 
-```json
-{
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  }
-}
-```
+## Testing
 
-- `npm run dev` – start dev server with HMR.
-- `npm run build` – create optimized production build.
-- `npm run preview` – preview the production build locally.
-- `npm run lint` – run ESLint.
+**Vitest** covers pure logic (spreadsheet import/export, formatting) and a few components (`DataTable`,
+`Modal`, `ImportModal`, `NotificationBell`). The default environment is `node`; a component test opts into
+a DOM with a `// @vitest-environment jsdom` docblock rather than making every test pay for one.
 
-## Development Notes
+`src/i18n/locales.test.js` is the one to know about: three hand-edited translation files fail *silently*
+when they drift, so it enforces key parity in both directions, matching `{{placeholder}}` sets, complete
+Russian plural forms (`_one/_few/_many`) and no empty or `TODO` strings. **Adding a key to `en.js` and not
+the other two is a test failure, not a runtime fallback.**
 
-- Make sure Node.js and npm are installed and available in your PATH before configuring run configurations in WebStorm/IntelliJ.
-- When creating new pages, follow the existing pattern:
-  - add a route entry in `App.jsx` / router config,
-  - create a page in `src/pages`,
-  - call backend REST endpoints through the shared API client.
-- Prefer reusable components (inputs, modals, tables) over duplicating layout code.
-- When authentication is wired in:
-  - store the JWT in memory or secure storage,
-  - protect routes via an `AuthRoute`/`PrivateRoute` wrapper,
-  - hide or disable actions in the UI based on user roles/permissions.
+**Playwright** (`e2e/`) drives the real app against a running backend: focus trapping, sorting, table URL
+sync, theme switching, import cancellation and a general UI sweep.
 
-## Roadmap / Ideas
+CI (`.github/workflows/ci.yml`) runs build + unit tests in one job, and in a second job checks out
+`skladdo-backend`, boots both servers and runs the Playwright suite.
 
-- Authentication UI:
-  - login page and registration/invite flow.
-  - handling token expiration and logout.
-- Role/permission aware UI:
-  - conditionally show or hide buttons (create, delete, export) based on the current user’s permissions.
-- Table improvements:
-  - pagination, sorting, and column filters.
-- Better error and loading states:
-  - skeleton loaders, inline API error messages, and retry actions.
+## Conventions
 
----
+- **Every user-facing string is a translation key**, added to all three locales in the same change.
+- **New page** = a file in `src/pages`, a route in `App.jsx` wrapped in `RequirePermission` (or
+  `RequireAdmin`), a sidebar entry, and locale keys.
+- **Talk to the API through `src/api/client.js`** — it attaches the token and turns backend error keys
+  into translated messages.
+- Prefer the existing shared components (`DataTable`, `Modal`, `FormField`, `PageHeader`, `ActionMenu`)
+  over new one-off layout code.
+- Both themes are first-class: any new surface needs its `dark:` classes.
+
+## Known gaps
+
+- `npm run lint` currently reports pre-existing errors, mostly `react-hooks/set-state-in-effect` from the
+  newer plugin version; lint is not part of CI yet.
+- The card fields in the register wizard are a **preview only** — nothing is sent, charged or stored,
+  because no payment provider is wired up on the backend.

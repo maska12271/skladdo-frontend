@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GripVertical, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, GripVertical, X } from 'lucide-react'
 import { COLS, widgetMeta } from '../hooks/useDashboardLayout'
-import { clamp, bottom, layoutMove, layoutResize, sameLayout } from '../utils/gridLayout'
+import { clamp, bottom, compact, layoutMove, layoutResize, sameLayout } from '../utils/gridLayout'
 
 const ROW_PX = 40 // height of one grid row in pixels (fine step so widgets size precisely)
 const GAP = 16 // gap between cells in pixels
@@ -126,20 +126,81 @@ export default function DashboardGrid({ items, editing, onChange, onRemove, rend
         attachListeners()
     }
 
+    /**
+     * Moves a widget one place up or down in the stacked order, by swapping its slot with its
+     * neighbour's.
+     *
+     * A swap rather than a re-stack on purpose: re-numbering every `y` into a single column would
+     * reorder the phone view at the cost of flattening the desktop arrangement the same layout drives.
+     * Trading places keeps every widget's column and width, and `compact` settles any overlap the swap
+     * creates between two widgets of different sizes.
+     */
+    const moveInStack = (key, direction) => {
+        const ordered = itemsRef.current.slice().sort((a, b) => a.y - b.y || a.x - b.x)
+        const from = ordered.findIndex((i) => i.key === key)
+        const to = from + direction
+        if (from < 0 || to < 0 || to >= ordered.length) return
+        const a = ordered[from]
+        const b = ordered[to]
+        const next = itemsRef.current.map((it) => {
+            if (it.key === a.key) return { ...it, x: b.x, y: b.y }
+            if (it.key === b.key) return { ...it, x: a.x, y: a.y }
+            return { ...it }
+        })
+        onChangeRef.current(compact(next))
+    }
+
     const narrow = width > 0 && width < NARROW
     const cw = colWidth(width)
     const gridHeight = hToPx(Math.max(1, bottom(items)))
 
-    // Stacked, non-editable fallback for small screens.
+    // Small screens get a static two-column layout instead of the draggable grid.
+    //
+    // It used to stack every widget full-width at its desktop height, which on a phone meant sixteen
+    // boxes and roughly 4,700px of scrolling before the last one. The compact KPI tiles are the ones
+    // that suffer least from being narrow and cost the most rows, so they pair up two to a line; the
+    // taller content widgets keep the full width, where a chart or a list is still readable.
     if (narrow) {
         const ordered = items.slice().sort((a, b) => a.y - b.y || a.x - b.x)
         return (
-            <div ref={containerRef} className="space-y-4">
-                {ordered.map((it) => (
-                    <WidgetFrame key={it.key} title={titleOf(it.key)} plain={plainOf?.(it.key)} editing={false} style={{ height: hToPx(it.h) }}>
-                        {renderContent(it.key)}
-                    </WidgetFrame>
-                ))}
+            <div ref={containerRef} className="grid grid-cols-2 gap-4">
+                {ordered.map((it, index) => {
+                    // Only the smallest tiles pair up. The three money KPIs (revenue, spend, collected)
+                    // are `h: 4` and carry a figure plus a comparison line, so they take the full width;
+                    // the four counters below them are `h: 2` and sit two to a row.
+                    const compactTile = it.h <= 2
+                    // Everything on a phone is sized by its content, so a list shows its rows in full
+                    // instead of behind an internal scrollbar, and a widget with nothing to say shrinks
+                    // to the size of saying so. The exception is a chart: its SVG fills whatever box it
+                    // is given and has no height of its own, so it keeps the stored one.
+                    const isChart = Boolean(widgetMeta(it.key)?.chart)
+                    return (
+                        <WidgetFrame
+                            key={it.key}
+                            title={titleOf(it.key)}
+                            plain={plainOf?.(it.key)}
+                            // Editable on a phone too, but only for *which* widgets and in what order.
+                            // Resizing is left out deliberately: the sizes here are driven by the stored
+                            // desktop layout, and a corner drag is a poor gesture on a touch screen.
+                            editing={editing}
+                            onRemove={() => onRemove(it.key)}
+                            onMoveUp={index > 0 ? () => moveInStack(it.key, -1) : undefined}
+                            onMoveDown={index < ordered.length - 1 ? () => moveInStack(it.key, 1) : undefined}
+                            className={compactTile ? '' : 'col-span-2'}
+                            flush={isChart}
+                            // The content widgets keep their stored height, because that height is the
+                            // design: each is a fixed window onto a list that scrolls inside itself.
+                            // Letting them grow to fit instead turned "Low stock" into a 1,030px box and
+                            // made the page longer than it was before pairing the tiles up.
+                            //
+                            // The tiles are the opposite case — they hold one number, so they size to
+                            // their content and two of them fit a row.
+                            style={{ height: isChart ? hToPx(it.h) : undefined }}
+                        >
+                            {renderContent(it.key)}
+                        </WidgetFrame>
+                    )
+                })}
             </div>
         )
     }
@@ -204,13 +265,13 @@ export default function DashboardGrid({ items, editing, onChange, onRemove, rend
  * widget's own content. `plain` widgets — the headline figures — carry their own label and link, so
  * outside edit mode they get the bare card and skip the title bar entirely.
  */
-function WidgetFrame({ title, action, plain, editing, lifted, onRemove, onDragStart, onResizeStart, children, style }) {
+function WidgetFrame({ title, action, plain, editing, lifted, onRemove, onDragStart, onResizeStart, onMoveUp, onMoveDown, children, style, className = '', flush = false }) {
     const { t } = useTranslation()
     const bare = plain && !editing
     return (
         <div
             style={style}
-            className={`relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white transition-shadow dark:bg-slate-900 ${
+            className={`relative flex h-full flex-col overflow-hidden rounded-2xl border bg-white transition-shadow dark:bg-slate-900 ${className} ${
                 lifted ? 'border-teal-400 shadow-2xl ring-2 ring-teal-400/40 dark:border-teal-400' : 'border-slate-200 shadow-sm dark:border-slate-800'
             }`}
         >
@@ -222,11 +283,18 @@ function WidgetFrame({ title, action, plain, editing, lifted, onRemove, onDragSt
                 }`}
             >
                 <div className="flex min-w-0 items-center gap-2">
-                    {editing && <GripVertical className="h-4 w-4 shrink-0 text-slate-400" />}
+                    {/* The grip is only honest where dragging works; the stacked layout gets buttons. */}
+                    {editing && !onMoveUp && !onMoveDown && <GripVertical className="h-4 w-4 shrink-0 text-slate-400" />}
                     <h3 className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</h3>
                 </div>
                 {/* While editing the header is the drag handle, so the link is hidden to keep it grabbable. */}
                 {!editing && action}
+                {editing && (onMoveUp || onMoveDown) && (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                        <MoveButton onClick={onMoveUp} label={t('dashboard.moveUp')} icon={ArrowUp} />
+                        <MoveButton onClick={onMoveDown} label={t('dashboard.moveDown')} icon={ArrowDown} />
+                    </div>
+                )}
                 {editing && (
                     <button
                         type="button"
@@ -240,9 +308,12 @@ function WidgetFrame({ title, action, plain, editing, lifted, onRemove, onDragSt
                 )}
             </div>}
 
-            <div className={`min-h-0 flex-1 overflow-auto ${bare ? '' : 'p-4'} ${editing ? 'pointer-events-none select-none' : ''}`}>{children}</div>
+            {/* A chart gets the card every other widget gets, but barely any padding inside it on a phone:
+                the 16px inset costs a tenth of the plot's width and buys nothing, since the drawing
+                already carries its own margin around the axes. */}
+            <div className={`min-h-0 flex-1 overflow-auto ${bare ? '' : flush ? 'p-4 sm:p-4 max-sm:px-1 max-sm:pb-1' : 'p-4'} ${editing ? 'pointer-events-none select-none' : ''}`}>{children}</div>
 
-            {editing && (
+            {editing && onResizeStart && (
                 <div
                     onPointerDown={onResizeStart}
                     style={{ touchAction: 'none' }}
@@ -261,5 +332,20 @@ function WidgetFrame({ title, action, plain, editing, lifted, onRemove, onDragSt
                 </div>
             )}
         </div>
+    )
+}
+
+/** Reorder control for the stacked layout, where there is no drag gesture to offer. */
+function MoveButton({ onClick, label, icon: Icon }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={!onClick}
+            aria-label={label}
+            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 disabled:opacity-30 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+        >
+            <Icon className="h-4 w-4" />
+        </button>
     )
 }

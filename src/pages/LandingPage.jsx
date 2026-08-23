@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import {
     ArrowRight, Check, LayoutDashboard, Boxes, ShoppingCart,
     Gavel, Mail, Users, Warehouse, Globe, Receipt, ShieldCheck, BarChart3,
+    TriangleAlert, Copy, ClockAlert, Repeat, KeyRound, PackageCheck, Wallet,
+    Minus, X, ChevronDown, Sparkles,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
@@ -27,6 +29,26 @@ const MORE = [
     { key: 'permissions', icon: ShieldCheck },
 ]
 
+// The daily pain a trading company feels before it has a system — the "why you need this" section.
+const PROBLEMS = [
+    { key: 'stale', icon: TriangleAlert },
+    { key: 'copies', icon: Copy },
+    { key: 'chase', icon: ClockAlert },
+    { key: 'retype', icon: Repeat },
+]
+
+// What a connected warehouse partner gets, and what it costs them (nothing).
+const WAREHOUSE_POINTS = [
+    { key: 'code', icon: KeyRound },
+    { key: 'scope', icon: Warehouse },
+    { key: 'work', icon: PackageCheck },
+    { key: 'cost', icon: Wallet },
+]
+
+const COMPARE_ROWS = ['truth', 'stock', 'access', 'partners', 'tenders', 'invoices', 'history', 'start']
+
+const FAQ = ['warehouseFree', 'excel', 'lockin', 'team', 'languages', 'cancel']
+
 export default function LandingPage() {
     const { t } = useTranslation()
     const { isAuthenticated } = useAuth()
@@ -39,9 +61,13 @@ export default function LandingPage() {
         <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
             <Header t={t} />
             <Hero t={t} />
+            <Problem t={t} />
             <Features t={t} />
             <MoreFeatures t={t} />
+            <WarehouseAccount t={t} />
+            <Comparison t={t} />
             <Pricing t={t} />
+            <Faq t={t} />
             <FinalCta t={t} />
             <Footer t={t} />
         </div>
@@ -53,11 +79,13 @@ function Header({ t }) {
         <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/80 backdrop-blur dark:border-slate-800/70 dark:bg-slate-950/80">
             <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3.5">
                 <div className="flex items-center gap-2">
-                    <img src="/kladdo-logo.svg" alt="" aria-hidden="true" className="h-8 w-auto" />
+                    <img src="/skladdo-logo.svg" alt="" aria-hidden="true" className="h-8 w-auto" />
                     <span className="text-lg font-bold tracking-tight text-teal-700 dark:text-teal-400">{t('nav.appName')}</span>
                 </div>
-                <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300 sm:flex">
+                <nav className="hidden items-center gap-5 text-sm font-medium text-slate-600 dark:text-slate-300 md:flex">
                     <a href="#features" className="hover:text-teal-700 dark:hover:text-teal-400">{t('landing.nav.features')}</a>
+                    <a href="#warehouse" className="hover:text-teal-700 dark:hover:text-teal-400">{t('landing.nav.warehouse')}</a>
+                    <a href="#why" className="hover:text-teal-700 dark:hover:text-teal-400">{t('landing.nav.why')}</a>
                     <a href="#pricing" className="hover:text-teal-700 dark:hover:text-teal-400">{t('landing.nav.pricing')}</a>
                 </nav>
                 <div className="flex items-center gap-2">
@@ -100,10 +128,51 @@ function Hero({ t }) {
                     </Link>
                 </div>
                 <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">{t('landing.hero.note')}</p>
+                <a
+                    href="#warehouse"
+                    className="mt-4 inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50/60 px-4 py-1.5 text-sm font-medium text-teal-800 hover:bg-teal-50 dark:border-teal-900 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-950/60"
+                >
+                    <Sparkles className="h-4 w-4" />
+                    {t('landing.hero.freeNote')}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                </a>
 
                 <div className="mx-auto mt-14 max-w-5xl">
                     <BrowserFrame src="/landing/dashboard.png" alt={t('landing.features.dashboard.title')} />
                 </div>
+            </div>
+        </section>
+    )
+}
+
+/** The problem the product exists to solve, stated before any feature is named. */
+function Problem({ t }) {
+    return (
+        <section className="border-y border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/40">
+            <div className="mx-auto max-w-6xl px-4 py-20">
+                <div className="mx-auto max-w-2xl text-center">
+                    <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{t('landing.problemTitle')}</h2>
+                    <p className="mt-4 text-lg text-slate-600 dark:text-slate-300">{t('landing.problemSubtitle')}</p>
+                </div>
+
+                <div className="mt-12 grid gap-6 sm:grid-cols-2">
+                    {PROBLEMS.map((p) => {
+                        const Icon = p.icon
+                        return (
+                            <div key={p.key} className="flex gap-4 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+                                <Icon className="h-6 w-6 shrink-0 text-amber-500" />
+                                <div>
+                                    <h3 className="font-semibold">{t(`landing.problems.${p.key}.title`)}</h3>
+                                    <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">{t(`landing.problems.${p.key}.desc`)}</p>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+
+                <p className="mx-auto mt-10 max-w-3xl text-center text-lg font-medium text-slate-800 dark:text-slate-100">
+                    {t('landing.problemAnswer')}
+                </p>
             </div>
         </section>
     )
@@ -165,6 +234,126 @@ function MoreFeatures({ t }) {
     )
 }
 
+/** The free WAREHOUSE account type — a separate audience, so it gets its own section and its own CTA. */
+function WarehouseAccount({ t }) {
+    return (
+        <section id="warehouse" className="relative overflow-hidden bg-teal-50/60 dark:bg-teal-950/20">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+                <div className="absolute -top-32 -right-24 h-96 w-96 rounded-full bg-teal-400/20 blur-3xl dark:bg-teal-500/10" />
+            </div>
+            <div className="relative mx-auto max-w-6xl px-4 py-20">
+                <div className="mx-auto max-w-3xl text-center">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-600 px-3 py-1 text-xs font-semibold text-white">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        {t('landing.warehouse.badge')}
+                    </span>
+                    <h2 className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">{t('landing.warehouse.title')}</h2>
+                    <p className="mt-4 text-lg text-slate-600 dark:text-slate-300">{t('landing.warehouse.subtitle')}</p>
+                </div>
+
+                <div className="mt-12 grid gap-6 sm:grid-cols-2">
+                    {WAREHOUSE_POINTS.map((p) => {
+                        const Icon = p.icon
+                        return (
+                            <div key={p.key} className="rounded-2xl border border-teal-100 bg-white p-6 dark:border-teal-900/60 dark:bg-slate-900">
+                                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400">
+                                    <Icon className="h-5 w-5" />
+                                </div>
+                                <h3 className="mt-3 font-semibold">{t(`landing.warehouse.points.${p.key}.title`)}</h3>
+                                <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">{t(`landing.warehouse.points.${p.key}.desc`)}</p>
+                            </div>
+                        )
+                    })}
+                </div>
+
+                <div className="mt-10 flex flex-col items-center gap-4">
+                    <p className="flex max-w-2xl items-start gap-2 text-center text-sm text-slate-600 dark:text-slate-300">
+                        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
+                        <span>{t('landing.warehouse.limits')}</span>
+                    </p>
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                        <Link to="/register" className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-6 py-3 font-semibold text-white hover:bg-teal-700">
+                            {t('landing.warehouse.ctaWarehouse')} <ArrowRight className="h-4 w-4" />
+                        </Link>
+                        <a href="#pricing" className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-transparent dark:text-slate-200 dark:hover:bg-slate-900">
+                            {t('landing.warehouse.ctaBusiness')}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/** Skladdo against the two things it actually replaces: a pile of spreadsheets, or a general-purpose suite. */
+function Comparison({ t }) {
+    const COLS = [
+        { key: 'sheets', icon: X, tone: 'text-rose-500' },
+        { key: 'generic', icon: Minus, tone: 'text-slate-400' },
+        { key: 'skladdo', icon: Check, tone: 'text-teal-600 dark:text-teal-400' },
+    ]
+
+    return (
+        <section id="why" className="border-y border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/40">
+            <div className="mx-auto max-w-6xl px-4 py-20">
+                <div className="mx-auto max-w-2xl text-center">
+                    <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{t('landing.compareTitle')}</h2>
+                    <p className="mt-4 text-lg text-slate-600 dark:text-slate-300">{t('landing.compareSubtitle')}</p>
+                </div>
+
+                <div className="mt-12 overflow-x-auto">
+                    <table className="w-full min-w-[46rem] border-separate border-spacing-0 text-left text-sm">
+                        <thead>
+                            <tr>
+                                <th scope="col" className="w-56 px-4 pb-3" />
+                                {COLS.map((c) => (
+                                    <th
+                                        key={c.key}
+                                        scope="col"
+                                        className={`px-4 pb-3 font-semibold ${
+                                            c.key === 'skladdo' ? 'text-teal-700 dark:text-teal-400' : 'text-slate-500 dark:text-slate-400'
+                                        }`}
+                                    >
+                                        {t(`landing.compare.cols.${c.key}`)}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {COMPARE_ROWS.map((row) => (
+                                <tr key={row} className="align-top">
+                                    <th scope="row" className="border-t border-slate-200 px-4 py-4 font-semibold dark:border-slate-800">
+                                        {t(`landing.compare.rows.${row}.label`)}
+                                    </th>
+                                    {COLS.map((c) => {
+                                        const Icon = c.icon
+                                        const highlight = c.key === 'skladdo'
+                                        return (
+                                            <td
+                                                key={c.key}
+                                                className={`border-t border-slate-200 px-4 py-4 dark:border-slate-800 ${
+                                                    highlight
+                                                        ? 'bg-white font-medium text-slate-900 dark:bg-slate-900 dark:text-slate-100'
+                                                        : 'text-slate-600 dark:text-slate-400'
+                                                }`}
+                                            >
+                                                <span className="flex gap-2">
+                                                    <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${c.tone}`} />
+                                                    <span>{t(`landing.compare.rows.${row}.${c.key}`)}</span>
+                                                </span>
+                                            </td>
+                                        )
+                                    })}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    )
+}
+
 function Pricing({ t }) {
     const cap = (value, label) => (value === UNLIMITED ? t('landing.caps.unlimited') : value) + ' ' + label
 
@@ -215,6 +404,46 @@ function Pricing({ t }) {
                 ))}
             </div>
             <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">{t('landing.addonsNote')}</p>
+
+            <div className="mt-10 flex flex-col items-center justify-between gap-5 rounded-2xl border border-teal-200 bg-teal-50/60 p-7 dark:border-teal-900 dark:bg-teal-950/20 sm:flex-row sm:text-left">
+                <div className="flex items-start gap-4">
+                    <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white sm:inline-flex">
+                        <Warehouse className="h-6 w-6" />
+                    </div>
+                    <div>
+                        <h3 className="flex items-center gap-2 font-semibold">
+                            {t('landing.pricingFree.title')}
+                            <span className="rounded-full bg-teal-600 px-2 py-0.5 text-xs font-semibold text-white">€0</span>
+                        </h3>
+                        <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">{t('landing.pricingFree.desc')}</p>
+                    </div>
+                </div>
+                <Link to="/register" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white hover:bg-teal-700">
+                    {t('landing.pricingFree.cta')} <ArrowRight className="h-4 w-4" />
+                </Link>
+            </div>
+        </section>
+    )
+}
+
+/** Plain <details> accordion — the questions that decide a signup, answered without JavaScript. */
+function Faq({ t }) {
+    return (
+        <section className="border-y border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/40">
+            <div className="mx-auto max-w-3xl px-4 py-20">
+                <h2 className="text-center text-3xl font-bold tracking-tight sm:text-4xl">{t('landing.faqTitle')}</h2>
+                <div className="mt-12 space-y-3">
+                    {FAQ.map((key) => (
+                        <details key={key} className="group rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold">
+                                {t(`landing.faq.${key}.q`)}
+                                <ChevronDown className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+                            </summary>
+                            <p className="mt-3 text-slate-600 dark:text-slate-300">{t(`landing.faq.${key}.a`)}</p>
+                        </details>
+                    ))}
+                </div>
+            </div>
         </section>
     )
 }
@@ -239,9 +468,14 @@ function FinalCta({ t }) {
                 <div className="relative">
                     <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{t('landing.ctaTitle')}</h2>
                     <p className="mx-auto mt-4 max-w-xl text-teal-50">{t('landing.ctaSubtitle')}</p>
-                    <Link to="/register" className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-teal-700 hover:bg-teal-50">
-                        {t('landing.hero.ctaPrimary')} <ArrowRight className="h-4 w-4" />
-                    </Link>
+                    <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                        <Link to="/register" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-teal-700 hover:bg-teal-50">
+                            {t('landing.hero.ctaPrimary')} <ArrowRight className="h-4 w-4" />
+                        </Link>
+                        <Link to="/register" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/60 px-6 py-3 font-semibold text-white hover:bg-white/10">
+                            <Warehouse className="h-4 w-4" /> {t('landing.ctaWarehouse')}
+                        </Link>
+                    </div>
                 </div>
             </div>
         </section>
@@ -253,7 +487,7 @@ function Footer({ t }) {
         <footer className="border-t border-slate-200 dark:border-slate-800">
             <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row">
                 <div className="flex items-center gap-2">
-                    <img src="/kladdo-logo.svg" alt="" aria-hidden="true" className="h-6 w-auto" />
+                    <img src="/skladdo-logo.svg" alt="" aria-hidden="true" className="h-6 w-auto" />
                     <span className="font-semibold text-teal-700 dark:text-teal-400">{t('nav.appName')}</span>
                 </div>
                 <p className="text-sm text-slate-500 dark:text-slate-400">

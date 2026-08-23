@@ -5,6 +5,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../api/client'
 import { useServerTable } from '../hooks/useServerTable'
 import PageHeader from '../components/PageHeader'
 import SearchFilters from '../components/SearchFilters'
+import { sortOptionsFromColumns } from '../utils/sortOptions'
 import EmptyState from '../components/EmptyState'
 import DataTable from '../components/DataTable'
 import DataToolbar from '../components/DataToolbar'
@@ -27,6 +28,7 @@ import QuickCreateModal from '../components/QuickCreateModal'
 import CategoryManagerModal from '../components/CategoryManagerModal'
 import ComposeEmailModal from '../components/ComposeEmailModal'
 import { Eye, Pencil, Trash2, Factory, Mail } from 'lucide-react'
+import Checkbox from '../components/Checkbox'
 
 // One schema drives both export (headers localised to the current language) and import (headers
 // matched against each field's label in every app language). `id` is export-only. Categories are a
@@ -325,7 +327,7 @@ export default function ManufacturersPage() {
                 title={t('manufacturers.title')}
                 description={t('manufacturers.description')}
                 action={
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                         <DataToolbar
                             entityLabel="manufacturers"
                             fields={MANUFACTURER_FIELDS}
@@ -345,13 +347,13 @@ export default function ManufacturersPage() {
                                 {t('common.configureCategories')}
                             </button>
                         )}
-                        {canCreate && (
-                            <button onClick={openCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
-                                {t('manufacturers.add')}
-                            </button>
-                        )}
                     </div>
                 }
+                primaryAction={canCreate && (
+                        <button onClick={openCreate} className="min-h-11 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700 lg:min-h-0">
+                            {t('manufacturers.add')}
+                        </button>
+                    )}
             />
 
             <SearchFilters
@@ -377,6 +379,7 @@ export default function ManufacturersPage() {
                         ],
                     },
                 ]}
+                sort={{ sortBy, sortDir, onSortChange: setSort, options: sortOptionsFromColumns(columns) }}
             />
 
             <DataTable
@@ -409,6 +412,7 @@ export default function ManufacturersPage() {
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSortChange={setSort}
+                hideCardSort
                 bulkActions={
                     <>
                         {canSendEmail && (
@@ -532,13 +536,7 @@ export default function ManufacturersPage() {
                     {/* Active is a lifecycle toggle, only meaningful once a record exists — new records are active. */}
                     {editingId && (
                         <label className="md:col-span-4 inline-flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
-                            <input
-                                type="checkbox"
-                                name="active"
-                                checked={form.active}
-                                onChange={handleChange}
-                                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                            />
+                            <Checkbox name="active" checked={form.active} onChange={handleChange} />
                             <span className="font-medium text-slate-700 dark:text-slate-200">{t('common.active')}</span>
                         </label>
                     )}

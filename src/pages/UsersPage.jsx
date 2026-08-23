@@ -18,7 +18,8 @@ import { useModal } from '../hooks/useModal'
 import { safeArray } from '../utils/format'
 import { FormField, FormSelect } from '../components/FormField.jsx'
 import { PERMISSION_MODULES } from '../constants/modules'
-import { Pencil, Trash2, Archive, ArchiveRestore, ShieldCheck, User, KeyRound } from 'lucide-react'
+import { Pencil, Trash2, Archive, ArchiveRestore, ShieldCheck, User, KeyRound, Crown, Warehouse } from 'lucide-react'
+import Checkbox from '../components/Checkbox'
 
 const PERMISSION_ACTIONS = [
     { key: 'canView', labelKey: 'users.perm.view' },
@@ -42,6 +43,21 @@ const ROLE_LABELS = {
     ADMINISTRATOR: 'Administrator',
     USER: 'User',
     WAREHOUSE: 'Warehouse',
+}
+
+// One icon per role, so the badge reads at a glance rather than only by colour — which is the half of
+// it that a colour-blind reader loses.
+const ROLE_ICON = {
+    OWNER: Crown,
+    ADMINISTRATOR: ShieldCheck,
+    USER: User,
+    WAREHOUSE: Warehouse,
+}
+
+/** Up to two initials from a name, falling back to the email — the same rule the sidebar avatar uses. */
+function initials(user) {
+    const source = user?.fullName || user?.email || '?'
+    return source.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
 }
 
 const ROLE_BADGE = {
@@ -332,16 +348,33 @@ export default function UsersPage() {
     }
 
     const columns = [
+        {
+            // Unlabelled and first, which is what makes it the leading adornment on a card — the same
+            // slot the product thumbnail occupies.
+            key: 'avatar',
+            label: '',
+            name: t('users.cols.name'),
+            hideable: false,
+            render: (row) => (
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    {initials(row)}
+                </span>
+            ),
+        },
         { key: 'fullName', label: t('users.cols.name'), render: (row) => row.fullName || '-' },
         { key: 'email', label: t('common.email') },
         {
             key: 'role',
             label: t('users.cols.role'),
-            render: (row) => (
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${ROLE_BADGE[row.role] || ROLE_BADGE.USER}`}>
-                    {t(`roles.${row.role}`)}
-                </span>
-            ),
+            render: (row) => {
+                const Icon = ROLE_ICON[row.role] || User
+                return (
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${ROLE_BADGE[row.role] || ROLE_BADGE.USER}`}>
+                        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                        {t(`roles.${row.role}`)}
+                    </span>
+                )
+            },
         },
         {
             key: 'archived',
@@ -399,17 +432,19 @@ export default function UsersPage() {
                 title={t('users.title')}
                 description={t('users.description')}
                 action={
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                         <DataToolbar
                             entityLabel="users"
                             exportColumns={exportColumns}
                             rows={filteredRows}
                         />
-                        <button onClick={openCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
-                            {t('users.add')}
-                        </button>
                     </div>
                 }
+                primaryAction={
+                        <button onClick={openCreate} className="min-h-11 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700 lg:min-h-0">
+                            {t('users.add')}
+                        </button>
+                    }
             />
 
             <SearchFilters
@@ -547,13 +582,7 @@ export default function UsersPage() {
                                 <span className="block font-medium text-slate-700 dark:text-slate-200">{t('users.form.canSeePrices')}</span>
                                 <span className="text-xs text-slate-500 dark:text-slate-400">{t('users.form.canSeePricesHint')}</span>
                             </span>
-                            <input
-                                type="checkbox"
-                                name="canSeePrices"
-                                checked={!!form.canSeePrices}
-                                onChange={(e) => setForm((prev) => ({ ...prev, canSeePrices: e.target.checked }))}
-                                className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                            />
+                            <Checkbox name="canSeePrices" checked={!!form.canSeePrices} onChange={(e) => setForm((prev) => ({ ...prev, canSeePrices: e.target.checked }))} />
                         </label>
                     )}
 
@@ -642,12 +671,7 @@ export default function UsersPage() {
                                                     <td className="px-4 py-3 font-medium">{label}</td>
                                                     <td colSpan={PERMISSION_ACTIONS.length} className="px-4 py-3 text-center">
                                                         <label className="inline-flex items-center gap-2">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={!!row.canCreate}
-                                                                onChange={(e) => toggleEmailAccess(row.module, e.target.checked)}
-                                                                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                                                            />
+                                                            <Checkbox checked={!!row.canCreate} onChange={(e) => toggleEmailAccess(row.module, e.target.checked)} />
                                                             <span className="text-sm text-slate-600 dark:text-slate-300">{t('users.perm.emailAccess')}</span>
                                                         </label>
                                                     </td>
@@ -659,12 +683,7 @@ export default function UsersPage() {
                                                 <td className="px-4 py-3 font-medium">{label}</td>
                                                 {PERMISSION_ACTIONS.map((action) => (
                                                     <td key={action.key} className="px-4 py-3 text-center">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={!!row[action.key]}
-                                                            onChange={(e) => togglePermission(row.module, action.key, e.target.checked)}
-                                                            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                                                        />
+                                                        <Checkbox checked={!!row[action.key]} onChange={(e) => togglePermission(row.module, action.key, e.target.checked)} />
                                                     </td>
                                                 ))}
                                             </tr>

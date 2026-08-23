@@ -15,6 +15,7 @@ import SentEmailDetailModal from '../components/SentEmailDetailModal'
 import { formatMoney, formatDate, formatDateTime, safeArray } from '../utils/format'
 import { PERIOD_KEYS, periodRange } from '../utils/period'
 import { PERMISSION_MODULES } from '../constants/modules'
+import Checkbox from '../components/Checkbox'
 
 const ROLE_BADGE = {
     OWNER: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
@@ -491,12 +492,7 @@ export default function UserDetailPage() {
                                     const checked = assignedWarehouseIds.includes(w.id)
                                     return (
                                         <label key={w.id} className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition ${checked ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300' : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300'}`}>
-                                            <input
-                                                type="checkbox"
-                                                checked={checked}
-                                                onChange={(e) => setAssignedWarehouseIds((prev) => e.target.checked ? [...prev, w.id] : prev.filter((x) => x !== w.id))}
-                                                className="h-3.5 w-3.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                                            />
+                                            <Checkbox checked={checked} onChange={(e) => setAssignedWarehouseIds((prev) => e.target.checked ? [...prev, w.id] : prev.filter((x) => x !== w.id))} />
                                             {w.name}
                                         </label>
                                     )
@@ -568,13 +564,7 @@ export default function UserDetailPage() {
                                                             <td className="px-4 py-3 font-medium">{label}</td>
                                                             <td colSpan={PERMISSION_ACTIONS.length} className="px-4 py-3 text-center">
                                                                 <label className="inline-flex items-center gap-2">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={!!row.canCreate}
-                                                                        disabled={!canEditRights}
-                                                                        onChange={(e) => toggleEmailAccess(row.module, e.target.checked)}
-                                                                        className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 disabled:opacity-50 dark:border-slate-700"
-                                                                    />
+                                                                    <Checkbox checked={!!row.canCreate} disabled={!canEditRights} onChange={(e) => toggleEmailAccess(row.module, e.target.checked)} />
                                                                     <span className="text-sm text-slate-600 dark:text-slate-300">{t('users.perm.emailAccess')}</span>
                                                                 </label>
                                                             </td>
@@ -586,13 +576,7 @@ export default function UserDetailPage() {
                                                         <td className="px-4 py-3 font-medium">{label}</td>
                                                         {PERMISSION_ACTIONS.map((action) => (
                                                             <td key={action.key} className="px-4 py-3 text-center">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={!!row[action.key]}
-                                                                    disabled={!canEditRights}
-                                                                    onChange={(e) => togglePermission(row.module, action.key, e.target.checked)}
-                                                                    className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 disabled:opacity-50 dark:border-slate-700"
-                                                                />
+                                                                <Checkbox checked={!!row[action.key]} disabled={!canEditRights} onChange={(e) => togglePermission(row.module, action.key, e.target.checked)} />
                                                             </td>
                                                         ))}
                                                     </tr>

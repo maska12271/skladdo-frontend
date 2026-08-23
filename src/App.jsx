@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import ProtectedLayout from './components/ProtectedLayout'
 import RequireAdmin from './components/RequireAdmin'
 import RequirePermission from './components/RequirePermission'
+import RequirePlatformAdmin from './components/RequirePlatformAdmin'
 import LoadingBlock from './components/LoadingBlock'
 import { useAuth } from './context/AuthContext'
 
@@ -33,6 +34,10 @@ const WarehousesPage = lazy(() => import('./pages/WarehousesPage'))
 const WarehouseDetailPage = lazy(() => import('./pages/WarehouseDetailPage'))
 const SentEmailsPage = lazy(() => import('./pages/SentEmailsPage'))
 const EmailBatchDetailPage = lazy(() => import('./pages/EmailBatchDetailPage'))
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage'))
+const AdminCompaniesPage = lazy(() => import('./pages/AdminCompaniesPage'))
+const AdminCompanyDetailPage = lazy(() => import('./pages/AdminCompanyDetailPage'))
+const AdminInviteLinksPage = lazy(() => import('./pages/AdminInviteLinksPage'))
 
 /**
  * Shown when a warehouse account is on the dashboard without a client open — in practice only before it
@@ -65,11 +70,32 @@ function NoClientOpen() {
  * ever works inside its clients, so at home it is shown how to get one instead.
  */
 function DashboardOrConnections() {
-    const { isWarehouseAccount, isPartnerSession } = useAuth()
+    const { isWarehouseAccount, isPartnerSession, isPlatformCompany } = useAuth()
+    // A platform account runs Skladdo rather than using it: there is no company of its own to report on,
+    // so the operator overview *is* its dashboard. Rendered rather than redirected, for the reason
+    // NoClientOpen documents — a component that merely renders cannot steal a navigation.
+    if (isPlatformCompany) {
+        return <AdminDashboardPage />
+    }
     if (isWarehouseAccount && !isPartnerSession) {
         return <NoClientOpen />
     }
     return <DashboardPage />
+}
+
+/**
+ * Gates the pages that administer a *company* — its users, its settings, its activity trail.
+ *
+ * A platform account is the owner of a shell company with no data, so these pages would render real
+ * controls over something that is not a business. They are hidden from its sidebar; this closes the door
+ * for anyone who types the URL, which is the difference between "not offered" and "not there".
+ */
+function RequireCompanyAccount({ children }) {
+    const { isPlatformCompany } = useAuth()
+    if (isPlatformCompany) {
+        return <Navigate to="/admin" replace />
+    }
+    return children
 }
 
 export default function App() {
@@ -190,7 +216,7 @@ export default function App() {
                     path="/users"
                     element={
                         <RequireAdmin>
-                            <UsersPage />
+                            <RequireCompanyAccount><UsersPage /></RequireCompanyAccount>
                         </RequireAdmin>
                     }
                 />
@@ -198,7 +224,7 @@ export default function App() {
                     path="/users/:id"
                     element={
                         <RequireAdmin>
-                            <UserDetailPage />
+                            <RequireCompanyAccount><UserDetailPage /></RequireCompanyAccount>
                         </RequireAdmin>
                     }
                 />
@@ -206,7 +232,7 @@ export default function App() {
                     path="/audit-log"
                     element={
                         <RequireAdmin>
-                            <AuditLogPage />
+                            <RequireCompanyAccount><AuditLogPage /></RequireCompanyAccount>
                         </RequireAdmin>
                     }
                 />
@@ -214,8 +240,44 @@ export default function App() {
                     path="/settings"
                     element={
                         <RequireAdmin>
-                            <SettingsPage />
+                            <RequireCompanyAccount><SettingsPage /></RequireCompanyAccount>
                         </RequireAdmin>
+                    }
+                />
+
+                {/* The platform operator's pages. These read and administer every tenant, so they are
+                    gated on the account's platform flag rather than on its standing in any one company —
+                    a company owner is refused here exactly like anyone else. */}
+                <Route
+                    path="/admin"
+                    element={
+                        <RequirePlatformAdmin>
+                            <AdminDashboardPage />
+                        </RequirePlatformAdmin>
+                    }
+                />
+                <Route
+                    path="/admin/companies"
+                    element={
+                        <RequirePlatformAdmin>
+                            <AdminCompaniesPage />
+                        </RequirePlatformAdmin>
+                    }
+                />
+                <Route
+                    path="/admin/companies/:id"
+                    element={
+                        <RequirePlatformAdmin>
+                            <AdminCompanyDetailPage />
+                        </RequirePlatformAdmin>
+                    }
+                />
+                <Route
+                    path="/admin/invite-links"
+                    element={
+                        <RequirePlatformAdmin>
+                            <AdminInviteLinksPage />
+                        </RequirePlatformAdmin>
                     }
                 />
             </Route>

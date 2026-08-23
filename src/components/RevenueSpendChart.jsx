@@ -1,12 +1,25 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatMoney } from '../utils/format'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 // Dependency-free grouped SVG bar chart for the dashboard: monthly revenue (sales) next to spend
 // (purchases). `data` is the backend `monthly` array: [{ month: 'YYYY-MM', revenue, spend }, ...].
 // `showRevenue` / `showSpend` let the caller drop a series the user has no permission to see.
-const W = 760
-const H = 280
-const PAD = { top: 16, right: 16, bottom: 36, left: 64 }
+// The viewBox is a coordinate space, not a pixel size, so a *shorter* one draws everything larger once
+// it is scaled to the container. `H` is what sets that scale: 280 suits a wide desktop widget, while a
+// phone card is only ~230px tall, so it gets a taller space to keep the bars and labels readable.
+// `W` is deliberately not fixed — it is measured from the box the chart is handed (see `boxAspect`), so
+// the coordinate space always has the same shape as its container. Pinning it letterboxed the drawing:
+// a 380-wide space inside a 382x233 phone card was scaled to fit the height and centred, so the chart
+// used 295px of a full-bleed card with ~43px of white down either side. The `W` below is only the
+// first-paint fallback, used until the box has been measured.
+// `left` is the room the money labels get: "€207,524.48" runs ~53 units at this font size and wants an
+// 8-unit gap on top of that, and 72 leaves a couple of digits' headroom for a company whose figures run
+// longer. It matters more than it used to — the phone's 34 fit only because the labels spilled left into
+// the letterbox margin, and nothing spills outside the viewBox now that it matches its box.
+const DESKTOP_BOX = { W: 760, H: 280, PAD: { top: 16, right: 16, bottom: 46, left: 72 } }
+const MOBILE_BOX = { W: 380, H: 300, PAD: { top: 12, right: 4, bottom: 54, left: 72 } }
 
 function formatMonth(ym) {
     const [y, m] = ym.split('-')
@@ -16,6 +29,10 @@ function formatMonth(ym) {
 
 export default function RevenueSpendChart({ data = [], showRevenue = true, showSpend = true, bare = false }) {
     const { t } = useTranslation()
+    const box = useBreakpoint() === 'mobile' ? MOBILE_BOX : DESKTOP_BOX
+    const { H, PAD } = box
+    const svgRef = useRef(null)
+    const [boxAspect, setBoxAspect] = useState(null)
     const series = [
         showRevenue && { key: 'revenue', label: t('dashboard.chart.revenue'), bar: 'fill-teal-500', dot: 'bg-teal-500' },
         showSpend && { key: 'spend', label: t('dashboard.chart.spend'), bar: 'fill-secondary-300', dot: 'bg-secondary-300' },
@@ -31,6 +48,10 @@ export default function RevenueSpendChart({ data = [], showRevenue = true, showS
     const top = Math.max(1, ...values, ...nets)
     const floor = Math.min(0, ...nets)
     const span = top - floor
+    // Shape the coordinate space like the box it is drawn into, so `meet` scales it to fit both
+    // dimensions at once instead of fitting the height and centring what is left over. The lower bound
+    // keeps a plot to draw in if the widget is ever resized taller than it is wide.
+    const W = Math.max(PAD.left + PAD.right + 40, boxAspect ? Math.round(H * boxAspect) : box.W)
     const plotW = W - PAD.left - PAD.right
     const plotH = H - PAD.top - PAD.bottom
     const yOf = (v) => PAD.top + plotH * (1 - (v - floor) / span)
@@ -43,6 +64,19 @@ export default function RevenueSpendChart({ data = [], showRevenue = true, showS
     const centerX = (i) => PAD.left + slot * i + slot / 2
 
     const hasData = data.length > 0 && series.length > 0
+
+    // The SVG element's own size comes from the layout (`w-full`, `flex-1`) rather than from the viewBox,
+    // so reading it back to shape the viewBox does not feed into itself.
+    useLayoutEffect(() => {
+        const el = svgRef.current
+        if (!el) return
+        const ro = new ResizeObserver(([entry]) => {
+            const { width, height } = entry.contentRect
+            if (width > 0 && height > 0) setBoxAspect(width / height)
+        })
+        ro.observe(el)
+        return () => ro.disconnect()
+    }, [hasData])
 
     return (
         <div className={bare ? 'flex h-full flex-col' : 'rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900'}>
@@ -70,6 +104,7 @@ export default function RevenueSpendChart({ data = [], showRevenue = true, showS
                 </div>
             ) : (
                 <svg
+                    ref={svgRef}
                     viewBox={`0 0 ${W} ${H}`}
                     preserveAspectRatio="xMidYMid meet"
                     className={bare ? 'min-h-0 w-full flex-1' : 'w-full'}
@@ -109,10 +144,16 @@ export default function RevenueSpendChart({ data = [], showRevenue = true, showS
                                     )
                                 })}
                                 {i % labelEvery === 0 && (
+                                    // Rotated so every month can be named. Horizontally they either
+                                    // collide or have to be thinned out to every other one, which on a
+                                    // phone left a chart whose bars could not be tied to a month at all.
+                                    // Anchored at the end and rotated about its own point, so the label
+                                    // hangs back-left from the bar it belongs to rather than drifting off.
                                     <text
                                         x={centerX(i)}
-                                        y={H - PAD.bottom + 18}
-                                        textAnchor="middle"
+                                        y={H - PAD.bottom + 14}
+                                        textAnchor="end"
+                                        transform={`rotate(-45 ${centerX(i)} ${H - PAD.bottom + 14})`}
                                         className="fill-slate-400 text-[10px]"
                                     >
                                         {formatMonth(d.month)}

@@ -17,6 +17,7 @@ import { useToast } from '../context/ToastContext'
 import { safeArray } from '../utils/format'
 import { FormField } from '../components/FormField.jsx'
 import AddressAutocompleteField from '../components/AddressAutocompleteField.jsx'
+import Checkbox from '../components/Checkbox'
 
 const emptyForm = { name: '', address: '', active: true }
 
@@ -241,13 +242,7 @@ export default function WarehousesPage() {
                     {/* Active is a lifecycle toggle, only meaningful once a record exists — new records are active. */}
                     {editingId && (
                         <label className="md:col-span-2 inline-flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
-                            <input
-                                type="checkbox"
-                                name="active"
-                                checked={form.active}
-                                onChange={handleChange}
-                                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                            />
+                            <Checkbox name="active" checked={form.active} onChange={handleChange} />
                             <span className="font-medium text-slate-700 dark:text-slate-200">{t('warehouses.form.active')}</span>
                         </label>
                     )}

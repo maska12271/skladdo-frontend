@@ -9,6 +9,7 @@ import ConfirmModal from './ConfirmModal'
 import { FormField } from './FormField.jsx'
 import RichTextEditor from './RichTextEditor'
 import { safeArray } from '../utils/format'
+import Checkbox from './Checkbox'
 
 const emptyForm = { name: '', subject: '', body: '', active: true }
 
@@ -167,7 +168,7 @@ export default function EmailTemplatesManager() {
                     <p className="text-xs text-slate-500 dark:text-slate-400">{t('emailTemplates.tokensHint')}</p>
                     {editingId && (
                         <label className="inline-flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
-                            <input type="checkbox" name="active" checked={!!form.active} onChange={handleChange} className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700" />
+                            <Checkbox name="active" checked={!!form.active} onChange={handleChange} />
                             <span className="font-medium text-slate-700 dark:text-slate-200">{t('common.active')}</span>
                         </label>
                     )}

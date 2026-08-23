@@ -5,6 +5,7 @@ import { apiDelete, apiGet, apiPatch, apiPost, apiPut, apiUpload } from '../api/
 import { useServerTable } from '../hooks/useServerTable'
 import PageHeader from '../components/PageHeader'
 import SearchFilters from '../components/SearchFilters'
+import { sortOptionsFromColumns } from '../utils/sortOptions'
 import EmptyState from '../components/EmptyState'
 import DataTable from '../components/DataTable'
 import DataToolbar from '../components/DataToolbar'
@@ -60,7 +61,7 @@ const emptyForm = {
     rateSource: 'SAME',
     rateAsOfDate: null,
     tenderId: '',
-    invoiceFileUrl: '',
+    invoiceFileKey: '',
     invoiceFileName: '',
     items: [
         {
@@ -218,7 +219,7 @@ export default function PurchaseOrdersPage() {
             rateSource: 'SAVED',
             rateAsOfDate: null,
             tenderId: item.tenderId ?? '',
-            invoiceFileUrl: item.invoiceFileUrl || '',
+            invoiceFileKey: item.invoiceFileKey || '',
             invoiceFileName: item.invoiceFileName || '',
             items: item.items?.length
                 ? item.items.map((it) => ({
@@ -315,7 +316,7 @@ export default function PurchaseOrdersPage() {
             const data = new FormData()
             data.append('file', file)
             const res = await apiUpload('/upload/document', data)
-            setForm((prev) => ({ ...prev, invoiceFileUrl: res.url, invoiceFileName: res.name || file.name }))
+            setForm((prev) => ({ ...prev, invoiceFileKey: res.key, invoiceFileName: res.name || file.name }))
             toast.success(t('purchaseOrders.invoice.uploaded'))
         } finally {
             setUploadingInvoice(false)
@@ -323,7 +324,7 @@ export default function PurchaseOrdersPage() {
         }
     }
 
-    const removeInvoiceFile = () => setForm((prev) => ({ ...prev, invoiceFileUrl: '', invoiceFileName: '' }))
+    const removeInvoiceFile = () => setForm((prev) => ({ ...prev, invoiceFileKey: '', invoiceFileName: '' }))
 
     // Returns a message when the form can't be submitted yet, or null when it is valid.
     const validate = () => {
@@ -368,7 +369,7 @@ export default function PurchaseOrdersPage() {
             currency: form.currency || baseCurrency || null,
             exchangeRate: form.exchangeRate ? Number(form.exchangeRate) : null,
             tenderId: form.tenderId ? Number(form.tenderId) : null,
-            invoiceFileUrl: form.invoiceFileUrl || null,
+            invoiceFileKey: form.invoiceFileKey || null,
             invoiceFileName: form.invoiceFileName || null,
             items: form.items.map((item) => ({
                 productId: Number(item.productId),
@@ -477,7 +478,7 @@ export default function PurchaseOrdersPage() {
                 title={t('purchaseOrders.title')}
                 description={t('purchaseOrders.description')}
                 action={
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                         <DataToolbar
                             entityLabel="purchase-orders"
                             exportColumns={exportColumns}
@@ -485,13 +486,13 @@ export default function PurchaseOrdersPage() {
                             fetchRows={fetchAllOrders}
                             count={total}
                         />
-                        {canCreate && (
-                            <button onClick={openCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
-                                {t('purchaseOrders.add')}
-                            </button>
-                        )}
                     </div>
                 }
+                primaryAction={canCreate && (
+                        <button onClick={openCreate} className="min-h-11 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700 lg:min-h-0">
+                            {t('purchaseOrders.add')}
+                        </button>
+                    )}
             />
 
             <SearchFilters
@@ -521,6 +522,7 @@ export default function PurchaseOrdersPage() {
                         ],
                     },
                 ]}
+                sort={{ sortBy, sortDir, onSortChange: setSort, options: sortOptionsFromColumns(columns) }}
             />
 
             <DataTable
@@ -553,6 +555,7 @@ export default function PurchaseOrdersPage() {
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSortChange={setSort}
+                hideCardSort
                 bulkActions={
                     canDelete ? (
                         <button

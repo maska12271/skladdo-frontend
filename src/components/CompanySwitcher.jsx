@@ -13,7 +13,12 @@ import { useToast } from '../context/ToastContext'
  * Renders nothing at all for an account with only its own company, which is everybody who isn't a
  * warehouse operator.
  */
-export default function CompanySwitcher() {
+/**
+ * `align` is which edge the panel hangs from. In the header it sits at the right of the bar and opens
+ * leftwards, which is the default; in the nav drawer it sits at the left of a 320px panel, where a
+ * right-anchored 288px menu would open off the side of the screen.
+ */
+export default function CompanySwitcher({ align = 'right', className = '' }) {
     const { t } = useTranslation()
     const { companies, switchCompany, isHomeAdmin, isPartnerSession, isWarehouseAccount, lastClientId } = useAuth()
     const toast = useToast()
@@ -95,7 +100,7 @@ export default function CompanySwitcher() {
     }
 
     return (
-        <div ref={containerRef} className="relative">
+        <div ref={containerRef} className={`relative ${className}`}>
             <button
                 type="button"
                 onClick={() => setOpen((prev) => !prev)}
@@ -122,7 +127,9 @@ export default function CompanySwitcher() {
             {open && (
                 <div
                     role="listbox"
-                    className="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                    className={`absolute z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900 ${
+                        align === 'left' ? 'left-0' : 'right-0'
+                    }`}
                 >
                     <p className="border-b border-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:text-slate-400">
                         {t('companySwitcher.label')}

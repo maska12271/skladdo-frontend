@@ -182,6 +182,9 @@ export function AuthProvider({ children }) {
     const can = useCallback((module, action = 'canView') => {
         if (!user) return false
         if (user.companyType === 'WAREHOUSE' && user.partnerSession !== true) return false
+        // A platform account is Skladdo itself and has no business data anywhere — not even a client to
+        // switch into — so unlike a warehouse account this closes unconditionally.
+        if (user.companyType === 'PLATFORM') return false
         if (MANAGER_ROLES.includes(user.role)) return true
         const flags = user.permissions?.[module]
         return Boolean(flags && flags[action])
@@ -194,6 +197,17 @@ export function AuthProvider({ children }) {
     // The account type chosen at signup. A warehouse account owns no catalogue, orders or tenders at all —
     // the server refuses them outright — so the app shows it its connected clients instead.
     const isWarehouseAccount = user?.companyType === 'WAREHOUSE'
+
+    // Whether this account operates the platform itself, which is what opens the cross-tenant `/admin`
+    // panel. Independent of `isAdmin`: that describes standing inside one company and grants nothing here.
+    // The flag is only ever set by deployment configuration (app.platform-admin-emails), never through the
+    // app, and every /api/admin endpoint re-checks it — so this drives navigation, not access.
+    const isPlatformAdmin = user?.platformAdmin === true
+
+    // Whether the login belongs to Skladdo's own shell company rather than to a customer. Distinct from
+    // `isPlatformAdmin`, which is the capability: an operator whose account happens to live in a real
+    // customer company still has business pages to see, and this is what says "there are none".
+    const isPlatformCompany = user?.companyType === 'PLATFORM'
 
     const value = useMemo(() => ({
         token,
@@ -213,10 +227,13 @@ export function AuthProvider({ children }) {
         refreshCompanies,
         isPartnerSession,
         isWarehouseAccount,
+        isPlatformAdmin,
+        isPlatformCompany,
         lastClientId,
         switchingRef,
     }), [token, user, isAdmin, isHomeAdmin, canSeePrices, can, login, register, logout, updateUser,
-        companies, switchCompany, refreshCompanies, isPartnerSession, isWarehouseAccount, lastClientId])
+        companies, switchCompany, refreshCompanies, isPartnerSession, isWarehouseAccount, isPlatformAdmin,
+        isPlatformCompany, lastClientId])
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

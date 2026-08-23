@@ -85,7 +85,7 @@ export default function NotificationBell() {
                 aria-label={t('notifications.title')}
                 aria-haspopup="menu"
                 aria-expanded={open}
-                className="relative rounded-xl border border-slate-300 p-2.5 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                className="relative inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 hover:bg-slate-100 lg:h-auto lg:w-auto lg:p-2.5 dark:border-slate-700 dark:hover:bg-slate-800"
             >
                 <Bell className="h-5 w-5" />
                 {unread > 0 && (

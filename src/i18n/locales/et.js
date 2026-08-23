@@ -4,6 +4,9 @@ export default {
         showPassword: 'Näita parooli',
         hidePassword: 'Peida parool',
         backToHome: 'Tagasi avalehele',
+        moreActions: 'Rohkem tegevusi',
+        filters: 'Filtrid',
+        clearFilters: 'Tühjenda filtrid',
         cancel: 'Tühista',
         save: 'Salvesta',
         saveChanges: 'Salvesta muudatused',
@@ -82,7 +85,7 @@ export default {
         incoming: 'Saabuvad ostutellimused',
     },
     nav: {
-        appName: 'Kladdo',
+        appName: 'Skladdo',
         tagline: 'Tellimused, hanked, kliendid, tooted',
         dashboard: 'Töölaud',
         products: 'Tooted',
@@ -106,6 +109,12 @@ export default {
         signOut: 'Logi välja',
         expand: 'Ava külgriba',
         collapse: 'Sulge külgriba',
+        menu: 'Navigeerimine',
+        openMenu: 'Ava menüü',
+        closeMenu: 'Sulge menüü',
+        theme: 'Teema',
+        themeLight: 'Hele',
+        themeDark: 'Tume',
     },
     roles: {
         OWNER: 'Omanik',
@@ -368,6 +377,8 @@ export default {
             },
             trialEnds: 'Prooviperiood lõpeb {{date}}',
             nextPayment: 'Uueneb {{date}}',
+            freeUntil: 'Tasuta kuni {{date}}',
+            sponsoredNote: 'Teie konto on tasuta kuni {{date}}. Enne seda tasu ei võeta.',
             cancelsOn: 'Tühistatakse {{date}}',
             cancel: 'Tühista pakett',
             resume: 'Taasta pakett',
@@ -685,9 +696,15 @@ export default {
         continue: 'Edasi',
         accountType: 'Mis tüüpi konto see on?',
         accountTypeTitle: 'Millist kontot sa vajad?',
-        accountTypeSubtitle: 'Kladdo töötab kummagi puhul erinevalt — vali see, mis vastab sinu tegevusele.',
+        accountTypeSubtitle: 'Skladdo töötab kummagi puhul erinevalt — vali see, mis vastab sinu tegevusele.',
         accountTypeHint: 'Seda ei saa hiljem muuta.',
         pickAccountType: 'Jätkamiseks vali konto tüüp.',
+        invite: {
+            title: 'Sind on Skladdosse kutsutud.',
+            freeDays_one: 'Esimene päev on tasuta — kaarti pole vaja.',
+            freeDays_other: 'Esimesed {{count}} päeva on tasuta — kaarti pole vaja.',
+            invalid: 'See kutselink enam ei kehti, kuid saad end allpool ikkagi registreerida.',
+        },
         accountTypes: {
             BUSINESS: {
                 name: 'Ettevõte',
@@ -758,6 +775,8 @@ export default {
     landing: {
         nav: {
             features: 'Funktsioonid',
+            why: 'Miks Skladdo',
+            warehouse: 'Ladudele',
             pricing: 'Hinnad',
             signIn: 'Logi sisse',
             getStarted: 'Alusta',
@@ -765,11 +784,33 @@ export default {
         hero: {
             badge: 'Hulgimüük ja jaotus — korras',
             title: 'Juhi kogu oma kaubandusäri ühest kohast',
-            subtitle: 'Kladdo koondab su tooted, laoseisu, tellimused, arved, hanked ja tarnijad ühte — koos analüütikaga, mis näitab, kuidas kõik toimib.',
+            subtitle: 'Skladdo koondab su tooted, laoseisu, tellimused, arved, hanked ja tarnijad ühte — koos analüütikaga, mis näitab, kuidas kõik toimib.',
             ctaPrimary: 'Alusta',
             ctaSecondary: 'Logi sisse',
             note: 'Tühista esimesel kuul igal ajal — esimene makse kuu hiljem.',
+            freeNote: 'Haldad ladu teiste ettevõtete jaoks? Sinu konto on tasuta.',
         },
+        problemTitle: 'Tuttav tunne?',
+        problemSubtitle: 'Enamik kaubandusettevõtteid ei kaota raha halbade tehingutega. Nad kaotavad selle numbritega, mida keegi ei usalda.',
+        problems: {
+            stale: {
+                title: 'Laoseis on oletus',
+                desc: 'Tabel ütleb 40, riiulil on 12, ja klient ootab telefonis vastust.',
+            },
+            copies: {
+                title: 'Sama faili kolm versiooni',
+                desc: 'Üks muudab koopiat oma postkastis, teine seda töölaual — ja eilsed numbrid võidavad.',
+            },
+            chase: {
+                title: 'Tähtajad on kellegi peas',
+                desc: 'Hangete tähtajad, maksmata arved ja tellimispunktid on meeles, mitte süsteemis — kuni üks neist ununeb.',
+            },
+            retype: {
+                title: 'Kõik trükitakse kaks korda',
+                desc: 'Tellimus → arve → laoleht → e-kiri. Samad read, uuesti trükitud, iga kord uue näpuveaga.',
+            },
+        },
+        problemAnswer: 'Skladdo asendab kogu selle virna ühe süsteemiga, kus tellimus uuendab laoseisu, laoseis hoiatab sind ja arve kirjutab end ise.',
         featuresTitle: 'Kõik, mida su kaubandusäri vajab',
         featuresSubtitle: 'Esimesest ostutellimusest viimase arveni — üks ühendatud süsteem tosina tabeli asemel.',
         features: {
@@ -790,7 +831,7 @@ export default {
                 desc: 'Halda mitmeosalisi hankeid, jäädvusta iga osaleja pakkumine ja vali võitjad osade kaupa — töölauaga, mis hoiab tähtajad silme ees.',
             },
             emails: {
-                title: 'Suhtle tarnijatega Kladdost lahkumata',
+                title: 'Suhtle tarnijatega Skladdost lahkumata',
                 desc: 'Koosta ja saada tootjatele kirju oma aadressilt, koos avamiste ja vastuste jälgimisega, et miski ei jääks kahe silma vahele.',
             },
             team: {
@@ -806,6 +847,91 @@ export default {
             multiCurrency: { title: 'Mitu valuutat', desc: 'Tee tehinguid mis tahes valuutas põhivaluuta kurssidega.' },
             analytics: { title: 'Analüütika', desc: 'Kasutajapõhine tulemuslikkus, käibetrendid ja tooteülevaated.' },
             permissions: { title: 'Täpsed õigused', desc: 'Mooduli kaupa vaata / loo / muuda / kustuta iga kasutaja jaoks.' },
+        },
+        warehouse: {
+            badge: 'Alati tasuta',
+            title: 'Sinu laopartner töötab Skladdos — tasuta',
+            subtitle: 'Logistikapartner, 3PL-teenusepakkuja või oma laomeeskond saab tasuta oma sisselogimise. Nad töötavad ladudes, mille sa neile määrad, sinu päris andmetega, võtmata kohta sinu paketist.',
+            points: {
+                code: {
+                    title: 'Ühenda koodiga',
+                    desc: 'Sina genereerid ühekordse ühenduskoodi, mis kehtib 48 tundi. Nemad sisestavad selle ja ongi ühendatud — ilma e-kirjakutseteta ja kinnitust ootamata.',
+                },
+                scope: {
+                    title: 'Ainult need laod, mille sa määrad',
+                    desc: 'Vali, milliseid ladusid iga partner puutuda tohib. Kui ühtegi ei määra, ei näe nad midagi; ühenduse tühistamisel lõpeb ligipääs juba järgmise päringuga.',
+                },
+                work: {
+                    title: 'Nemad komplekteerivad, võtavad vastu ja loevad üle',
+                    desc: 'Partnerid täidavad su müügitellimusi, võtavad ostutellimusi lattu ja hoiavad laoseisu ning partiid täpsena — sinu andmetes ja kohe, mitte järgmise hommiku e-kirjas.',
+                },
+                cost: {
+                    title: 'Ei kohta, paketti ega kaarti',
+                    desc: 'Laokonto registreerub kahe sammuga, ei maksa midagi ja võib teenindada nii palju kliendiettevõtteid kui soovib. Maksavad ainult ärikontod.',
+                },
+            },
+            limits: 'Partneri töötajad ei pääse kunagi su hangete, tarnijakirjade, kasutajate ega ettevõtte seadeteni ning üks lüliti peidab nende eest kõik hinnad — ühendus katab laotöö ja ei midagi muud.',
+            ctaWarehouse: 'Loo tasuta laokonto',
+            ctaBusiness: 'Alusta ärikontoga',
+        },
+        compareTitle: 'Miks mitte lihtsalt tabeliga jätkata?',
+        compareSubtitle: 'Tabelarvutus on suurepärane arvutamises ja väga halb ettevõtte ametliku andmebaasina, kus on laoseis, töötajad ja tähtajad.',
+        compare: {
+            cols: {
+                sheets: 'Tabelid ja e-kiri',
+                generic: 'Üldotstarbeline ERP / raamatupidamistarkvara',
+                skladdo: 'Skladdo',
+            },
+            rows: {
+                truth: {
+                    label: 'Kus numbrid elavad',
+                    sheets: 'Igal inimesel oma fail, mida e-kirjaga edasi saadetakse',
+                    generic: 'Üks süsteem — pärast migratsiooniprojekti',
+                    skladdo: 'Üks elav andmebaas, mida kogu meeskond jagab',
+                },
+                stock: {
+                    label: 'Laoseisud',
+                    sheets: 'Käsitsi sisestatud pärast iga tellimust, kui keegi mäletab',
+                    generic: 'Täpsed siis, kui konsultant on need seadistanud',
+                    skladdo: 'Liiguvad iga tellimusega, kuni partii ja aegumiskuupäevani',
+                },
+                access: {
+                    label: 'Kes mida näeb',
+                    sheets: 'Kõik või mitte midagi — üks fail, üks parool',
+                    generic: 'Rollimallid, mida sa ise harva juhid',
+                    skladdo: 'Vaata / loo / muuda / kustuta mooduli ja inimese kaupa',
+                },
+                partners: {
+                    label: 'Sinu ladu või 3PL',
+                    sheets: 'Laoaruanded e-kirjaga, alati päev hiljem',
+                    generic: 'Veel üks tasuline koht — või ligipääsu polegi',
+                    skladdo: 'Tasuta konto, piiratud ladudega, mille sa määrad',
+                },
+                tenders: {
+                    label: 'Hanked',
+                    sheets: 'Kaust pakkumisi ja tähtaeg, mida loodad meeles pidada',
+                    generic: 'Ei ole kaetud — eraldi tööriist ja eraldi harjumus',
+                    skladdo: 'Mitmeosalised hanked, pakkumised osalejate kaupa, tähtajahoiatused',
+                },
+                invoices: {
+                    label: 'Arved ja dokumendid',
+                    sheets: 'Dokumendimall, kopeeritud ja üle kontrollitud',
+                    generic: 'Jah, sinu raamatupidaja vormis',
+                    skladdo: 'Kaubamärgiga PDF-arved otse tellimusest',
+                },
+                history: {
+                    label: 'Mis juhtus ja kes seda tegi',
+                    sheets: 'See, mille viimane salvestus alles jättis',
+                    generic: 'Auditimoodul, tavaliselt eraldi hinnaga',
+                    skladdo: 'Täielik tegevuslogi ja kasutajapõhine tulemuslikkus, kaasas',
+                },
+                start: {
+                    label: 'Kui kiiresti alustad',
+                    sheets: 'Juba töös — ja juba probleem',
+                    generic: 'Nädalaid juurutust enne esimest tellimust',
+                    skladdo: 'Registreeru, impordi tabelid ja tööta samal päeval',
+                },
+            },
         },
         pricingTitle: 'Lihtne ja läbipaistev hinnastamine',
         pricingSubtitle: 'Vali pakett ja saad esimese kuu enne esimest makset. Muuda või tühista igal ajal.',
@@ -824,8 +950,41 @@ export default {
             unlimited: 'Piiramatu',
         },
         addonsNote: 'Lisa hanked ja tootjate e-kirjad igale paketile.',
+        pricingFree: {
+            title: 'Laokontod on tasuta',
+            desc: 'Haldad laoseisu teiste ettevõtete jaoks? Ei ole paketti valida ega kaarti sisestada — registreeru, sisesta kliendi kood ja alusta tööd.',
+            cta: 'Loo tasuta laokonto',
+        },
+        faqTitle: 'Küsimused, mis tulevad esimesena',
+        faq: {
+            warehouseFree: {
+                q: 'Kas laokonto on tõesti tasuta?',
+                a: 'Jah. Laokonto registreerub kahe sammuga, ilma paketi- ja kaardisammuta, ning võib ühenduda nii paljude kliendiettevõtetega kui soovib. Arve esitatakse ainult ärikontodele — nendele, kellele kuuluvad kataloog, tellimused ja arved.',
+            },
+            excel: {
+                q: 'Kas ma saan oma tabelid kaasa võtta?',
+                a: 'Jah. Tooted, kliendid, tootjad ja muu imporditakse CSV- või Exceli failist ning Skladdo tunneb ära veerupealkirjad inglise, eesti ja vene keeles. Puuduvad kategooriad luuakse impordi käigus, nii et faili pole tavaliselt vaja ette valmistada.',
+            },
+            lockin: {
+                q: 'Aga kui ma tahan oma andmed välja saada?',
+                a: 'Iga nimekirja saab eksportida CSV-sse või Excelisse ja seadetes on kogu ettevõtte täielik mitme lehega eksport. Sinu andmed on sinu omad ja nende kättesaamiseks kulub üks klõps, mitte kirjavahetus toega.',
+            },
+            team: {
+                q: 'Kas ma saan takistada töötajatel kõike näha?',
+                a: 'Õigusi antakse mooduli ja tegevuse kaupa, nii et laotöötaja saab kauba vastu võtta ilma ostuhindu nägemata ja müügiinimene saab koostada tellimusi kataloogi puutumata. Iga muudatus kirjutatakse tegevuslogisse.',
+            },
+            languages: {
+                q: 'Millistes keeltes see töötab?',
+                a: 'Inglise, eesti ja vene keeles, valik inimese kaupa — samad ettevõtte andmed, iga kolleeg oma keeles, sealhulgas e-kirjad ja veateated.',
+            },
+            cancel: {
+                q: 'Mis juhtub pärast registreerumist?',
+                a: 'Sa alustad valitud paketiga ja esimene kuu kestab enne esimest makset, nii et saad päris andmetega proovida ja selle aja jooksul tasuta tühistada. Paketti saab igal ajal muuta.',
+            },
+        },
         ctaTitle: 'Valmis alustama?',
         ctaSubtitle: 'Loo konto vähem kui minutiga — esimene kuu kestab enne mis tahes makset.',
+        ctaWarehouse: 'Mul on ladu (tasuta)',
         footer: {
             rights: 'Kõik õigused kaitstud.',
         },
@@ -847,6 +1006,15 @@ export default {
         previousPage: 'Eelmine leht',
         nextPage: 'Järgmine leht',
         lastPage: 'Viimane leht',
+        pageOf: 'Leht {{page}} / {{total}}',
+        sortBy: 'Sorteeri',
+        view: 'Vaade',
+        viewTable: 'Tabelivaade',
+        viewCards: 'Kaardivaade',
+        sortAsc: 'Kasvav',
+        sortDesc: 'Kahanev',
+        sortAscending: 'Sorteeritud kasvavalt, vaheta kahanevaks',
+        sortDescending: 'Sorteeritud kahanevalt, vaheta kasvavaks',
     },
     toolbar: {
         export: 'Ekspordi',
@@ -1124,6 +1292,7 @@ export default {
         notSupported: '"{{name}}" ei ole toetatud pildivorming ({{types}}).',
         tooLarge: '"{{name}}" on suurem kui 5 MB.',
         removeImage: 'Eemalda pilt',
+        addImages: 'Lisa pilte',
     },
     select: {
         placeholder: 'Vali...',
@@ -1153,6 +1322,8 @@ export default {
         cancel: 'Tühista',
         addWidget: 'Lisa vidin',
         removeWidget: 'Eemalda vidin',
+        moveUp: 'Liiguta üles',
+        moveDown: 'Liiguta alla',
         resizeWidget: 'Muuda vidina suurust',
         loading: 'Töölaua laadimine...',
         noData: 'Teie kontole pole töölaua andmeid saadaval.',
@@ -1172,12 +1343,12 @@ export default {
         titles: {
             revenueChart: 'Tulu vs kulu · 12 kuud',
             activity: 'Hiljutine tegevus',
-            lowStock: 'Madala laoseisuga tooted ({{count}})',
+            lowStock: 'Madala laoseisuga tooted',
             tenders: 'Viimased hanked',
             topClients: 'Top kliendid · see kuu',
             topProducts: 'Top tooted · see kuu',
-            expiringLots: 'Aeguvad ja aegunud partiid ({{count}})',
-            receivables: 'Laekumata arved ({{count}} üle tähtaja)',
+            expiringLots: 'Aeguvad ja aegunud partiid',
+            receivables: 'Laekumata arved',
             stockHealth: 'Laoseisu tervis',
         },
         kpi: {
@@ -1370,6 +1541,7 @@ export default {
         noSku: 'SKU puudub',
         edit: 'Muuda toodet',
         noImages: 'Pilte pole üles laaditud',
+        imagesUpdated: 'Pildid uuendatud',
         facts: {
             price: 'Hind',
             stockValue: 'Laoseisu koguväärtus',
@@ -1412,6 +1584,14 @@ export default {
             produced: 'Toodetud',
             expires: 'Aegub',
             noExpiry: 'Aegumatu',
+            searchPlaceholder: 'Otsi partii numbrit...',
+            allExpiry: 'Kõik aegumistähtajad',
+            expiry: {
+                expired: 'Aegunud',
+                expiringSoon: 'Aegub 30 päeva jooksul',
+                valid: 'Kehtiv',
+                noExpiry: 'Aegumistähtajata',
+            },
         },
         audit: {
             createdBy: 'Loonud',

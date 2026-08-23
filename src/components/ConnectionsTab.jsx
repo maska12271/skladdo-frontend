@@ -10,6 +10,7 @@ import { useModal } from '../hooks/useModal'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { safeArray } from '../utils/format'
+import Checkbox from './Checkbox'
 
 /**
  * Who works inside this company, or which companies we work inside — the two readings of the same list.
@@ -257,13 +258,7 @@ export default function ConnectionsTab() {
                                                                 : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
                                                         }`}
                                                     >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={checked}
-                                                            disabled={loading}
-                                                            onChange={() => toggleWarehouse(connection, warehouse.id)}
-                                                            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                                                        />
+                                                        <Checkbox checked={checked} disabled={loading} onChange={() => toggleWarehouse(connection, warehouse.id)} />
                                                         {warehouse.name}
                                                     </label>
                                                 )
@@ -272,13 +267,7 @@ export default function ConnectionsTab() {
                                     </div>
 
                                     <label className="flex items-start gap-3">
-                                        <input
-                                            type="checkbox"
-                                            checked={connection.canSeePrices}
-                                            disabled={loading}
-                                            onChange={() => togglePrices(connection)}
-                                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                                        />
+                                        <Checkbox checked={connection.canSeePrices} disabled={loading} onChange={() => togglePrices(connection)} className="mt-0.5" />
                                         <span>
                                             <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
                                                 {t('connections.canSeePrices')}

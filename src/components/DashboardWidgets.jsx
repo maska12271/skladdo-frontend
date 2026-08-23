@@ -4,6 +4,7 @@ import { FileText, Package, ShoppingCart } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import { Donut } from './MicroCharts'
 import { formatMoney, formatDate } from '../utils/format'
+import { useFittingRows } from '../hooks/useFittingRows'
 
 // Day-thresholds offered by the expiring-lots widget's selector.
 const EXPIRY_THRESHOLDS = [7, 30, 60, 90]
@@ -13,9 +14,21 @@ const DAY_MS = 86400000
 // the widgets are meant to be glanced at, and the list pages exist for the full set.
 export const WIDGET_ROWS = 6
 
+// A phone shows fewer, because a dashboard list is a glance rather than the full set — the list pages
+// exist for that. Widgets are no longer capped to a fixed height on a phone, so these rows are shown in
+// full rather than behind an internal scrollbar.
+export const MOBILE_WIDGET_ROWS = 5
+
+// Widgets whose rows become cards below `md` — a card is two or three times the height of a table row,
+// so the same count would not be comparable. These are the ones that get three.
+export const MOBILE_CARD_ROWS = 3
+
 // The activity feed's rows carry an icon and two lines each, so they run about half again as tall as a
 // table row — it shows one fewer to fit the same slot.
 const ACTIVITY_ROWS = 5
+
+// Measured height of one activity row — a 36px icon block plus padding and the divider.
+const ACTIVITY_ROW_PX = 58
 
 /**
  * The "showing 6 of 23" line under a truncated dashboard list. Renders nothing when the widget is
@@ -39,25 +52,30 @@ const ACTIVITY_META = {
 
 // Unified recent-activity stream across sales, purchases and tenders. Rows link to the matching
 // list page (there is no per-record detail route for orders/tenders).
-export function ActivityFeed({ items = [], onNavigate }) {
+export function ActivityFeed({ items = [], onNavigate, rowLimit = ACTIVITY_ROWS }) {
     const { t } = useTranslation()
+    // Measured rather than fixed: the widget is resizable, so how many rows belong in it depends on how
+    // tall it currently is. `rowLimit` remains the ceiling.
+    const [listRef, fitting] = useFittingRows(ACTIVITY_ROW_PX, rowLimit)
     if (items.length === 0) {
         return <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">{t('dashboard.activity.none')}</p>
     }
-    const visible = items.slice(0, ACTIVITY_ROWS)
+    const visible = items.slice(0, fitting)
     return (
         <div className="flex h-full flex-col">
-            <ul className="min-h-0 flex-1 divide-y divide-slate-100 overflow-auto dark:divide-slate-800">
+            {/* The rows share out whatever height the widget has, so a taller widget grows its rows
+                rather than leaving a band of empty space under the last one. */}
+            <ul ref={listRef} className="flex min-h-0 flex-1 flex-col divide-y divide-slate-100 overflow-hidden dark:divide-slate-800">
                 {visible.map((item) => {
                     const meta = ACTIVITY_META[item.type] || ACTIVITY_META.SALE
                     const Icon = meta.icon
                     const verb = t(`dashboard.activity.${meta.verbKey}`)
                     return (
-                        <li key={`${item.type}-${item.id}`}>
+                        <li key={`${item.type}-${item.id}`} className="flex min-h-0 flex-1 items-center">
                             <button
                                 type="button"
                                 onClick={() => onNavigate?.(meta.route)}
-                                className="flex w-full items-center gap-3 py-2.5 text-left transition hover:opacity-80"
+                                className="flex w-full items-center gap-3 py-1.5 text-left transition hover:opacity-80"
                             >
                                 <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${meta.tone}`}>
                                     <Icon className="h-4 w-4" />
@@ -83,7 +101,7 @@ export function ActivityFeed({ items = [], onNavigate }) {
 // Lots that are already expired (red) or expiring within a user-chosen day window (amber). The
 // backend ships every lot expiring within its horizon (90 days) plus all expired ones; the selector
 // just narrows the "soon" set client-side. Rows link to the product detail page.
-export function ExpiringLots({ rows = [], onNavigate }) {
+export function ExpiringLots({ rows = [], onNavigate, rowLimit = WIDGET_ROWS }) {
     const { t } = useTranslation()
     const [days, setDays] = useState(30)
 
@@ -100,7 +118,7 @@ export function ExpiringLots({ rows = [], onNavigate }) {
     const expired = classified.filter((r) => r.expired)
     const soon = classified.filter((r) => !r.expired && r.daysLeft <= days)
     const matching = [...expired, ...soon] // backend already sorts by expiry asc, so expired leads
-    const visible = matching.slice(0, WIDGET_ROWS)
+    const visible = matching.slice(0, rowLimit)
 
     return (
         <div className="flex h-full flex-col">
@@ -115,7 +133,7 @@ export function ExpiringLots({ rows = [], onNavigate }) {
                             key={d}
                             type="button"
                             onClick={() => setDays(d)}
-                            className={`rounded-md px-2 py-1 text-xs font-medium transition ${
+                            className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 py-1 text-xs font-medium transition lg:min-h-0 lg:min-w-0 ${
                                 days === d
                                     ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                                     : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
@@ -131,7 +149,41 @@ export function ExpiringLots({ rows = [], onNavigate }) {
                 <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">{t('dashboard.expiry.none')}</p>
             ) : (
                 <>
-                <div className="min-h-0 flex-1 overflow-auto">
+                {/* Five columns will not fit a phone, and a widget is the wrong place to pan sideways
+                    through a table — so below `md` each lot is a small card instead. */}
+                <div className="min-h-0 flex-1 space-y-1.5 overflow-auto md:hidden">
+                    {visible.map((r, i) => (
+                        <button
+                            key={`card-${r.productId}-${r.lotNumber}-${i}`}
+                            type="button"
+                            onClick={onNavigate && r.productId ? () => onNavigate(`/products/${r.productId}`) : undefined}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 p-2 text-left dark:border-slate-800"
+                        >
+                            <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium text-slate-700 dark:text-slate-200">
+                                    {r.productName || '—'}
+                                </span>
+                                <span className="block truncate text-xs text-slate-400 dark:text-slate-500">
+                                    {[r.lotNumber, r.warehouseName].filter(Boolean).join(' · ')} · {r.quantity}
+                                </span>
+                            </span>
+                            <span className="shrink-0 text-right">
+                                <span className={`block text-xs ${r.expired ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                                    {formatDate(r.expiryDate)}
+                                </span>
+                                <span className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-xs font-semibold ${
+                                    r.expired
+                                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                                        : 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+                                }`}>
+                                    {r.expired ? t('dashboard.expiry.expiredTag') : `${r.daysLeft}d`}
+                                </span>
+                            </span>
+                        </button>
+                    ))}
+                </div>
+
+                <div className="hidden min-h-0 flex-1 overflow-auto md:block">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400 dark:border-slate-800">
@@ -195,10 +247,10 @@ function ReceivableStat({ label, value, sub, tone }) {
         amber: 'text-amber-600 dark:text-amber-400',
     }[tone] || 'text-slate-800 dark:text-slate-100'
     return (
-        <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
-            <div className={`mt-1 text-lg font-bold tabular-nums ${toneClass}`}>{value}</div>
-            <div className="text-xs text-slate-400 dark:text-slate-500">{sub}</div>
+        <div className="rounded-xl border border-slate-200 p-2 sm:p-3 dark:border-slate-800">
+            <div className="truncate text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:text-xs">{label}</div>
+            <div className={`mt-1 truncate text-xs font-bold tabular-nums sm:text-lg ${toneClass}`}>{value}</div>
+            <div className="truncate text-[10px] text-slate-400 sm:text-xs dark:text-slate-500">{sub}</div>
         </div>
     )
 }
@@ -212,39 +264,40 @@ export function Receivables({ data, onNavigate }) {
     const { t } = useTranslation()
     if (!data) return null
     const rows = data.topOverdue || []
-    const aging = (data.aging || []).map((b) => ({
+    const agingAll = (data.aging || []).map((b) => ({
         key: b.bucket,
         label: t(`dashboard.receivables.aging.${b.bucket}`),
         value: Number(b.amount) || 0,
         color: AGING_COLORS[b.bucket] || 'slate',
     }))
+    // Nothing overdue means nothing to slice: the donut would only repeat the message under it.
+    const aging = agingAll.some((b) => b.value > 0) ? agingAll : []
     return (
         <div className="flex h-full flex-col">
-            {/* Totals beside the aging split, so the widget leads with one compact band rather than two.
-                The donut covers every overdue invoice, not just the rows listed below it. */}
-            <div className="flex flex-wrap items-start gap-4">
-                <div className="grid min-w-[260px] flex-1 grid-cols-3 gap-3">
-                    <ReceivableStat label={t('dashboard.receivables.unpaid')} value={formatMoney(data.unpaidTotal)} sub={t('dashboard.receivables.countInvoices', { count: data.unpaidCount })} tone="slate" />
-                    <ReceivableStat label={t('dashboard.receivables.overdue')} value={formatMoney(data.overdueTotal)} sub={t('dashboard.receivables.countInvoices', { count: data.overdueCount })} tone="rose" />
-                    <ReceivableStat label={t('dashboard.receivables.penalty')} value={formatMoney(data.penaltyAccruedTotal)} sub={t('dashboard.receivables.accrued')} tone="amber" />
-                </div>
-                {aging.length > 0 && (
-                    <div className="shrink-0 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-                        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">{t('dashboard.receivables.agingTitle')}</div>
-                        <Donut
-                            segments={aging}
-                            centerValue={data.overdueCount ?? 0}
-                            centerLabel={t('dashboard.receivables.overdue')}
-                            emptyText={t('dashboard.receivables.none')}
-                            formatValue={(v) => formatMoney(v)}
-                            size={92}
-                            thickness={12}
-                        />
-                    </div>
-                )}
+            {/* Three bands, top to bottom: the totals, then the aging split, then the largest debts.
+                Side by side the donut and the totals fought for the same row and the widget had to be
+                wide before either was legible; stacked, each gets the full width at any size. */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <ReceivableStat label={t('dashboard.receivables.unpaid')} value={formatMoney(data.unpaidTotal)} sub={t('dashboard.receivables.countInvoices', { count: data.unpaidCount })} tone="slate" />
+                <ReceivableStat label={t('dashboard.receivables.overdue')} value={formatMoney(data.overdueTotal)} sub={t('dashboard.receivables.countInvoices', { count: data.overdueCount })} tone="rose" />
+                <ReceivableStat label={t('dashboard.receivables.penalty')} value={formatMoney(data.penaltyAccruedTotal)} sub={t('dashboard.receivables.accrued')} tone="amber" />
             </div>
 
-            <div className="mt-4 min-h-0 flex-1 overflow-auto">
+            {aging.length > 0 && (
+                <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                    <div className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">{t('dashboard.receivables.agingTitle')}</div>
+                    <Donut
+                        segments={aging}
+                        centerValue={data.overdueCount ?? 0}
+                        centerLabel={t('dashboard.receivables.overdue')}
+                        formatValue={(v) => formatMoney(v)}
+                        size={92}
+                        thickness={12}
+                    />
+                </div>
+            )}
+
+            <div className="mt-3 min-h-0 flex-1 overflow-auto">
                 {rows.length === 0 ? (
                     <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">{t('dashboard.receivables.none')}</p>
                 ) : (

@@ -83,7 +83,7 @@ export function Donut({ segments = [], centerValue, centerLabel, emptyText, size
  * Bare trend line with a soft area beneath — no axes or labels, meant to sit inside a KPI card. The
  * vertical scale spans the series' own min..max so a flat-but-nonzero series still reads as flat.
  */
-export function Sparkline({ values = [], color = 'teal', width = 96, height = 28 }) {
+export function Sparkline({ values = [], color = 'teal', width = 96, height = 28, responsive = false }) {
     const nums = values.map((v) => Number(v) || 0)
     if (nums.length < 2) return null
 
@@ -95,11 +95,30 @@ export function Sparkline({ values = [], color = 'teal', width = 96, height = 28
     const points = nums.map((v, i) => `${(i * step).toFixed(1)},${y(v).toFixed(1)}`)
     const accent = ACCENT[color] || ACCENT.teal
 
+    // `responsive` lets the sparkline fill whatever width its container gives it, so it can yield space
+    // to the figure beside it instead of holding a fixed strip. `preserveAspectRatio="none"` is what makes
+    // it stretch rather than letterbox; `vector-effect` then keeps the line an even thickness despite the
+    // uneven scale, and the end dot a circle rather than an ellipse.
     return (
-        <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} className="shrink-0 overflow-visible" aria-hidden="true">
+        <svg
+            viewBox={`0 0 ${width} ${height}`}
+            width={responsive ? undefined : width}
+            height={responsive ? undefined : height}
+            preserveAspectRatio={responsive ? 'none' : undefined}
+            className={responsive ? 'h-full w-full overflow-visible' : 'shrink-0 overflow-visible'}
+            aria-hidden="true"
+        >
             <polygon points={`0,${height} ${points.join(' ')} ${width},${height}`} className={`${accent.fill} opacity-10`} />
-            <polyline points={points.join(' ')} fill="none" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" className={accent.stroke} />
-            <circle cx={width} cy={y(nums[nums.length - 1])} r="2" className={accent.fill} />
+            <polyline
+                points={points.join(' ')}
+                fill="none"
+                strokeWidth="1.75"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                vectorEffect={responsive ? 'non-scaling-stroke' : undefined}
+                className={accent.stroke}
+            />
+            {!responsive && <circle cx={width} cy={y(nums[nums.length - 1])} r="2" className={accent.fill} />}
         </svg>
     )
 }

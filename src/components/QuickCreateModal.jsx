@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext'
 import { useSettings } from '../context/SettingsContext'
 import { safeArray } from '../utils/format'
 import { X } from 'lucide-react'
+import { OVERLAY_BACKDROP } from '../constants/overlay'
 
 // `createdKey` points at the matching list page's "<entity> created" toast.
 const CONFIGS = {
@@ -115,7 +116,7 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
     if (!isOpen || !config) return null
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4">
+        <div className={`fixed inset-0 z-[60] flex items-center justify-center p-4 ${OVERLAY_BACKDROP}`}>
             <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
                 <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
                     <h2 className="text-lg font-semibold">{t(config.titleKey)}</h2>
@@ -168,7 +169,7 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
 
                     {type === 'product' && (
                         <>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <FormField id="qc-sku" label={t('common.sku')} name="sku" value={form.sku || ''} onChange={handleChange} placeholder={t('common.optional')} />
                                 <FormField id="qc-unit" label={t('common.unit')} name="unit" value={form.unit || ''} onChange={handleChange} placeholder={t('quickCreate.unitPlaceholder')} />
                             </div>

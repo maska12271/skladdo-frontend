@@ -76,16 +76,22 @@ export default function PlanBillingTab() {
 
     if (loading || !data) return <LoadingBlock />
 
-    const { plan, status, trialEndsAt, currentPeriodEnd, cancelAtPeriodEnd, monthlyPrice, currency, usage, plans, addons } = data
+    const { plan, status, trialEndsAt, currentPeriodEnd, cancelAtPeriodEnd, monthlyPrice, currency, usage, plans, addons, freeUntil } = data
     const isExpired = status === 'EXPIRED'
     // A free plan (a warehouse account) is never billed and cannot be switched or cancelled, so the
     // renewal date and the cancel control would both be describing something that does not happen. The
     // backend already sends it nothing to switch to; this drops the rest of the billing furniture.
     const isFreePlan = !Number(monthlyPrice)
 
-    // The single dated line under the plan name: cancellation wins, then trial, then next payment.
+    // A free period granted by Skladdo. The company cannot change it, but it must not be told it is about
+    // to be charged on a date when it was promised the opposite — so this outranks the renewal line.
+    const sponsored = Boolean(freeUntil) && new Date(freeUntil) > new Date()
+
+    // The single dated line under the plan name: a free period wins, then cancellation, then trial, then
+    // next payment.
     let periodLine = null
     if (isFreePlan) periodLine = null
+    else if (sponsored) periodLine = t('settings.plan.freeUntil', { date: fmtDate(freeUntil) })
     else if (cancelAtPeriodEnd && currentPeriodEnd) periodLine = t('settings.plan.cancelsOn', { date: fmtDate(currentPeriodEnd) })
     else if (status === 'TRIALING' && trialEndsAt) periodLine = t('settings.plan.trialEnds', { date: fmtDate(trialEndsAt) })
     else if (currentPeriodEnd) periodLine = t('settings.plan.nextPayment', { date: fmtDate(currentPeriodEnd) })
@@ -103,7 +109,9 @@ export default function PlanBillingTab() {
             <div className="flex items-start gap-2 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm dark:border-sky-900/60 dark:bg-sky-950/30">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
                 <p className="text-sky-800 dark:text-sky-300/90">
-                    {t(isFreePlan ? 'settings.plan.warehouseFree' : 'settings.plan.billingNote')}
+                    {sponsored
+                        ? t('settings.plan.sponsoredNote', { date: fmtDate(freeUntil) })
+                        : t(isFreePlan ? 'settings.plan.warehouseFree' : 'settings.plan.billingNote')}
                 </p>
             </div>
 

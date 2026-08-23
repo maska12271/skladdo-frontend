@@ -50,3 +50,19 @@ export function toNumber(value, fallback = 0) {
     const n = Number(cleaned)
     return Number.isFinite(n) ? n : fallback
 }
+/**
+ * A byte count as something a person reads: "1.4 MB", "812 KB".
+ *
+ * Binary units (1024) because that is what storage consoles report, so the figure here matches what the
+ * bucket says rather than being 5% adrift from it.
+ */
+export function formatBytes(bytes) {
+    const value = Number(bytes)
+    if (!Number.isFinite(value) || value <= 0) return '0 B'
+    const units = ['B', 'KB', 'MB', 'GB', 'TB']
+    const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1)
+    const scaled = value / 1024 ** exponent
+    // Whole bytes read oddly as "1.0 B"; anything larger gets one decimal until it reaches three digits.
+    const decimals = exponent === 0 || scaled >= 100 ? 0 : 1
+    return `${scaled.toFixed(decimals)} ${units[exponent]}`
+}

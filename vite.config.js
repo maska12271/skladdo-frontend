@@ -11,5 +11,8 @@ export default defineConfig({
     // paying for a DOM in every test.
     environment: 'node',
     include: ['src/**/*.test.{js,jsx}'],
+    // Installs a `matchMedia` jsdom does not provide. Harmless in the node environment, where it finds
+    // no `window` and does nothing.
+    setupFiles: ['./vitest.setup.js'],
   },
 })

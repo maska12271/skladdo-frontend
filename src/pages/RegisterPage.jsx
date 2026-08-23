@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, Navigate, Link, useSearchParams } from 'react-router-dom'
+import BackToHome from '../components/BackToHome'
 import { useTranslation } from 'react-i18next'
 import {
     Loader2, CreditCard, Lock, Eye, EyeOff, ShieldCheck, CheckCircle2, Check,
     Building2, Warehouse, ArrowLeft, ArrowRight, Sparkles,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { apiGet } from '../api/client'
 import { FormField } from '../components/FormField.jsx'
 import PasswordStrength from '../components/PasswordStrength.jsx'
 import { PLANS, PLAN_IDS, DEFAULT_PLAN } from '../config/plans'
@@ -52,6 +54,13 @@ export default function RegisterPage() {
     const requestedPlan = (searchParams.get('plan') || '').toUpperCase()
     const deepLinkedPlan = PLAN_IDS.includes(requestedPlan) ? requestedPlan : null
 
+    // An operator-issued invitation (/register?invite=CODE). Its terms are looked up rather than read
+    // from the URL: the code is the only thing that travels, and the server applies the terms again at
+    // signup, so nothing here can be talked into granting a better deal.
+    const inviteCode = searchParams.get('invite') || ''
+    const [invite, setInvite] = useState(null)
+    const [inviteChecked, setInviteChecked] = useState(!inviteCode)
+
     const [step, setStep] = useState(0)
     // Arriving from a pricing card already implies a business account, so that is preselected - but the
     // choice is still shown, because it is the one answer that can never be corrected later.
@@ -70,14 +79,55 @@ export default function RegisterPage() {
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
+    // Resolve the invitation before the form is used, so a link that has been revoked or used up says so
+    // up front instead of after everything has been typed in. An unknown code is not an error response —
+    // the endpoint answers `valid: false` — so only a network failure lands in the catch.
+    useEffect(() => {
+        if (!inviteCode) return
+        let cancelled = false
+        apiGet(`/public/invite?code=${encodeURIComponent(inviteCode)}`)
+            .then((res) => {
+                if (cancelled) return
+                setInvite(res)
+                if (res?.valid) {
+                    if (res.accountType) setAccountType(res.accountType)
+                    if (res.plan) setPlan(res.plan)
+                }
+            })
+            .catch(() => { /* treated as no invitation; the ordinary signup still works */ })
+            .finally(() => {
+                if (!cancelled) setInviteChecked(true)
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [inviteCode])
+
     if (isAuthenticated) {
         return <Navigate to="/dashboard" replace />
     }
 
+    const validInvite = invite?.valid ? invite : null
     const isWarehouse = accountType === 'WAREHOUSE'
+
+    // The invitation answers some of the questions, so those steps disappear rather than being shown
+    // pre-filled and un-editable — a step you cannot change is just a page to click past. The card step
+    // goes too when the link carries free days: it is a preview that never sends anything anyway, and
+    // asking for a card while promising "free for 30 days" reads as a trick.
     // Until a type is chosen the longer path is shown, so choosing "warehouse" visibly drops the plan and
     // payment steps - the clearest way to say that this account is not going to be asked to pay.
-    const steps = isWarehouse ? WAREHOUSE_STEPS : BUSINESS_STEPS
+    let steps
+    if (validInvite) {
+        steps = []
+        if (!validInvite.accountType) steps.push('type')
+        steps.push('details')
+        if (!isWarehouse) {
+            if (!validInvite.plan) steps.push('plan')
+            if (!validInvite.freeDays) steps.push('payment')
+        }
+    } else {
+        steps = isWarehouse ? WAREHOUSE_STEPS : BUSINESS_STEPS
+    }
     const current = steps[step]
     const isLast = step === steps.length - 1
     const selectedPlan = PLANS.find((p) => p.id === plan) || PLANS[0]
@@ -142,6 +192,10 @@ export default function RegisterPage() {
                 password,
                 accountType,
                 ...(isWarehouse ? {} : { plan }),
+                // Only sent when it actually works. A code the server would reject is never attached, so
+                // somebody arriving on a dead link still gets an ordinary signup rather than an error —
+                // they were told about it above, so nothing is being decided behind their back.
+                ...(validInvite ? { inviteCode } : {}),
             })
             navigate('/dashboard', { replace: true })
         } catch (err) {
@@ -180,14 +234,31 @@ export default function RegisterPage() {
             </div>
 
             <div className="fade-in-up shadow-pop relative w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 dark:border-slate-800 dark:bg-slate-900">
+                <BackToHome className="mb-4" />
                 <div className="mb-6 text-center">
                     <Link to="/" aria-label={t('common.backToHome')}>
-                        <img src="/kladdo-logo.svg" alt="" aria-hidden="true" className="mx-auto mb-2 h-9 w-auto" />
+                        <img src="/skladdo-logo.svg" alt="" aria-hidden="true" className="mx-auto mb-2 h-9 w-auto" />
                     </Link>
                     <h1 className="text-xl font-bold tracking-tight text-teal-700 dark:text-teal-400">
                         {t('register.title')}
                     </h1>
                 </div>
+
+                {validInvite && (
+                    <div className="mb-5 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800 dark:border-teal-800 dark:bg-teal-900/20 dark:text-teal-200">
+                        <p className="font-medium">{t('register.invite.title')}</p>
+                        {/* `count` rather than a named variable: it is what i18next selects the plural
+                            form from, and any other name renders the raw key instead of the sentence. */}
+                        {validInvite.freeDays ? (
+                            <p className="mt-0.5">{t('register.invite.freeDays', { count: validInvite.freeDays })}</p>
+                        ) : null}
+                    </div>
+                )}
+                {inviteCode && inviteChecked && !validInvite && (
+                    <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                        {t('register.invite.invalid')}
+                    </div>
+                )}
 
                 <Stepper steps={steps} current={step} onSelect={goToStep} t={t} />
 

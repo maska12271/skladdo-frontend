@@ -190,7 +190,7 @@ export default function OrderDetailPage({ type = 'sales' }) {
             </div>
 
             {/* Money / quantity summary */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
                 {canSeePrices && (
                     <StatCard
                         title={isSales ? t('orderDetail.stats.totalEarned') : t('orderDetail.stats.totalSpend')}
@@ -224,6 +224,7 @@ export default function OrderDetailPage({ type = 'sales' }) {
                     perms={invoicePerms}
                     canSeePrices={canSeePrices}
                     orderGross={Number(tot.totalInclTax) || 0}
+                    orderCurrency={orderCurrency}
                 />
             )}
 
@@ -264,7 +265,7 @@ export default function OrderDetailPage({ type = 'sales' }) {
             <div className="grid gap-6 lg:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
                     <h2 className="mb-4 text-lg font-semibold">{t('orderDetail.details')}</h2>
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
+                    <dl className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
                         <Fact label={t('orderDetail.facts.orderDate')} value={formatDate(details.orderDate)} />
                         <Fact label={t('orderDetail.facts.closingDate')} value={formatDate(details.closingDate)} />
                         {!isSales && <Fact label={t('orderDetail.facts.expectedDelivery')} value={formatDate(details.expectedDeliveryDate)} />}
@@ -344,7 +345,7 @@ function StatusTimeline({ events }) {
  * prepayment) the deposit up front, so nothing is generated with silent defaults. Voided invoices are
  * counted below for history.
  */
-function InvoiceSection({ orderId, orderStatus, invoices, setInvoices, perms, canSeePrices, orderGross }) {
+function InvoiceSection({ orderId, orderStatus, invoices, setInvoices, perms, canSeePrices, orderGross, orderCurrency }) {
     const { t } = useTranslation()
     const toast = useToast()
     const [busy, setBusy] = useState(false)
@@ -513,7 +514,7 @@ function InvoiceCard({ inv, perms, canSeePrices, busy, onDownload, onMarkPaid, o
                         {isPrepayment ? t('invoices.type.PREPAYMENT') : t('invoices.type.FINAL')}
                     </span>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap justify-end gap-2">
                     <button
                         onClick={onDownload}
                         disabled={busy}
@@ -779,7 +780,7 @@ function PurchaseInvoiceSection({ orderId, fileName, hasFile, canEdit, onChanged
             data.append('file', file)
             const uploaded = await apiUpload('/upload/document', data)
             const name = uploaded.name || file.name
-            await apiPut(`/purchase-orders/${orderId}/invoice-file`, { invoiceFileUrl: uploaded.url, invoiceFileName: name })
+            await apiPut(`/purchase-orders/${orderId}/invoice-file`, { invoiceFileKey: uploaded.key, invoiceFileName: name })
             onChanged({ hasInvoiceFile: true, invoiceFileName: name })
             toast.success(t('purchaseOrders.invoice.uploaded'))
         } finally {
@@ -819,7 +820,7 @@ function PurchaseInvoiceSection({ orderId, fileName, hasFile, canEdit, onChanged
                         <FileText className="h-4 w-4 shrink-0 text-slate-400" />
                         <span className="min-w-0 truncate">{fileName}</span>
                     </span>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                         <button
                             onClick={download}
                             disabled={busy}

@@ -5,6 +5,9 @@ export default {
         showPassword: 'Show password',
         hidePassword: 'Hide password',
         backToHome: 'Back to home',
+        moreActions: 'More actions',
+        filters: 'Filters',
+        clearFilters: 'Clear filters',
         cancel: 'Cancel',
         save: 'Save',
         saveChanges: 'Save changes',
@@ -83,7 +86,7 @@ export default {
         incoming: 'Incoming purchase orders',
     },
     nav: {
-        appName: 'Kladdo',
+        appName: 'Skladdo',
         tagline: 'Orders, tenders, clients, products',
         dashboard: 'Dashboard',
         products: 'Products',
@@ -107,6 +110,12 @@ export default {
         signOut: 'Sign out',
         expand: 'Expand sidebar',
         collapse: 'Collapse sidebar',
+        menu: 'Navigation',
+        openMenu: 'Open navigation',
+        closeMenu: 'Close navigation',
+        theme: 'Theme',
+        themeLight: 'Light',
+        themeDark: 'Dark',
     },
     roles: {
         OWNER: 'Owner',
@@ -371,6 +380,8 @@ export default {
             },
             trialEnds: 'Trial ends {{date}}',
             nextPayment: 'Renews {{date}}',
+            freeUntil: 'Free until {{date}}',
+            sponsoredNote: 'Your account is free until {{date}}. You will not be charged before then.',
             cancelsOn: 'Cancels on {{date}}',
             cancel: 'Cancel plan',
             resume: 'Resume plan',
@@ -688,9 +699,15 @@ export default {
         continue: 'Continue',
         accountType: 'What kind of account is this?',
         accountTypeTitle: 'What kind of account do you need?',
-        accountTypeSubtitle: 'Kladdo works differently for each — pick the one that matches how you operate.',
+        accountTypeSubtitle: 'Skladdo works differently for each — pick the one that matches how you operate.',
         accountTypeHint: 'This cannot be changed later.',
         pickAccountType: 'Please choose an account type to continue.',
+        invite: {
+            title: "You've been invited to Skladdo.",
+            freeDays_one: 'Your first day is free — no card needed.',
+            freeDays_other: 'Your first {{count}} days are free — no card needed.',
+            invalid: 'That invitation link is no longer valid, but you can still sign up below.',
+        },
         accountTypes: {
             BUSINESS: {
                 name: 'Business',
@@ -761,6 +778,8 @@ export default {
     landing: {
         nav: {
             features: 'Features',
+            why: 'Why Skladdo',
+            warehouse: 'For warehouses',
             pricing: 'Pricing',
             signIn: 'Sign in',
             getStarted: 'Get started',
@@ -768,11 +787,33 @@ export default {
         hero: {
             badge: 'Wholesale & distribution, handled',
             title: 'Run your whole trading business in one place',
-            subtitle: 'Kladdo brings your products, inventory, orders, invoices, tenders and suppliers together — with the analytics to see how it is all performing.',
+            subtitle: 'Skladdo brings your products, inventory, orders, invoices, tenders and suppliers together — with the analytics to see how it is all performing.',
             ctaPrimary: 'Get started',
             ctaSecondary: 'Sign in',
             note: 'Cancel anytime in your first month — first payment a month later.',
+            freeNote: 'Run a warehouse for other companies? Your account is free.',
         },
+        problemTitle: 'Sound familiar?',
+        problemSubtitle: 'Most trading companies do not lose money on bad deals. They lose it on numbers nobody trusts.',
+        problems: {
+            stale: {
+                title: 'The stock figure is a guess',
+                desc: 'The sheet says 40, the shelf says 12, and the customer is on the phone waiting for an answer.',
+            },
+            copies: {
+                title: 'Three versions of the same file',
+                desc: 'Someone edits the copy in their inbox, someone else the one on the desktop, and yesterday’s numbers win.',
+            },
+            chase: {
+                title: 'Deadlines live in someone’s head',
+                desc: 'Tender closings, unpaid invoices and reorder points are remembered rather than tracked — until one of them is missed.',
+            },
+            retype: {
+                title: 'Everything gets typed twice',
+                desc: 'Order → invoice → stock sheet → email. The same lines, retyped, picking up a new typo each time.',
+            },
+        },
+        problemAnswer: 'Skladdo replaces that whole pile with one system where the order updates the stock, the stock warns you, and the invoice writes itself.',
         featuresTitle: 'Everything your trade business needs',
         featuresSubtitle: 'From the first purchase order to the final invoice — one connected system instead of a dozen spreadsheets.',
         features: {
@@ -793,7 +834,7 @@ export default {
                 desc: 'Manage multi-part tenders, capture every participant offer, and pick winners per part — with a dashboard that keeps deadlines in view.',
             },
             emails: {
-                title: 'Reach suppliers without leaving Kladdo',
+                title: 'Reach suppliers without leaving Skladdo',
                 desc: 'Compose and send outreach to manufacturers from your own address, with open and reply tracking so nothing falls through the cracks.',
             },
             team: {
@@ -809,6 +850,91 @@ export default {
             multiCurrency: { title: 'Multi-currency', desc: 'Transact in any currency with base-currency exchange rates.' },
             analytics: { title: 'Analytics', desc: 'Per-user performance, revenue trends and product insights.' },
             permissions: { title: 'Granular permissions', desc: 'Per-module view / create / edit / delete for every user.' },
+        },
+        warehouse: {
+            badge: 'Free forever',
+            title: 'Your warehouse partner works in Skladdo — for free',
+            subtitle: 'A logistics provider, a 3PL or your own depot team can have their own login at no cost. They work inside the warehouses you assign them, on your live data, without taking a seat on your plan.',
+            points: {
+                code: {
+                    title: 'Connect with a code',
+                    desc: 'You generate a one-time connection code that is valid for 48 hours. They redeem it and you are linked — no email invitations, no waiting for approval.',
+                },
+                scope: {
+                    title: 'Only the warehouses you assign',
+                    desc: 'Choose which of your warehouses each partner may touch. Assign none and they see nothing; revoke the connection and their access ends on the next request.',
+                },
+                work: {
+                    title: 'They pick, receive and count',
+                    desc: 'Partners fulfil your sales orders, book in your purchase orders and keep stock and lots accurate — in your data, as it happens, instead of in a report emailed the next morning.',
+                },
+                cost: {
+                    title: 'No seat, no plan, no card',
+                    desc: 'A warehouse account signs up in two steps, pays nothing and can serve as many client companies as it likes. Only business accounts pay.',
+                },
+            },
+            limits: 'Partner staff never reach your tenders, supplier emails, users or company settings, and one switch hides every price from them — the connection covers warehouse work and nothing else.',
+            ctaWarehouse: 'Create a free warehouse account',
+            ctaBusiness: 'Start as a business',
+        },
+        compareTitle: 'Why not just keep the spreadsheet?',
+        compareSubtitle: 'Spreadsheets are excellent at arithmetic and terrible at being the system of record for a business with stock, staff and deadlines.',
+        compare: {
+            cols: {
+                sheets: 'Spreadsheets & email',
+                generic: 'Generic ERP / accounting suite',
+                skladdo: 'Skladdo',
+            },
+            rows: {
+                truth: {
+                    label: 'Where the numbers live',
+                    sheets: 'A file per person, emailed around',
+                    generic: 'One system — after a migration project',
+                    skladdo: 'One live database your whole team shares',
+                },
+                stock: {
+                    label: 'Stock levels',
+                    sheets: 'Typed in by hand after each order, when someone remembers',
+                    generic: 'Accurate once a consultant has configured it',
+                    skladdo: 'Move with every order, down to lot and expiry date',
+                },
+                access: {
+                    label: 'Who can see what',
+                    sheets: 'All or nothing — one file, one password',
+                    generic: 'Role templates you rarely control yourself',
+                    skladdo: 'View / create / edit / delete per module, per person',
+                },
+                partners: {
+                    label: 'Your warehouse or 3PL',
+                    sheets: 'Stock reports by email, always a day behind',
+                    generic: 'Another paid seat — or no access at all',
+                    skladdo: 'A free account limited to the warehouses you assign',
+                },
+                tenders: {
+                    label: 'Tenders',
+                    sheets: 'A folder of offers and a deadline you hope to recall',
+                    generic: 'Not covered — a separate tool and a separate habit',
+                    skladdo: 'Multi-part tenders, offers per participant, deadline alerts',
+                },
+                invoices: {
+                    label: 'Invoices & documents',
+                    sheets: 'A template document, copy-pasted and re-checked',
+                    generic: 'Yes, in your accountant’s format',
+                    skladdo: 'Branded PDF invoices straight from the order',
+                },
+                history: {
+                    label: 'What happened, and who did it',
+                    sheets: 'Whatever the last save kept',
+                    generic: 'An audit module, usually priced separately',
+                    skladdo: 'Full activity log and per-user performance, included',
+                },
+                start: {
+                    label: 'Time to get going',
+                    sheets: 'Already running — and already the problem',
+                    generic: 'Weeks of implementation before the first order',
+                    skladdo: 'Sign up, import your spreadsheets, work the same day',
+                },
+            },
         },
         pricingTitle: 'Simple, transparent pricing',
         pricingSubtitle: 'Pick a plan and get your first month before the first payment. Change or cancel any time.',
@@ -827,8 +953,41 @@ export default {
             unlimited: 'Unlimited',
         },
         addonsNote: 'Add tenders and manufacturer emails to any plan.',
+        pricingFree: {
+            title: 'Warehouse accounts are free',
+            desc: 'Handling stock for other companies? There is no plan to choose and no card to enter — sign up, redeem your client’s code and start working.',
+            cta: 'Create a free warehouse account',
+        },
+        faqTitle: 'Questions people ask first',
+        faq: {
+            warehouseFree: {
+                q: 'Is the warehouse account really free?',
+                a: 'Yes. A warehouse account signs up in two steps, with no plan step and no card step, and can connect to as many client companies as it likes. Only business accounts — the ones that own the catalogue, the orders and the invoices — are billed.',
+            },
+            excel: {
+                q: 'Can I bring my spreadsheets with me?',
+                a: 'Yes. Products, clients, manufacturers and more import from CSV or Excel, and Skladdo recognises column headers in English, Estonian and Russian. Missing categories are created as it goes, so you rarely have to prepare the file first.',
+            },
+            lockin: {
+                q: 'What if I want my data back out?',
+                a: 'Every list exports to CSV or Excel, and Settings holds a full multi-sheet export of the whole company. Your data is yours, and getting it out takes one click — not a support ticket.',
+            },
+            team: {
+                q: 'Can I stop staff from seeing everything?',
+                a: 'Permissions are granted per module and per action, so a warehouse worker can receive stock without seeing purchase prices, and a salesperson can raise orders without touching the catalogue. Every change is written to the activity log.',
+            },
+            languages: {
+                q: 'What languages does it work in?',
+                a: 'English, Estonian and Russian, chosen per person — the same company data, each colleague in their own language, including the emails and error messages.',
+            },
+            cancel: {
+                q: 'What happens after I sign up?',
+                a: 'You start on the plan you picked and your first month runs before the first payment, so you can try it with real data and cancel free of charge inside that window. Plans can be changed at any time.',
+            },
+        },
         ctaTitle: 'Ready to get started?',
         ctaSubtitle: 'Create your account in under a minute — your first month runs before any payment.',
+        ctaWarehouse: 'I run a warehouse (free)',
         footer: {
             rights: 'All rights reserved.',
         },
@@ -850,6 +1009,15 @@ export default {
         previousPage: 'Previous page',
         nextPage: 'Next page',
         lastPage: 'Last page',
+        pageOf: 'Page {{page}} of {{total}}',
+        sortBy: 'Sort by',
+        view: 'View',
+        viewTable: 'Table view',
+        viewCards: 'Card view',
+        sortAsc: 'Ascending',
+        sortDesc: 'Descending',
+        sortAscending: 'Sorted ascending, switch to descending',
+        sortDescending: 'Sorted descending, switch to ascending',
     },
     toolbar: {
         export: 'Export',
@@ -1129,6 +1297,7 @@ export default {
         notSupported: '"{{name}}" is not a supported image type ({{types}}).',
         tooLarge: '"{{name}}" is larger than 5 MB.',
         removeImage: 'Remove image',
+        addImages: 'Add images',
     },
     select: {
         placeholder: 'Select...',
@@ -1158,6 +1327,8 @@ export default {
         cancel: 'Cancel',
         addWidget: 'Add widget',
         removeWidget: 'Remove widget',
+        moveUp: 'Move up',
+        moveDown: 'Move down',
         resizeWidget: 'Resize widget',
         loading: 'Loading dashboard...',
         noData: 'No dashboard data available for your account.',
@@ -1177,12 +1348,12 @@ export default {
         titles: {
             revenueChart: 'Revenue vs spend · 12 months',
             activity: 'Recent activity',
-            lowStock: 'Low stock products ({{count}})',
+            lowStock: 'Low stock products',
             tenders: 'Latest tenders',
             topClients: 'Top clients · this month',
             topProducts: 'Top products · this month',
-            expiringLots: 'Expiring & expired lots ({{count}})',
-            receivables: 'Outstanding invoices ({{count}} overdue)',
+            expiringLots: 'Expiring & expired lots',
+            receivables: 'Outstanding invoices',
             stockHealth: 'Stock health',
         },
         kpi: {
@@ -1375,6 +1546,7 @@ export default {
         noSku: 'No SKU',
         edit: 'Edit product',
         noImages: 'No images uploaded',
+        imagesUpdated: 'Images updated',
         facts: {
             price: 'Price',
             stockValue: 'Total value in stock',
@@ -1417,6 +1589,14 @@ export default {
             produced: 'Produced',
             expires: 'Expires',
             noExpiry: 'No expiry',
+            searchPlaceholder: 'Search lot number...',
+            allExpiry: 'All expiry dates',
+            expiry: {
+                expired: 'Expired',
+                expiringSoon: 'Expiring in 30 days',
+                valid: 'Valid',
+                noExpiry: 'No expiry date',
+            },
         },
         audit: {
             createdBy: 'Created by',

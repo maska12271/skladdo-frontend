@@ -46,9 +46,44 @@ async function choose(page, productName, categoryName) {
     })
 }
 
+/**
+ * What this file has created on the server, removed again after each test.
+ *
+ * The confirming test below genuinely imports a product and a category — that is the half of the contract
+ * it exists to prove — but nothing used to take them away again, so every run left one of each behind.
+ * They accumulate, and because they sort to the top of the products list they quietly destabilise
+ * unrelated specs: `sorting.spec.js` in particular compares row order against a list that keeps growing.
+ *
+ * Registered by name rather than id: the import happens inside the browser, so the ids never reach the
+ * test. Only what this file created is removed — see the note in the suite output about older residue.
+ */
+const created = { products: [], categories: [] }
+
 test.describe('import preview and cancel (N-010)', () => {
     test.beforeEach(async ({ page }) => {
         await login(page)
+    })
+
+    test.afterEach(async ({ page }) => {
+        if (created.products.length === 0 && created.categories.length === 0) return
+        await page.evaluate(async ({ products, categories }) => {
+            const token = localStorage.getItem('token')
+            const headers = { Authorization: `Bearer ${token}` }
+            const removeByName = async (kind, names) => {
+                if (names.length === 0) return
+                const res = await fetch(`http://localhost:8080/api/${kind}?size=3000`, { headers })
+                const body = await res.json()
+                const list = Array.isArray(body) ? body : body.content ?? []
+                for (const item of list.filter((i) => names.includes(i.name))) {
+                    await fetch(`http://localhost:8080/api/${kind}/${item.id}`, { method: 'DELETE', headers })
+                }
+            }
+            // Products first: they reference the categories.
+            await removeByName('products', products)
+            await removeByName('categories', categories)
+        }, created)
+        created.products.length = 0
+        created.categories.length = 0
     })
 
     test('previewing a file creates no category, and cancelling leaves nothing behind', async ({ page }) => {
@@ -91,6 +126,10 @@ test.describe('import preview and cancel (N-010)', () => {
     test('confirming the import does create the category and the product', async ({ page }) => {
         const category = uniq()
         const product = `${category} Product`
+        // Registered before the import rather than after the assertions, so a failure part-way through
+        // still hands them to the cleanup instead of leaking them.
+        created.categories.push(category)
+        created.products.push(product)
 
         await openImport(page)
         await choose(page, product, category)

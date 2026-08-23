@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { NavLink, useNavigate } from "react-router-dom"
+import { NavLink, useLocation, useNavigate } from "react-router-dom"
 import {
     LayoutDashboard,
     Package,
@@ -17,9 +17,20 @@ import {
     Warehouse,
     Mail,
     ScrollText,
+    Building2,
+    Gauge,
+    Link2,
+    X,
+    Moon,
+    Sun,
 } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
+import { useTheme } from "../context/ThemeContext"
+import { useBreakpoint } from "../hooks/useBreakpoint"
+import { OVERLAY_BACKDROP } from "../constants/overlay"
 import { getCookie, setCookie } from "../utils/cookies"
+import CompanySwitcher from "./CompanySwitcher"
+import LanguageSwitcher from "./LanguageSwitcher"
 
 // `module` is the permission area gating the link; links without one (Dashboard) are always shown.
 // `labelKey` indexes the i18n `nav.*` dictionary.
@@ -65,11 +76,47 @@ function Tooltip({ label }) {
     )
 }
 
-export default function Sidebar() {
+/**
+ * The app's navigation, in two shapes for one set of links.
+ *
+ * On a desktop it is a permanent column that can be collapsed to icons. Below `lg` there is no room to
+ * give it permanently, so it becomes an off-canvas drawer over the page — `open`/`onClose` are the header
+ * hamburger's end of that, and are unused on a desktop.
+ */
+export default function Sidebar({ open = false, onClose = () => {} }) {
     const { t } = useTranslation()
-    const { user, isHomeAdmin, can, logout, isWarehouseAccount, isPartnerSession, companies, switchCompany, lastClientId } = useAuth()
+    const { user, isHomeAdmin, can, logout, isWarehouseAccount, isPartnerSession, isPlatformAdmin, isPlatformCompany, companies, switchCompany, lastClientId } = useAuth()
     const navigate = useNavigate()
-    const [collapsed, setCollapsed] = useState(() => getCookie(COLLAPSE_COOKIE) === "1")
+    const location = useLocation()
+    const { theme, toggleTheme } = useTheme()
+    const breakpoint = useBreakpoint()
+    const [collapsedPref, setCollapsedPref] = useState(() => getCookie(COLLAPSE_COOKIE) === "1")
+
+    const isDesktop = breakpoint === "desktop"
+    // Collapsing trades labels for hover tooltips, and a phone or tablet has no pointer to hover with —
+    // so the drawer always shows full labels, whatever the saved preference says.
+    const collapsed = isDesktop && collapsedPref
+
+    // The drawer sits on top of the page, so anything meaning "you are looking at something else now"
+    // closes it: navigating away, or the viewport growing to where the sidebar is permanent again.
+    useEffect(() => {
+        onClose()
+    }, [location.pathname, isDesktop, onClose])
+
+    // While it is over the page, Escape dismisses it and the page underneath must not scroll.
+    useEffect(() => {
+        if (!open || isDesktop) return undefined
+        const onKeyDown = (event) => {
+            if (event.key === "Escape") onClose()
+        }
+        document.addEventListener("keydown", onKeyDown)
+        const previousOverflow = document.body.style.overflow
+        document.body.style.overflow = "hidden"
+        return () => {
+            document.removeEventListener("keydown", onKeyDown)
+            document.body.style.overflow = previousOverflow
+        }
+    }, [open, isDesktop, onClose])
 
     /**
      * Opens one of the account's own pages. Those endpoints are scoped to the company the session is
@@ -109,7 +156,7 @@ export default function Sidebar() {
     }
 
     const toggle = () => {
-        setCollapsed((prev) => {
+        setCollapsedPref((prev) => {
             const next = !prev
             setCookie(COLLAPSE_COOKIE, next ? "1" : "0")
             return next
@@ -140,23 +187,237 @@ export default function Sidebar() {
           ]
     // Judged by their standing at home: inside a client every session is capped to warehouse staff, but
     // these are their own company's pages, not the client's.
-    const links = isHomeAdmin ? [...visibleLinks, ...adminLinks] : visibleLinks
+    const companyLinks = isHomeAdmin ? [...visibleLinks, ...adminLinks] : visibleLinks
+
+    // Running Skladdo itself, as opposed to using it. These cross every tenant, so they hang off the
+    // account's platform flag and have nothing to do with `isHomeAdmin` — a customer's owner never sees
+    // them. `platform` marks the divider, the same way `ownCompany` does above.
+    const platformLinks = isPlatformAdmin
+        ? [
+              { to: "/admin", label: "Overview", icon: Gauge, platform: true },
+              { to: "/admin/companies", label: "Companies", icon: Building2, platform: true },
+              { to: "/admin/invite-links", label: "Invite links", icon: Link2, platform: true },
+          ]
+        : []
+
+    // A platform account has no company of its own to run — no catalogue, no orders, no settings worth
+    // opening — so it gets the admin pages and nothing else, with no divider to separate them from
+    // absent ones. An operator whose login lives in a real customer company still sees both halves.
+    const links = isPlatformCompany
+        ? platformLinks.map((link) => ({ ...link, platform: false }))
+        : [...companyLinks, ...platformLinks]
+
+    const nav = (
+        <nav className={`flex-1 space-y-0.5 ${collapsed ? "overflow-visible" : "overflow-y-auto"}`}>
+            {links.map((link, index) => {
+                const Icon = link.icon
+                const startsOwnCompany = link.ownCompany && !links[index - 1]?.ownCompany
+                const startsPlatform = link.platform && !links[index - 1]?.platform
+
+                return (
+                    <div key={link.to}>
+                    {/* Everything below this line is the account's own company rather than the one
+                        being worked in — worth saying, since the two are different places. */}
+                    {startsOwnCompany && (
+                        <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
+                            {!collapsed && (
+                                <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                                    {t('nav.ownCompanySettings')}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                    {/* And everything below *this* line is Skladdo itself rather than any one company.
+                        Untranslated on purpose — see components/AdminBits.jsx. */}
+                    {startsPlatform && (
+                        <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
+                            {!collapsed && (
+                                <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                                    Platform
+                                </p>
+                            )}
+                        </div>
+                    )}
+                    <NavLink
+                        to={link.to}
+                        end={link.to === "/admin"}
+                        onClick={(event) => {
+                            // Platform pages belong to no tenant, so neither company-switching handler
+                            // applies to them — they are ordinary navigation.
+                            if (link.platform) return
+                            if (link.ownCompany) openOwnCompany(event, link.to)
+                            else openClientPage(event, link.to)
+                        }}
+                        className={({ isActive }) =>
+                            `group relative flex items-center rounded-lg text-sm font-medium transition ${
+                                // py-3 gives the drawer's links a 44px row; `lg` puts the permanent
+                                // sidebar back to its original density. This is the E0 deferral.
+                                collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-3 lg:py-2"
+                            } ${
+                                isActive
+                                    ? "bg-teal-600 text-white shadow-sm"
+                                    : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                            }`
+                        }
+                    >
+                        <Icon className="h-[18px] w-[18px] shrink-0" />
+                        {/* Platform links carry a literal label; everything else is translated. */}
+                        {!collapsed && <span>{link.label ?? t(`nav.${link.labelKey}`)}</span>}
+                        {collapsed && <Tooltip label={link.label ?? t(`nav.${link.labelKey}`)} />}
+                    </NavLink>
+                    </div>
+                )
+            })}
+        </nav>
+    )
+
+    const account = (
+        <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
+            {collapsed ? (
+                <div className="flex flex-col items-center gap-3">
+                    <NavLink
+                        to="/account"
+                        aria-label={t('nav.account')}
+                        className={({ isActive }) =>
+                            `group relative flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200 ${
+                                isActive ? 'ring-2 ring-teal-500' : ''
+                            }`
+                        }
+                    >
+                        {initials(user)}
+                        <Tooltip label={t('nav.account')} />
+                    </NavLink>
+                    <button
+                        onClick={logout}
+                        aria-label={t('nav.signOut')}
+                        className="group relative flex items-center justify-center rounded-lg p-2.5 text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                        <LogOut className="h-5 w-5 shrink-0" />
+                        <Tooltip label={t('nav.signOut')} />
+                    </button>
+                </div>
+            ) : (
+                // One row in the drawer: the account link takes the width it needs and sign-out becomes
+                // the icon beside it, rather than a second full-width row. On a desktop there is room for
+                // both, so it keeps the labelled button.
+                <div className={isDesktop ? '' : 'flex items-center gap-2'}>
+                    <NavLink
+                        to="/account"
+                        className={({ isActive }) =>
+                            `block min-w-0 flex-1 rounded-lg px-2 py-1.5 transition lg:mb-2 ${
+                                isActive ? "bg-slate-100 dark:bg-slate-800" : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                            }`
+                        }
+                    >
+                        <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">
+                            {user?.fullName || user?.email}
+                        </p>
+                        <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                            {user?.role ? t(`roles.${user.role}`) : ""}
+                            {user?.companyName ? ` · ${user.companyName}` : ""}
+                        </p>
+                    </NavLink>
+                    <button
+                        onClick={logout}
+                        aria-label={t('nav.signOut')}
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 lg:h-auto lg:w-full lg:justify-start lg:gap-3 lg:px-3 lg:py-2 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                        <LogOut className="h-[18px] w-[18px] shrink-0" />
+                        <span className="hidden text-sm font-medium lg:inline">{t('nav.signOut')}</span>
+                    </button>
+                </div>
+            )}
+        </div>
+    )
+
+    if (!isDesktop) {
+        return (
+            <>
+                {open && (
+                    <div
+                        onClick={onClose}
+                        aria-hidden="true"
+                        className={`fixed inset-0 z-40 ${OVERLAY_BACKDROP}`}
+                    />
+                )}
+                {/* Kept mounted so it can slide rather than blink. `inert` is what makes the closed
+                    drawer genuinely gone — off-screen alone would leave its links tabbable. */}
+                <aside
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={t('nav.menu')}
+                    inert={!open}
+                    className={`fixed inset-y-0 left-0 z-50 flex w-80 max-w-[85vw] flex-col border-r border-slate-200 bg-white p-4 shadow-xl transition-transform duration-200 dark:border-slate-800 dark:bg-slate-900 ${
+                        open ? "translate-x-0" : "-translate-x-full"
+                    }`}
+                >
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                            <img src="/skladdo-logo.svg" alt="" aria-hidden="true" className="h-8 w-auto shrink-0" />
+                            {/* Not a heading: every page already has its own h1, and a second one in the
+                                chrome makes the brand compete with the page title in the heading outline. */}
+                            <span className="truncate text-xl font-bold tracking-tight text-teal-700 dark:text-teal-400">
+                                {t('nav.appName')}
+                            </span>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            aria-label={t('nav.closeMenu')}
+                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
+
+                    {/* Which company's data is on screen — the one header control that still needs a
+                        panel. Left-anchored and at the top, so it opens downwards into the drawer rather
+                        than off the side or the bottom of the screen. Renders nothing for an account with
+                        a single company, which is most of them. */}
+                    <CompanySwitcher align="left" className="mb-3 border-b border-slate-200 pb-3 dark:border-slate-800" />
+
+                    {nav}
+
+                    {/* Preferences, below the links and above the account: both were in the header, where
+                        neither fits at phone width. Laid out flat rather than as menus — see the note in
+                        LanguageSwitcher about panels opening off-screen from a left-hand button. */}
+                    <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+                        <LanguageSwitcher variant="inline" />
+                        <button
+                            type="button"
+                            onClick={toggleTheme}
+                            className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                            <span>{t('nav.theme')}</span>
+                            <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                                {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                                {theme === 'dark' ? t('nav.themeDark') : t('nav.themeLight')}
+                            </span>
+                        </button>
+                    </div>
+
+                    {account}
+                </aside>
+            </>
+        )
+    }
 
     return (
         <aside
-            className={`sticky top-0 z-40 hidden h-screen shrink-0 flex-col self-start border-r border-slate-200 bg-white transition-[width] duration-200 dark:border-slate-800 dark:bg-slate-900 md:flex ${
+            className={`sticky top-0 z-40 flex h-screen shrink-0 flex-col self-start border-r border-slate-200 bg-white transition-[width] duration-200 dark:border-slate-800 dark:bg-slate-900 ${
                 collapsed ? "w-20 p-3" : "w-64 p-4"
             }`}
         >
             <div className={`mb-4 flex ${collapsed ? "flex-col items-center gap-3" : "items-center justify-between"}`}>
                 {collapsed ? (
-                    <img src="/kladdo-logo.svg" alt={t('nav.appName')} className="h-8 w-auto" />
+                    <img src="/skladdo-logo.svg" alt={t('nav.appName')} className="h-8 w-auto" />
                 ) : (
                     <div className="flex items-center gap-2.5">
-                        <img src="/kladdo-logo.svg" alt="" aria-hidden="true" className="h-8 w-auto shrink-0" />
-                        <h1 className="text-xl font-bold tracking-tight text-teal-700 dark:text-teal-400">
+                        <img src="/skladdo-logo.svg" alt="" aria-hidden="true" className="h-8 w-auto shrink-0" />
+                        {/* Not a heading: every page already has its own h1, and a second one in the
+                            chrome makes the brand compete with the page title in the heading outline. */}
+                        <span className="text-xl font-bold tracking-tight text-teal-700 dark:text-teal-400">
                             {t('nav.appName')}
-                        </h1>
+                        </span>
                     </div>
                 )}
                 <button
@@ -168,100 +429,8 @@ export default function Sidebar() {
                 </button>
             </div>
 
-            <nav className={`flex-1 space-y-0.5 ${collapsed ? "overflow-visible" : "overflow-y-auto"}`}>
-                {links.map((link, index) => {
-                    const Icon = link.icon
-                    const startsOwnCompany = link.ownCompany && !links[index - 1]?.ownCompany
-
-                    return (
-                        <div key={link.to}>
-                        {/* Everything below this line is the account's own company rather than the one
-                            being worked in — worth saying, since the two are different places. */}
-                        {startsOwnCompany && (
-                            <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
-                                {!collapsed && (
-                                    <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                                        {t('nav.ownCompanySettings')}
-                                    </p>
-                                )}
-                            </div>
-                        )}
-                        <NavLink
-                            to={link.to}
-                            onClick={(event) => (link.ownCompany
-                                ? openOwnCompany(event, link.to)
-                                : openClientPage(event, link.to))}
-                            className={({ isActive }) =>
-                                `group relative flex items-center rounded-lg text-sm font-medium transition ${
-                                    collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2"
-                                } ${
-                                    isActive
-                                        ? "bg-teal-600 text-white shadow-sm"
-                                        : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                                }`
-                            }
-                        >
-                            <Icon className="h-[18px] w-[18px] shrink-0" />
-                            {!collapsed && <span>{t(`nav.${link.labelKey}`)}</span>}
-                            {collapsed && <Tooltip label={t(`nav.${link.labelKey}`)} />}
-                        </NavLink>
-                        </div>
-                    )
-                })}
-            </nav>
-
-            <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
-                {collapsed ? (
-                    <div className="flex flex-col items-center gap-3">
-                        <NavLink
-                            to="/account"
-                            aria-label={t('nav.account')}
-                            className={({ isActive }) =>
-                                `group relative flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200 ${
-                                    isActive ? 'ring-2 ring-teal-500' : ''
-                                }`
-                            }
-                        >
-                            {initials(user)}
-                            <Tooltip label={t('nav.account')} />
-                        </NavLink>
-                        <button
-                            onClick={logout}
-                            aria-label={t('nav.signOut')}
-                            className="group relative flex items-center justify-center rounded-lg p-2.5 text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                            <LogOut className="h-5 w-5 shrink-0" />
-                            <Tooltip label={t('nav.signOut')} />
-                        </button>
-                    </div>
-                ) : (
-                    <>
-                        <NavLink
-                            to="/account"
-                            className={({ isActive }) =>
-                                `mb-2 block rounded-lg px-2 py-1.5 transition ${
-                                    isActive ? "bg-slate-100 dark:bg-slate-800" : "hover:bg-slate-100 dark:hover:bg-slate-800"
-                                }`
-                            }
-                        >
-                            <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">
-                                {user?.fullName || user?.email}
-                            </p>
-                            <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                                {user?.role ? t(`roles.${user.role}`) : ""}
-                                {user?.companyName ? ` · ${user.companyName}` : ""}
-                            </p>
-                        </NavLink>
-                        <button
-                            onClick={logout}
-                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                            <LogOut className="h-[18px] w-[18px] shrink-0" />
-                            <span>{t('nav.signOut')}</span>
-                        </button>
-                    </>
-                )}
-            </div>
+            {nav}
+            {account}
         </aside>
     )
 }

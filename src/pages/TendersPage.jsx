@@ -5,6 +5,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../api/client'
 import { useServerTable } from '../hooks/useServerTable'
 import PageHeader from '../components/PageHeader'
 import SearchFilters from '../components/SearchFilters'
+import { sortOptionsFromColumns } from '../utils/sortOptions'
 import EmptyState from '../components/EmptyState'
 import DataTable from '../components/DataTable'
 import DataToolbar from '../components/DataToolbar'
@@ -300,7 +301,7 @@ export default function TendersPage() {
                 title={t('tenders.title')}
                 description={t('tenders.description')}
                 action={
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                         {tab === 'list' && (
                             <DataToolbar
                                 entityLabel="tenders"
@@ -310,13 +311,13 @@ export default function TendersPage() {
                                 count={total}
                             />
                         )}
-                        {canCreate && (
-                            <button onClick={openCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
-                                {t('tenders.add')}
-                            </button>
-                        )}
                     </div>
                 }
+                primaryAction={canCreate && (
+                        <button onClick={openCreate} className="min-h-11 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700 lg:min-h-0">
+                            {t('tenders.add')}
+                        </button>
+                    )}
             />
 
             {/* List / Dashboard tabs */}
@@ -358,6 +359,7 @@ export default function TendersPage() {
                         ],
                     },
                 ]}
+                sort={{ sortBy, sortDir, onSortChange: setSort, options: sortOptionsFromColumns(columns) }}
             />
 
             <DataTable
@@ -390,6 +392,7 @@ export default function TendersPage() {
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSortChange={setSort}
+                hideCardSort
                 bulkActions={
                     canDelete ? (
                         <button

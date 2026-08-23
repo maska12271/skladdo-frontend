@@ -1,12 +1,29 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, ArrowUp, ArrowDown, ChevronsUpDown, LayoutGrid, Rows3 } from 'lucide-react'
+import { useBreakpoint } from '../hooks/useBreakpoint'
+import Checkbox from './Checkbox'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
 // Per-table column-visibility preferences are persisted in localStorage (per browser) keyed by
 // the table's `tableId`, so a user's choices survive reloads and navigation.
 const COLUMN_PREF_PREFIX = 'tableColumns:'
+
+// Table or cards, remembered per table. Cards are forced below `md` regardless — this is the choice a
+// wider screen gets, where both shapes are legible and which one reads better depends on the data and on
+// the person. Stored beside the column preferences, so a table remembers how you like to look at it.
+const VIEW_PREF_PREFIX = 'tableView:'
+
+function loadViewPref(tableId) {
+    if (!tableId || typeof localStorage === 'undefined') return null
+    try {
+        const value = localStorage.getItem(VIEW_PREF_PREFIX + tableId)
+        return value === 'cards' || value === 'table' ? value : null
+    } catch {
+        return null
+    }
+}
 
 function loadHiddenColumns(tableId) {
     if (!tableId || typeof localStorage === 'undefined') return []
@@ -37,15 +54,7 @@ function SelectAllCheckbox({ checked, indeterminate, disabled, onChange, label }
     }, [indeterminate])
 
     return (
-        <input
-            ref={ref}
-            type="checkbox"
-            checked={checked}
-            disabled={disabled}
-            onChange={onChange}
-            aria-label={label}
-            className="block h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 disabled:opacity-40 dark:border-slate-600 dark:bg-slate-900"
-        />
+        <Checkbox ref={ref} checked={checked} disabled={disabled} onChange={onChange} aria-label={label} className="block" />
     )
 }
 
@@ -63,6 +72,41 @@ function getPageWindow(current, total) {
     pages.push(total)
     return pages
 }
+
+/** A column carrying a readable heading, as opposed to an image or an action menu. */
+const isFieldColumn = (column) => typeof column.label === 'string' && column.label !== ''
+
+/**
+ * Regroups the visible columns into the parts a card needs, reading the shape the list pages already
+ * write rather than asking them to declare anything new: a labelled column is a field, the first of them
+ * is the card's title, and an unlabelled one is an adornment — the thumbnail that sits before the title,
+ * the action menu that sits after it.
+ */
+function splitForCards(columns) {
+    const titleIndex = columns.findIndex(isFieldColumn)
+    // A table of nothing but adornments has no title to promote; keep them in order and add no heading.
+    if (titleIndex === -1) return { leading: columns, title: null, fields: [], trailing: [] }
+    const rest = columns.slice(titleIndex + 1)
+    return {
+        leading: columns.slice(0, titleIndex),
+        title: columns[titleIndex],
+        fields: rest.filter(isFieldColumn),
+        trailing: rest.filter((column) => !isFieldColumn(column)),
+    }
+}
+
+// Fewer than this and there is nothing worth managing — every column already fits, and the picker is a
+// control that only adds a decision. Warehouses, with three, was the case that prompted it.
+const MIN_COLUMNS_FOR_PICKER = 5
+
+// Cards pass a context so a column can render differently there. The table passes none, so every existing
+// `render(row)` is unaffected.
+const CARD_CONTEXT = { card: true }
+
+const cellValue = (column, row, context) => (column.render ? column.render(row, context) : row[column.key])
+
+/** Whether a cell produced anything worth giving space to on a card. */
+const isEmptyCell = (value) => value === null || value === undefined || value === false || value === ''
 
 export default function DataTable({
     columns,
@@ -100,6 +144,12 @@ export default function DataTable({
     sortBy,
     sortDir,
     onSortChange,
+    // Set when the page has moved sorting into its filter sheet, so the card toolbar does not offer a
+    // second control for the same state.
+    hideCardSort = false,
+    // Forces the card layout at every width. For a container too narrow for a table whatever the screen
+    // size — a dashboard widget in a one-third column.
+    alwaysCards = false,
 }) {
     const { t } = useTranslation()
     const [internalPage, setInternalPage] = useState(1)
@@ -192,7 +242,40 @@ export default function DataTable({
     const sortingEnabled = typeof onSortChange === 'function'
     const totalColumns = visibleColumns.length + (selectionEnabled ? 1 : 0)
     const showBulkBar = selectionEnabled && selectedIds.length > 0
-    const showColumnPicker = tableId && hideableColumns.length > 0
+    const showColumnPicker = tableId && hideableColumns.length >= MIN_COLUMNS_FOR_PICKER
+
+    // A phone cannot hold a business table: eight columns of it means a horizontal scroll for every row,
+    // and reading one record turns into panning. Below `md` each row becomes a card instead. Everything
+    // around the rows — selection, sorting, paging, the column picker — is the same state either way;
+    // only the shape the rows are drawn in changes.
+    const isMobile = useBreakpoint() === 'mobile'
+    const [viewPref, setViewPref] = useState(() => loadViewPref(tableId))
+    // A phone has no choice to offer; anywhere else the saved preference decides, defaulting to the table.
+    const asCards = alwaysCards || isMobile || viewPref === 'cards'
+    const showViewToggle = !isMobile && !alwaysCards && Boolean(tableId)
+
+    const chooseView = (next) => {
+        setViewPref(next)
+        if (!tableId || typeof localStorage === 'undefined') return
+        try {
+            localStorage.setItem(VIEW_PREF_PREFIX + tableId, next)
+        } catch {
+            /* ignore quota errors — the choice just won't outlive the page */
+        }
+    }
+
+    // Container queries, not viewport ones: `xl:grid-cols-3` put three columns inside a 340px dashboard
+    // widget whenever the *window* was wide, giving one word per line and labels colliding with their
+    // values. How many columns fit depends on how wide this list actually is.
+    const cardGridClass = `@container grid content-start grid-cols-1 @[34rem]:grid-cols-2 @[60rem]:grid-cols-3 ${bare ? 'gap-1.5' : 'gap-2 p-3'}`
+
+    const cardSplit = splitForCards(visibleColumns)
+    // Cards have no column headers to click, so sorting needs a control of its own, and no header row to
+    // hold "select all" either — both move into the toolbar.
+    const sortableColumns = sortingEnabled ? visibleColumns.filter((c) => c.sortKey && isFieldColumn(c)) : []
+    const showCardSort = asCards && sortableColumns.length > 0 && !hideCardSort
+    const showCardSelectAll = asCards && selectionEnabled && total > 0
+    const showToolbar = showColumnPicker || showCardSort || showCardSelectAll || showViewToggle
     const rangeStart = total === 0 ? 0 : start + 1
     const rangeEnd = Math.min(start + pageSize, total)
 
@@ -219,34 +302,110 @@ export default function DataTable({
                             {t('table.selected', { count: selectedIds.length })}
                         </span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">{bulkActions}</div>
+                    <div className="flex flex-wrap items-center justify-end gap-2">{bulkActions}</div>
                 </div>
             )}
 
-            {showColumnPicker && (
-                <div className="flex justify-end border-b border-slate-200 px-4 py-2 dark:border-slate-800">
-                    <ColumnPicker
-                        columns={hideableColumns}
-                        hiddenColumns={hiddenColumns}
-                        onToggle={toggleColumn}
-                        onReset={resetColumns}
-                    />
+            {showToolbar && (
+                <div className="flex flex-wrap items-center justify-end gap-2 border-b border-slate-200 px-4 py-2 dark:border-slate-800">
+                    {showCardSelectAll && (
+                        <label className="mr-auto flex min-h-11 items-center gap-2 text-sm text-slate-500 lg:min-h-0 dark:text-slate-400">
+                            <SelectAllCheckbox
+                                checked={allSelected}
+                                indeterminate={someSelected}
+                                disabled={pageSelectableIds.length === 0}
+                                onChange={toggleAll}
+                                label={t('table.selectAll')}
+                            />
+                            {t('table.selectAll')}
+                        </label>
+                    )}
+                    {showCardSort && (
+                        <CardSortControl
+                            columns={sortableColumns}
+                            sortBy={sortBy}
+                            sortDir={sortDir}
+                            onSortChange={onSortChange}
+                        />
+                    )}
+                    {showColumnPicker && (
+                        <ColumnPicker
+                            columns={hideableColumns}
+                            hiddenColumns={hiddenColumns}
+                            onToggle={toggleColumn}
+                            onReset={resetColumns}
+                        />
+                    )}
+                    {showViewToggle && (
+                        <div role="group" aria-label={t('table.view')} className="inline-flex overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+                            {[['table', Rows3, t('table.viewTable')], ['cards', LayoutGrid, t('table.viewCards')]].map(([mode, Icon, label]) => (
+                                <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => chooseView(mode)}
+                                    aria-pressed={asCards === (mode === 'cards')}
+                                    aria-label={label}
+                                    title={label}
+                                    className={`inline-flex min-h-11 min-w-11 items-center justify-center px-3 transition lg:min-h-0 lg:min-w-0 lg:py-1.5 ${
+                                        asCards === (mode === 'cards')
+                                            ? 'bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-300'
+                                            : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                                    }`}
+                                >
+                                    <Icon className="h-4 w-4" />
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
 
+            {asCards ? (
+                // One column on a phone; on a wider screen the cards become a gallery rather than a
+                // single tall stack, which is the shape that makes this view worth choosing there.
+                <div className={cardGridClass}>
+                    {loading && pageRows.length === 0 ? (
+                        <CardSkeleton count={Math.min(paginate ? pageSize : 4, 6)} />
+                    ) : total === 0 ? (
+                        <p className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
+                            {filtersActive ? t('table.noResults') : t('table.noData')}
+                        </p>
+                    ) : (
+                        pageRows.map((row, index) => {
+                            const rowId = getRowId(row)
+                            const rowSelectable = selectionEnabled && isRowSelectable(row)
+                            return (
+                                <RowCard
+                                    key={rowId ?? index}
+                                    split={cardSplit}
+                                    row={row}
+                                    selectable={rowSelectable}
+                                    selected={rowSelectable && selectedSet.has(rowId)}
+                                    onToggleSelect={() => toggleRow(rowId)}
+                                    onClick={handleRowClick ? (event) => handleRowClick(event, row) : undefined}
+                                    selectRowLabel={t('table.selectRow')}
+                                    dense={bare}
+                                />
+                            )
+                        })
+                    )}
+                </div>
+            ) : (
             <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                     <thead className="bg-slate-50 dark:bg-slate-800/70">
                     <tr>
                         {selectionEnabled && (
                             <th className="w-12 px-4 py-3 text-left">
-                                <SelectAllCheckbox
-                                    checked={allSelected}
-                                    indeterminate={someSelected}
-                                    disabled={pageSelectableIds.length === 0}
-                                    onChange={toggleAll}
-                                    label={t('table.selectAll')}
-                                />
+                                <label className="-m-3 flex h-11 w-11 cursor-pointer items-center justify-center lg:m-0 lg:h-auto lg:w-auto">
+                                    <SelectAllCheckbox
+                                        checked={allSelected}
+                                        indeterminate={someSelected}
+                                        disabled={pageSelectableIds.length === 0}
+                                        onChange={toggleAll}
+                                        label={t('table.selectAll')}
+                                    />
+                                </label>
                             </th>
                         )}
                         {visibleColumns.map((column) => {
@@ -268,7 +427,10 @@ export default function DataTable({
                                                 column.sortKey,
                                                 active && sortDir === 'asc' ? 'desc' : 'asc',
                                             )}
-                                            className="group inline-flex items-center gap-1.5 font-semibold text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+                                            // The negative margin lets the button grow into the cell's
+                                            // existing padding, so it becomes a 44px touch target on a
+                                            // tablet without making the header row any taller.
+                                            className="group -my-3 inline-flex items-center gap-1.5 py-3 font-semibold text-slate-600 transition hover:text-slate-900 lg:my-0 lg:py-0 dark:text-slate-300 dark:hover:text-white"
                                         >
                                             {column.label}
                                             <SortIcon active={active} dir={sortDir} />
@@ -306,13 +468,9 @@ export default function DataTable({
                                     {selectionEnabled && (
                                         <td className="w-12 px-4 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
                                             {rowSelectable && (
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isSelected}
-                                                    onChange={() => toggleRow(rowId)}
-                                                    aria-label={t('table.selectRow')}
-                                                    className="block h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-900"
-                                                />
+                                                <label className="-m-3 flex h-11 w-11 cursor-pointer items-center justify-center lg:m-0 lg:h-auto lg:w-auto">
+                                                    <Checkbox checked={isSelected} onChange={() => toggleRow(rowId)} aria-label={t('table.selectRow')} className="block" />
+                                                </label>
                                             )}
                                         </td>
                                     )}
@@ -328,6 +486,7 @@ export default function DataTable({
                     </tbody>
                 </table>
             </div>
+            )}
 
             {paginate && total > 0 && (
                 <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
@@ -351,7 +510,7 @@ export default function DataTable({
                                     // the page as part of its own size update.
                                     if (!onPageSizeChange) setPage(1)
                                 }}
-                                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                                className="min-h-11 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 outline-none focus:border-teal-500 lg:min-h-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                             >
                                 {PAGE_SIZE_OPTIONS.map((size) => (
                                     <option key={size} value={size}>{size}</option>
@@ -368,7 +527,13 @@ export default function DataTable({
                                     <ChevronLeft className="h-4 w-4" />
                                 </PageButton>
 
-                                {getPageWindow(safePage, totalPages).map((p, i) =>
+                                {/* Up to seven page buttons plus four arrows do not fit a phone, but the
+                                    position still has to be legible — so it becomes a readout. */}
+                                {isMobile ? (
+                                    <span aria-current="page" className="px-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                                        {t('table.pageOf', { page: safePage, total: totalPages })}
+                                    </span>
+                                ) : getPageWindow(safePage, totalPages).map((p, i) =>
                                     p === '…' ? (
                                         <span key={`gap-${i}`} className="px-2 text-sm text-slate-400">…</span>
                                     ) : (
@@ -377,7 +542,7 @@ export default function DataTable({
                                             type="button"
                                             onClick={() => setPage(p)}
                                             aria-current={p === safePage ? 'page' : undefined}
-                                            className={`min-w-9 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                                            className={`min-h-11 min-w-11 rounded-lg px-3 py-1.5 text-sm font-medium transition lg:min-h-0 lg:min-w-9 ${
                                                 p === safePage
                                                     ? 'bg-teal-600 text-white'
                                                     : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
@@ -403,6 +568,135 @@ export default function DataTable({
     )
 }
 
+/**
+ * One record as a card: the thumbnail, title and action menu on a header line, every other visible
+ * column beneath it as a labelled pair. The cells are the table's own `render` output, so a badge or a
+ * money cell looks the same here as it does in a row.
+ */
+function RowCard({ split, row, selectable, selected, onToggleSelect, onClick, selectRowLabel, dense = false }) {
+    const { leading, title, fields, trailing } = split
+    // An adornment that renders nothing is dropped rather than given an empty box: a product with no
+    // picture should not reserve a thumbnail-sized hole on its card the way it does in a table, where the
+    // placeholder is what keeps the column lined up.
+    const adornments = (columns) =>
+        columns
+            .map((column) => ({ key: column.key, value: cellValue(column, row, CARD_CONTEXT) }))
+            .filter((cell) => !isEmptyCell(cell.value))
+
+    const leadingCells = adornments(leading)
+    const trailingCells = adornments(trailing)
+
+    return (
+        <div
+            onClick={onClick}
+            className={`rounded-xl border transition ${dense ? 'p-1.5' : 'p-3'} ${
+                selected
+                    ? 'border-teal-300 bg-teal-50/60 dark:border-teal-800 dark:bg-teal-950/20'
+                    : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
+            } ${onClick ? 'cursor-pointer active:bg-slate-50 dark:active:bg-slate-800/50' : ''}`}
+        >
+            <div className="flex items-center gap-3">
+                {selectable && (
+                    // The box stays 16px — a giant checkbox looks wrong — but the *tappable* area is the
+                    // label around it, at the full 44. The negative margins give that area back to the
+                    // layout so the title still sits where it did.
+                    <label
+                        onClick={(event) => event.stopPropagation()}
+                        className="-my-2 -ml-2 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center"
+                    >
+                        <Checkbox checked={selected} onChange={onToggleSelect} aria-label={selectRowLabel} className="block" />
+                    </label>
+                )}
+                {leadingCells.map((cell) => (
+                    <div key={cell.key} className="shrink-0">{cell.value}</div>
+                ))}
+                {title && (
+                    <div className={`min-w-0 flex-1 break-words font-semibold text-slate-800 dark:text-slate-100 ${dense ? 'text-sm' : ''}`}>
+                        {cellValue(title, row, CARD_CONTEXT)}
+                    </div>
+                )}
+                {trailingCells.map((cell) => (
+                    <div key={cell.key} className="shrink-0">{cell.value}</div>
+                ))}
+            </div>
+
+            {fields.length > 0 && (
+                // A two-column grid rather than a row of `justify-between` flexes: with the latter every
+                // label sat at a different distance from its value, because each row was spaced
+                // independently. A shared column keeps the values lined up down the card.
+                <dl className={`grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 border-t border-slate-100 text-sm dark:border-slate-800 ${dense ? 'mt-1 gap-y-0.5 pt-1 text-xs' : 'mt-2.5 gap-y-1.5 pt-2.5'}`}>
+                    {fields.map((column) => (
+                        <Fragment key={column.key}>
+                            <dt className="whitespace-nowrap text-slate-500 dark:text-slate-400">{column.label}</dt>
+                            <dd className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 break-words text-right text-slate-700 dark:text-slate-200">
+                                {cellValue(column, row, CARD_CONTEXT)}
+                            </dd>
+                        </Fragment>
+                    ))}
+                </dl>
+            )}
+        </div>
+    )
+}
+
+/**
+ * The card view's replacement for clickable column headers. A native `select` on purpose: it opens the
+ * platform's own picker, which beats a custom menu on the devices this view exists for.
+ */
+function CardSortControl({ columns, sortBy, sortDir, onSortChange }) {
+    const { t } = useTranslation()
+    const descending = sortDir === 'desc'
+
+    return (
+        <div className="flex items-center gap-1.5">
+            <select
+                value={sortBy ?? ''}
+                // Ascending, not the direction the previous field happened to be in: clicking an inactive
+                // column header sorts ascending, and picking a field here has to mean the same thing.
+                onChange={(event) => onSortChange(event.target.value, 'asc')}
+                aria-label={t('table.sortBy')}
+                className="min-h-11 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-teal-500 lg:min-h-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+            >
+                <option value="" disabled>{t('table.sortBy')}</option>
+                {columns.map((column) => (
+                    <option key={column.key} value={column.sortKey}>{column.label}</option>
+                ))}
+            </select>
+            <button
+                type="button"
+                disabled={!sortBy}
+                onClick={() => onSortChange(sortBy, descending ? 'asc' : 'desc')}
+                aria-label={descending ? t('table.sortDescending') : t('table.sortAscending')}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 lg:h-8 lg:w-8 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+                {descending ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+            </button>
+        </div>
+    )
+}
+
+// The card-view counterpart of TableSkeleton, for the same reason: no flash of "no data" before the
+// first response lands.
+function CardSkeleton({ count }) {
+    return (
+        <>
+            {Array.from({ length: count }).map((_, i) => (
+                <div
+                    key={i}
+                    aria-hidden="true"
+                    className="rounded-xl border border-slate-200 p-3 dark:border-slate-800"
+                >
+                    <div className="h-4 w-1/2 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                    <div className="mt-3 space-y-2">
+                        <div className="h-3 w-full animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+                        <div className="h-3 w-2/3 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+                    </div>
+                </div>
+            ))}
+        </>
+    )
+}
+
 function ColumnPicker({ columns, hiddenColumns, onToggle, onReset }) {
     const { t } = useTranslation()
     const [open, setOpen] = useState(false)
@@ -417,11 +711,26 @@ function ColumnPicker({ columns, hiddenColumns, onToggle, onReset }) {
         const rect = triggerRef.current?.getBoundingClientRect()
         if (!rect) return
         const margin = 8
+        const gap = 4
         let left = rect.right - WIDTH
         const maxLeft = window.innerWidth - WIDTH - margin
         if (left > maxLeft) left = maxLeft
         if (left < margin) left = margin
-        setCoords({ top: rect.bottom + 4, left })
+
+        // Vertical placement matters as much as horizontal on a short screen: a `fixed` panel hung below
+        // a trigger near the bottom simply lands off the viewport, and the page cannot be scrolled to
+        // reach it — scrolling closes it. So it flips above when below is tight, and is capped to the
+        // room it actually has either way.
+        const spaceBelow = window.innerHeight - rect.bottom - margin - gap
+        const spaceAbove = rect.top - margin - gap
+        const dropUp = spaceBelow < 220 && spaceAbove > spaceBelow
+        setCoords({
+            top: dropUp ? undefined : rect.bottom + gap,
+            // Anchored by its bottom edge when flipped, so a short menu still sits against the trigger.
+            bottom: dropUp ? window.innerHeight - rect.top + gap : undefined,
+            left,
+            maxHeight: Math.max(160, dropUp ? spaceAbove : spaceBelow),
+        })
     }, [open])
 
     useEffect(() => {
@@ -460,7 +769,7 @@ function ColumnPicker({ columns, hiddenColumns, onToggle, onReset }) {
                 onClick={() => setOpen((value) => !value)}
                 aria-haspopup="menu"
                 aria-expanded={open}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition lg:min-h-0 ${
                     open
                         ? 'border-teal-500 bg-teal-50 text-teal-600 dark:border-teal-500 dark:bg-teal-500/10 dark:text-teal-300'
                         : 'border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
@@ -473,24 +782,26 @@ function ColumnPicker({ columns, hiddenColumns, onToggle, onReset }) {
                 <div
                     ref={menuRef}
                     role="menu"
-                    style={{ position: 'fixed', top: coords.top, left: coords.left, width: WIDTH }}
-                    className="z-[60] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-800"
+                    style={{
+                        position: 'fixed',
+                        top: coords.top,
+                        bottom: coords.bottom,
+                        left: coords.left,
+                        width: WIDTH,
+                        maxHeight: coords.maxHeight,
+                    }}
+                    className="z-[60] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-800"
                 >
                     <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
                         {t('table.showColumns')}
                     </div>
-                    <div className="max-h-72 overflow-y-auto border-y border-slate-200 py-1 dark:border-slate-700">
+                    <div className="min-h-0 flex-1 overflow-y-auto border-y border-slate-200 py-1 dark:border-slate-700">
                         {columns.map((column) => (
                             <label
                                 key={column.key}
                                 className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700/60"
                             >
-                                <input
-                                    type="checkbox"
-                                    checked={!hiddenColumns.includes(column.key)}
-                                    onChange={() => onToggle(column.key)}
-                                    className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-900"
-                                />
+                                <Checkbox checked={!hiddenColumns.includes(column.key)} onChange={() => onToggle(column.key)} />
                                 <span>{column.name}</span>
                             </label>
                         ))}
@@ -546,7 +857,7 @@ function PageButton({ onClick, disabled, ariaLabel, children }) {
             onClick={onClick}
             disabled={disabled}
             aria-label={ariaLabel}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-800"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 lg:h-8 lg:w-8 dark:text-slate-300 dark:hover:bg-slate-800"
         >
             {children}
         </button>

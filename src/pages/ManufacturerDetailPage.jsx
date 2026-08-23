@@ -107,7 +107,7 @@ export default function ManufacturerDetailPage() {
                     </p>
                     <StatusBadge status={manufacturer.active ? 'ACTIVE' : 'INACTIVE'} />
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 md:justify-end">
                     {canSendEmail && (
                         <button
                             onClick={composeModal.open}

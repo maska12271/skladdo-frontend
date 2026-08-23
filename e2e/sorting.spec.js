@@ -72,6 +72,12 @@ test.describe('sort behaviour', () => {
         await login(page)
         await page.goto('/products')
         await expect(page.locator('table')).toBeVisible({ timeout: 15000 })
+        // The table element renders before its rows do. Without this the "before" snapshot below could be
+        // taken from an empty table, and then the *initial, unsorted* rows arriving would satisfy "the
+        // first name has changed" — so the spec would compare an unsorted list against a sorted one and
+        // fail intermittently, depending only on how fast the first fetch happened to be. The summary
+        // line is the signal that real data has landed; it renders only once there is a total to report.
+        await expect(page.getByText(/Showing/)).toBeVisible({ timeout: 15000 })
     })
 
     /** The Name cell of every visible row, in display order. */

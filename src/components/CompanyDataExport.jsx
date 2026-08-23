@@ -64,7 +64,7 @@ export default function CompanyDataExport() {
                     rows,
                 })
             }
-            await downloadWorkbook(`kladdo-export-${new Date().toISOString().slice(0, 10)}`, sheets)
+            await downloadWorkbook(`skladdo-export-${new Date().toISOString().slice(0, 10)}`, sheets)
             toast.success(t('settings.company.exportDone'))
         } catch {
             toast.error(t('settings.company.exportFailed'))

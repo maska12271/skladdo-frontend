@@ -60,7 +60,9 @@ export default function StatusPicker({
                 type="button"
                 disabled={loading}
                 onClick={() => setOpen((v) => !v)}
-                className="inline-flex items-center gap-1 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-60"
+                // The pill itself stays its own size; the button around it grows to a 44px tap target on
+                // touch, since this is how a status is changed from a phone.
+                className="inline-flex min-h-11 items-center gap-1 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-60 lg:min-h-0"
             >
                 <StatusBadge status={status} />
                 {loading ? (

@@ -17,10 +17,11 @@ import AddressAutocompleteField from '../components/AddressAutocompleteField.jsx
 import EmailTemplatesManager from '../components/EmailTemplatesManager'
 import PlanBillingTab from '../components/PlanBillingTab'
 import CompanyDataExport from '../components/CompanyDataExport'
-import { resolveImageUrl } from '../components/ImageUploadField'
+import { usePresignedUrl } from '../hooks/usePresignedUrl'
 import { PERMISSION_MODULES } from '../constants/modules'
 import ConnectionsTab from '../components/ConnectionsTab'
 import { SlidersHorizontal, Percent, FileText, Users, Plus, Pencil, Trash2, Star, UploadCloud, X, Mail, Send, Info, CreditCard, Building2, Handshake } from 'lucide-react'
+import Checkbox from '../components/Checkbox'
 
 const TABS = [
     { key: 'general', icon: SlidersHorizontal },
@@ -153,6 +154,7 @@ export default function SettingsPage() {
 
     const logoInputRef = useRef(null)
     const [logoUploading, setLogoUploading] = useState(false)
+    const logoUrl = usePresignedUrl(settings?.logoKey)
 
     const uploadLogo = async (file) => {
         if (!file) return
@@ -161,7 +163,7 @@ export default function SettingsPage() {
             const formData = new FormData()
             formData.append('file', file)
             const res = await apiUpload('/upload/image', formData)
-            setSettings((prev) => ({ ...prev, logoUrl: res.url }))
+            setSettings((prev) => ({ ...prev, logoKey: res.key }))
         } finally {
             setLogoUploading(false)
             if (logoInputRef.current) logoInputRef.current.value = ''
@@ -185,7 +187,7 @@ export default function SettingsPage() {
         vatNumber: settings.vatNumber || null,
         bankName: settings.bankName || null,
         bankIban: settings.bankIban || null,
-        logoUrl: settings.logoUrl || null,
+        logoKey: settings.logoKey || null,
         invoiceTemplate: settings.invoiceTemplate || 'CLASSIC',
         invoiceAccentColor: settings.invoiceAccentColor || null,
         invoiceShowLogo: settings.invoiceShowLogo !== false,
@@ -287,7 +289,7 @@ export default function SettingsPage() {
               vatNumber: settings.vatNumber,
               bankName: settings.bankName,
               bankIban: settings.bankIban,
-              logoUrl: settings.logoUrl,
+              logoKey: settings.logoKey,
               invoiceTemplate: settings.invoiceTemplate,
               invoiceAccentColor: settings.invoiceAccentColor,
               invoiceShowLogo: settings.invoiceShowLogo,
@@ -519,13 +521,7 @@ export default function SettingsPage() {
                                 <span className="block font-medium text-slate-700 dark:text-slate-200">{t('settings.general.pricesIncludeTax')}</span>
                                 <span className="text-xs text-slate-500 dark:text-slate-400">{t('settings.general.pricesIncludeTaxHint')}</span>
                             </span>
-                            <input
-                                type="checkbox"
-                                name="pricesIncludeTax"
-                                checked={!!settings.pricesIncludeTax}
-                                onChange={handleSettingsChange}
-                                className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                            />
+                            <Checkbox name="pricesIncludeTax" checked={!!settings.pricesIncludeTax} onChange={handleSettingsChange} />
                         </label>
                     )}
 
@@ -712,13 +708,7 @@ export default function SettingsPage() {
                                     className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800"
                                 >
                                     <span className="font-medium text-slate-700 dark:text-slate-200">{t(`settings.invoicing.toggle.${key}`)}</span>
-                                    <input
-                                        type="checkbox"
-                                        name={key}
-                                        checked={settings[key] !== false}
-                                        onChange={handleSettingsChange}
-                                        className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                                    />
+                                    <Checkbox name={key} checked={settings[key] !== false} onChange={handleSettingsChange} />
                                 </label>
                             ))}
                         </div>
@@ -841,13 +831,7 @@ export default function SettingsPage() {
 
                         <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
                             <span className="font-medium text-slate-700 dark:text-slate-200">{t('settings.email.useTls')}</span>
-                            <input
-                                type="checkbox"
-                                name="smtpUseTls"
-                                checked={settings.smtpUseTls !== false}
-                                onChange={handleSettingsChange}
-                                className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                            />
+                            <Checkbox name="smtpUseTls" checked={settings.smtpUseTls !== false} onChange={handleSettingsChange} />
                         </label>
 
                         <SaveBar saving={saving} label={t('settings.save')} savingLabel={t('common.saving')} />
@@ -1007,12 +991,7 @@ export default function SettingsPage() {
                                                     <td className="px-4 py-3 font-medium">{label}</td>
                                                     <td colSpan={PERMISSION_ACTIONS.length} className="px-4 py-3 text-center">
                                                         <label className="inline-flex items-center gap-2">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={!!row.canCreate}
-                                                                onChange={(e) => toggleEmailAccess(row.module, e.target.checked)}
-                                                                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                                                            />
+                                                            <Checkbox checked={!!row.canCreate} onChange={(e) => toggleEmailAccess(row.module, e.target.checked)} />
                                                             <span className="text-sm text-slate-600 dark:text-slate-300">{t('users.perm.emailAccess')}</span>
                                                         </label>
                                                     </td>
@@ -1024,12 +1003,7 @@ export default function SettingsPage() {
                                                 <td className="px-4 py-3 font-medium">{label}</td>
                                                 {PERMISSION_ACTIONS.map((action) => (
                                                     <td key={action.key} className="px-4 py-3 text-center">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={!!row[action.key]}
-                                                            onChange={(e) => togglePerm(row.module, action.key, e.target.checked)}
-                                                            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                                                        />
+                                                        <Checkbox checked={!!row[action.key]} onChange={(e) => togglePerm(row.module, action.key, e.target.checked)} />
                                                     </td>
                                                 ))}
                                             </tr>
@@ -1110,8 +1084,8 @@ export default function SettingsPage() {
 
                             <div className="mb-4 flex items-center gap-4">
                                 <div className="flex h-16 w-32 items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-950">
-                                    {settings.logoUrl ? (
-                                        <img src={resolveImageUrl(settings.logoUrl)} alt={t('settings.company.logo')} className="max-h-full max-w-full object-contain" />
+                                    {settings.logoKey ? (
+                                        <img src={logoUrl} alt={t('settings.company.logo')} className="max-h-full max-w-full object-contain" />
                                     ) : (
                                         <span className="text-xs text-slate-400">{t('settings.company.noLogo')}</span>
                                     )}
@@ -1132,10 +1106,10 @@ export default function SettingsPage() {
                                     >
                                         <UploadCloud className="h-4 w-4" /> {logoUploading ? t('common.saving') : t('settings.company.uploadLogo')}
                                     </button>
-                                    {settings.logoUrl && (
+                                    {settings.logoKey && (
                                         <button
                                             type="button"
-                                            onClick={() => setSettings((prev) => ({ ...prev, logoUrl: '' }))}
+                                            onClick={() => setSettings((prev) => ({ ...prev, logoKey: '' }))}
                                             className="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-600"
                                         >
                                             <X className="h-3 w-3" /> {t('settings.company.removeLogo')}
@@ -1197,25 +1171,13 @@ export default function SettingsPage() {
                         placeholder="20"
                     />
                     <label className="inline-flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
-                        <input
-                            type="checkbox"
-                            name="isDefault"
-                            checked={!!taxForm.isDefault}
-                            onChange={handleTaxChange}
-                            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                        />
+                        <Checkbox name="isDefault" checked={!!taxForm.isDefault} onChange={handleTaxChange} />
                         <span className="font-medium text-slate-700 dark:text-slate-200">{t('settings.tax.makeDefault')}</span>
                     </label>
                     {/* Active is only meaningful once a rate exists — a new tax rate is created active. */}
                     {editingTaxId && (
                         <label className="inline-flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
-                            <input
-                                type="checkbox"
-                                name="active"
-                                checked={!!taxForm.active}
-                                onChange={handleTaxChange}
-                                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                            />
+                            <Checkbox name="active" checked={!!taxForm.active} onChange={handleTaxChange} />
                             <span className="font-medium text-slate-700 dark:text-slate-200">{t('common.active')}</span>
                         </label>
                     )}

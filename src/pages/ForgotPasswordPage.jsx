@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import BackToHome from '../components/BackToHome'
 import { useTranslation } from 'react-i18next'
 import { Loader2, MailCheck, MailWarning } from 'lucide-react'
 import { apiPost } from '../api/client'
@@ -44,9 +45,10 @@ export default function ForgotPasswordPage() {
             </div>
 
             <div className="fade-in-up shadow-pop relative w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 dark:border-slate-800 dark:bg-slate-900">
+                <BackToHome className="mb-4" />
                 <div className="mb-8 text-center">
                     <Link to="/" aria-label={t('common.backToHome')}>
-                        <img src="/kladdo-logo.svg" alt="" aria-hidden="true" className="mx-auto mb-3 h-12 w-auto" />
+                        <img src="/skladdo-logo.svg" alt="" aria-hidden="true" className="mx-auto mb-3 h-12 w-auto" />
                     </Link>
                     <h1 className="text-2xl font-bold tracking-tight text-teal-700 dark:text-teal-400">
                         {t('forgotPassword.title')}

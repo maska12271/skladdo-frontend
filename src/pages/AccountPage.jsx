@@ -11,6 +11,7 @@ import { FormField } from '../components/FormField.jsx'
 import PasswordStrength from '../components/PasswordStrength.jsx'
 import RichTextEditor from '../components/RichTextEditor'
 import LanguageSwitcher from '../components/LanguageSwitcher'
+import Checkbox from '../components/Checkbox'
 
 /** A titled card section wrapping one part of the account form. */
 function Section({ icon: Icon, title, description, children }) {
@@ -278,12 +279,7 @@ export default function AccountPage() {
                                             {t(`notifications.type.${value}`)}
                                         </span>
                                     </span>
-                                    <input
-                                        type="checkbox"
-                                        checked={!mutedTypes.includes(value)}
-                                        onChange={() => toggleNotification(value)}
-                                        className="h-5 w-5 shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-700"
-                                    />
+                                    <Checkbox checked={!mutedTypes.includes(value)} onChange={() => toggleNotification(value)} className="shrink-0" />
                                 </label>
                             ))}
                         </div>

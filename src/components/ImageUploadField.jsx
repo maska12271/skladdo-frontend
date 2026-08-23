@@ -1,70 +1,48 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UploadCloud, X, Loader2 } from 'lucide-react'
-import { apiUpload } from '../api/client'
+import { usePresignedUrl } from '../hooks/usePresignedUrl'
+import { useImageUpload, ACCEPTED_LABEL } from '../hooks/useImageUpload'
 
-// Uploaded files are served from the backend origin (the API base minus its trailing `/api`).
-const BACKEND_BASE = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api').replace(/\/api\/?$/, '')
-const MAX_SIZE = 5 * 1024 * 1024 // 5 MB — keep in sync with backend multipart limit
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-const ACCEPTED_LABEL = 'JPG, PNG, GIF or WebP'
-
-export function resolveImageUrl(url) {
-    if (!url) return null
-    if (url.startsWith('http') || url.startsWith('data:')) return url
-    return BACKEND_BASE + url
+// One image's thumbnail — its own component so usePresignedUrl (a hook) can resolve each key
+// independently while mapping over a dynamic list.
+function Thumbnail({ imageKey, alt, onRemove, removeLabel }) {
+    const url = usePresignedUrl(imageKey)
+    return (
+        <div className="group relative aspect-square overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+            <img src={url} alt={alt} className="h-full w-full object-cover" />
+            <button
+                type="button"
+                onClick={onRemove}
+                aria-label={removeLabel}
+                className="absolute right-1 top-1 rounded-full bg-slate-900/60 p-1 text-white opacity-0 transition hover:bg-rose-600 group-hover:opacity-100"
+            >
+                <X className="h-3.5 w-3.5" />
+            </button>
+        </div>
+    )
 }
 
 export default function ImageUploadField({ value = [], onChange, className = '' }) {
     const { t } = useTranslation()
-    const [uploading, setUploading] = useState(false)
-    const [error, setError] = useState('')
+    const { uploadFiles, uploading, error } = useImageUpload()
     const [dragOver, setDragOver] = useState(false)
     const fileRef = useRef(null)
 
-    const uploadFiles = async (fileList) => {
-        const files = Array.from(fileList)
-        if (files.length === 0) return
-        setError('')
-
-        const valid = []
-        for (const file of files) {
-            if (!ACCEPTED_TYPES.includes(file.type)) {
-                setError(t('imageUpload.notSupported', { name: file.name, types: ACCEPTED_LABEL }))
-                continue
-            }
-            if (file.size > MAX_SIZE) {
-                setError(t('imageUpload.tooLarge', { name: file.name }))
-                continue
-            }
-            valid.push(file)
-        }
-        if (valid.length === 0) return
-
-        setUploading(true)
-        try {
-            const results = await Promise.all(
-                valid.map((file) => {
-                    const formData = new FormData()
-                    formData.append('file', file)
-                    return apiUpload('/upload/image', formData)
-                }),
-            )
-            onChange([...value, ...results.map((r) => r.url)])
-        } finally {
-            setUploading(false)
-        }
+    const addFiles = async (fileList) => {
+        const keys = await uploadFiles(fileList)
+        if (keys.length > 0) onChange([...value, ...keys])
     }
 
     const handleInputChange = (e) => {
-        uploadFiles(e.target.files)
+        addFiles(e.target.files)
         e.target.value = ''
     }
 
     const handleDrop = (e) => {
         e.preventDefault()
         setDragOver(false)
-        uploadFiles(e.dataTransfer.files)
+        addFiles(e.dataTransfer.files)
     }
 
     const removeAt = (index) => {
@@ -118,21 +96,14 @@ export default function ImageUploadField({ value = [], onChange, className = '' 
 
             {value.length > 0 && (
                 <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
-                    {value.map((url, index) => (
-                        <div
-                            key={`${url}-${index}`}
-                            className="group relative aspect-square overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700"
-                        >
-                            <img src={resolveImageUrl(url)} alt={`${t('imageUpload.label')} ${index + 1}`} className="h-full w-full object-cover" />
-                            <button
-                                type="button"
-                                onClick={() => removeAt(index)}
-                                aria-label={t('imageUpload.removeImage')}
-                                className="absolute right-1 top-1 rounded-full bg-slate-900/60 p-1 text-white opacity-0 transition hover:bg-rose-600 group-hover:opacity-100"
-                            >
-                                <X className="h-3.5 w-3.5" />
-                            </button>
-                        </div>
+                    {value.map((key, index) => (
+                        <Thumbnail
+                            key={`${key}-${index}`}
+                            imageKey={key}
+                            alt={`${t('imageUpload.label')} ${index + 1}`}
+                            onRemove={() => removeAt(index)}
+                            removeLabel={t('imageUpload.removeImage')}
+                        />
                     ))}
                 </div>
             )}
