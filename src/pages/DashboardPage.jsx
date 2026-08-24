@@ -93,6 +93,7 @@ export default function DashboardPage() {
         if (stats.tenders) keys.add('tenders')
         if (hasSales) keys.add('topClients')
         if (hasSales) keys.add('topProducts')
+        if (hasSales) keys.add('topServices')
         return keys
     }, [stats])
 
@@ -162,6 +163,8 @@ export default function DashboardPage() {
                 return t('dashboard.titles.topClients')
             case 'topProducts':
                 return t('dashboard.titles.topProducts')
+            case 'topServices':
+                return t('dashboard.titles.topServices')
             default:
                 // KPI widgets fall through to their catalogue label.
                 return t(`dashboard.widgets.${key}`, { defaultValue: widgetMeta(key)?.label || key })
@@ -246,6 +249,8 @@ export default function DashboardPage() {
                 return <RankList rows={stats.topClients || []} emptyText={t('dashboard.rank.noSales')} />
             case 'topProducts':
                 return <RankList rows={stats.topProducts || []} emptyText={t('dashboard.rank.noSales')} unit={t('dashboard.rank.units')} />
+            case 'topServices':
+                return <RankList rows={stats.topServices || []} emptyText={t('dashboard.rank.noSales')} unit={t('dashboard.rank.units')} />
             default:
                 return null
         }
@@ -388,6 +393,7 @@ const WIDGET_LINKS = {
     tenders: '/tenders',
     topClients: '/clients',
     topProducts: '/products',
+    topServices: '/services',
 }
 
 /** Widget title per KPI, reusing the translations the old summary-card block already shipped. */

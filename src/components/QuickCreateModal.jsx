@@ -18,6 +18,25 @@ const CONFIGS = {
         endpoint: '/categories',
         toPayload: (f) => ({ name: f.name, description: f.description || '' }),
     },
+    service: {
+        titleKey: 'quickCreate.service',
+        createdKey: 'services.created',
+        endpoint: '/services',
+        // No manufacturer, no stock and no category requirement - a service has none of them.
+        toPayload: (f) => ({
+            name: f.name,
+            code: f.code || '',
+            price: Number(f.price || 0),
+            category: f.categoryId ? { id: Number(f.categoryId) } : null,
+            active: true,
+        }),
+    },
+    serviceCategory: {
+        titleKey: 'quickCreate.serviceCategory',
+        createdKey: 'serviceCategories.created',
+        endpoint: '/service-categories',
+        toPayload: (f) => ({ name: f.name, description: f.description || '' }),
+    },
     partnerCategory: {
         titleKey: 'quickCreate.partnerCategory',
         createdKey: 'partnerCategories.created',
@@ -79,6 +98,12 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
                 setCategories(safeArray(cats))
                 setManufacturers(safeArray(mfrs))
             })
+        }
+        if (type === 'service') {
+            // Its own taxonomy, and optional here - a service can be created without one.
+            apiGet('/service-categories?page=0&size=500&sortBy=name&sortDir=asc')
+                .then((cats) => setCategories(safeArray(cats)))
+                .catch(() => setCategories([]))
         }
     }, [isOpen, initialName, type])
 
@@ -195,6 +220,25 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
                                 searchable
                                 placeholder={t('quickCreate.selectManufacturer')}
                                 options={manufacturers.map((m) => ({ value: String(m.id), label: m.name }))}
+                            />
+                        </>
+                    )}
+
+                    {type === 'service' && (
+                        <>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <FormField id="qc-code" label={t('common.code')} name="code" value={form.code || ''} onChange={handleChange} placeholder={t('common.optional')} />
+                                <FormField id="qc-price" label={`${t('common.price')} (${currencySymbol()})`} name="price" type="number" step="0.01" value={form.price || ''} onChange={handleChange} required placeholder="0.00" />
+                            </div>
+                            <FormSelect
+                                id="qc-service-category"
+                                label={t('nav.serviceCategories')}
+                                name="categoryId"
+                                value={form.categoryId || ''}
+                                onChange={handleChange}
+                                searchable
+                                placeholder={t('common.optional')}
+                                options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
                             />
                         </>
                     )}

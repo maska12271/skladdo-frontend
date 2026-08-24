@@ -30,30 +30,39 @@ export function FormSelect({
                                searchable = false,
                                className = "",
                                onQuickCreate,
+                               quickCreateActions,
                            }) {
     return (
         <div className={`space-y-2 ${className}`}>
             <FieldLabel id={id} label={label} required={required} />
-            <CustomSelect
-                id={id}
-                options={options}
-                value={value}
-                searchable={searchable}
-                placeholder={placeholder}
-                ariaLabel={typeof label === "string" ? label : undefined}
-                onChange={(val) => onChange({ target: { name, value: val } })}
-                onQuickCreate={onQuickCreate}
-            />
-            {required && (
-                <input
-                    className="sr-only"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                    required
-                    value={value ?? ""}
-                    onChange={() => {}}
+            {/* The control and its validation proxy share a wrapper so the proxy is not a `space-y-2`
+                sibling. As one it picked up the stack's margin and left ~8px of dead space under every
+                required field - enough to push a delete button laid out beside it out of line. It has to
+                stay rendered (a display:none input is exempt from constraint validation), so it is kept
+                out of the flow here instead. */}
+            <div className="relative">
+                <CustomSelect
+                    id={id}
+                    options={options}
+                    value={value}
+                    searchable={searchable}
+                    placeholder={placeholder}
+                    ariaLabel={typeof label === "string" ? label : undefined}
+                    onChange={(val) => onChange({ target: { name, value: val } })}
+                    onQuickCreate={onQuickCreate}
+                    quickCreateActions={quickCreateActions}
                 />
-            )}
+                {required && (
+                    <input
+                        className="sr-only"
+                        tabIndex={-1}
+                        aria-hidden="true"
+                        required
+                        value={value ?? ""}
+                        onChange={() => {}}
+                    />
+                )}
+            </div>
         </div>
     );
 }

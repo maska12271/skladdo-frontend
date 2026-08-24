@@ -18,12 +18,12 @@ const VIEWPORTS = [
 ]
 
 const LIST_PAGES = [
-    '/dashboard', '/products', '/sales-orders', '/purchase-orders', '/warehouses', '/manufacturers',
+    '/dashboard', '/products', '/services', '/sales-orders', '/purchase-orders', '/warehouses', '/manufacturers',
     '/clients', '/tenders', '/emails', '/users', '/audit-log', '/settings', '/account',
 ]
 
 // Detail pages are reached by opening the first record, so no seeded ids are baked into the test.
-const DETAIL_FROM = ['/products', '/sales-orders', '/purchase-orders', '/clients', '/manufacturers', '/tenders', '/warehouses']
+const DETAIL_FROM = ['/products', '/services', '/sales-orders', '/purchase-orders', '/clients', '/manufacturers', '/tenders', '/warehouses']
 
 /**
  * Elements painted past the right edge with no scrollable ancestor to bring them back.

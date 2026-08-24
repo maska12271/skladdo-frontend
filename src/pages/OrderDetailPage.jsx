@@ -122,9 +122,16 @@ export default function OrderDetailPage({ type = 'sales' }) {
         : null
 
     const itemColumns = [
-        { key: 'productName', label: t('orderDetail.cols.product'), render: (r) => r.productName || '-' },
+        // A line is either a product or a service; the column shows whichever it is.
+        { key: 'productName', label: t('orderDetail.cols.product'), render: (r) => r.productName || r.serviceName || '-' },
         { key: 'sku', label: t('common.sku'), render: (r) => r.sku || '—' },
-        { key: 'quantity', label: t('common.qty') },
+        // The unit qualifies the number, so it belongs beside it: "3" alone does not say 3 of what.
+        // Only products carry one; a service line shows the bare count.
+        {
+            key: 'quantity',
+            label: t('common.qty'),
+            render: (r) => (r.unit ? `${r.quantity} ${r.unit}` : r.quantity),
+        },
         ...(canSeePrices
             ? [
                 { key: 'unitPrice', label: t('orderDetail.cols.unitPrice'), render: (r) => formatMoney(r.unitPrice, orderCurrency) },
@@ -162,7 +169,7 @@ export default function OrderDetailPage({ type = 'sales' }) {
             }]
             : []),
     ]
-    const itemRows = (details.items || []).map((it, i) => ({ ...it, _rid: `${it.productId}-${i}` }))
+    const itemRows = (details.items || []).map((it, i) => ({ ...it, _rid: `${it.productId ?? `s${it.serviceId}`}-${i}` }))
 
     return (
         <div className="space-y-6">
@@ -247,7 +254,10 @@ export default function OrderDetailPage({ type = 'sales' }) {
                     columns={itemColumns}
                     rows={itemRows}
                     getRowId={(r) => r._rid}
-                    onRowClick={(r) => r.productId && navigate(`/products/${r.productId}`)}
+                    onRowClick={(r) => {
+                        if (r.productId) navigate(`/products/${r.productId}`)
+                        else if (r.serviceId) navigate(`/services/${r.serviceId}`)
+                    }}
                     paginate={false}
                 />
             </section>

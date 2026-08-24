@@ -12,7 +12,25 @@ function getFocusableElements(container) {
     ).filter((el) => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden'))
 }
 
-export default function Modal({ isOpen, title, children, onClose, width = 'max-w-3xl' }) {
+/**
+ * The caller's width cap, paired with the `sm:`-prefixed variant that actually applies it.
+ *
+ * Spelled out as literal strings on purpose. Tailwind only emits a utility it can see written out in
+ * the source, and this used to build the variant at runtime (`sm:${width}`) — which produced a class
+ * name with no rule behind it, so **every modal in the app was uncapped on desktop** and grew to the
+ * full width of the window. Adding a size here means adding both halves of the pair.
+ */
+const WIDTHS = {
+    'max-w-md': 'sm:max-w-md',
+    'max-w-lg': 'sm:max-w-lg',
+    'max-w-xl': 'sm:max-w-xl',
+    'max-w-2xl': 'sm:max-w-2xl',
+    'max-w-3xl': 'sm:max-w-3xl',
+}
+
+const DEFAULT_WIDTH = 'max-w-3xl'
+
+export default function Modal({ isOpen, title, children, onClose, width = DEFAULT_WIDTH }) {
     const { t } = useTranslation()
     const dialogRef = useRef(null)
     const lastActiveElementRef = useRef(null)
@@ -82,14 +100,10 @@ export default function Modal({ isOpen, title, children, onClose, width = 'max-w
 
     if (!isOpen) return null
 
-    // The caller's width cap is a desktop concern. Below `sm` the dialog is a sheet the full width of the
-    // screen, so the cap only takes effect from `sm` up — a `max-w-lg` box floating in the middle of a
-    // phone wastes the screen and leaves a form squeezed into it.
-    const widthFromSm = width
-        .split(' ')
-        .filter(Boolean)
-        .map((cls) => (cls.includes(':') ? cls : `sm:${cls}`))
-        .join(' ')
+    // The cap is a desktop concern. Below `sm` the dialog is a sheet the full width of the screen, so it
+    // only takes effect from `sm` up — a capped box floating in the middle of a phone wastes the screen
+    // and leaves the form squeezed inside it.
+    const widthFromSm = WIDTHS[width] ?? WIDTHS[DEFAULT_WIDTH]
 
     return (
         <div

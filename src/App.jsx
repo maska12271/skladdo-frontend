@@ -16,6 +16,8 @@ const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const ProductsPage = lazy(() => import('./pages/ProductsPage'))
 const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'))
+const ServicesPage = lazy(() => import('./pages/ServicesPage'))
+const ServiceDetailPage = lazy(() => import('./pages/ServiceDetailPage'))
 const ManufacturersPage = lazy(() => import('./pages/ManufacturersPage'))
 const ManufacturerDetailPage = lazy(() => import('./pages/ManufacturerDetailPage'))
 const ClientsPage = lazy(() => import('./pages/ClientsPage'))
@@ -155,6 +157,14 @@ export default function App() {
                 <Route
                     path="/products/:id"
                     element={<RequirePermission module="PRODUCTS"><ProductDetailPage /></RequirePermission>}
+                />
+                <Route
+                    path="/services"
+                    element={<RequirePermission module="SERVICES"><ServicesPage /></RequirePermission>}
+                />
+                <Route
+                    path="/services/:id"
+                    element={<RequirePermission module="SERVICES"><ServiceDetailPage /></RequirePermission>}
                 />
                 <Route
                     path="/manufacturers"

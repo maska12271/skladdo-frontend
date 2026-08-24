@@ -96,3 +96,46 @@ test.describe('list URL sync', () => {
         await expect(page).toHaveURL(/[?&]size=25/)
     })
 })
+
+/**
+ * Clearing filters writes several params in one user action, which is exactly the shape that used to
+ * break: `setSearchParams((prev) => …)` resolves `prev` against the *last render*, so two calls in one
+ * tick both started from the pre-click URL and the second discarded the first (F-016). The control was
+ * added on the desktop filter bar and has always existed in the mobile filter sheet, and neither
+ * actually cleared anything until `useServerTable` began composing same-tick writes.
+ */
+test.describe('clearing filters', () => {
+    test.beforeEach(async ({ page }) => {
+        await login(page)
+    })
+
+    test('is offered only once something is filtered', async ({ page }) => {
+        await page.goto('/products')
+        await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0)
+
+        await page.goto('/products?manufacturer=1,2')
+        await expect(page.getByRole('button', { name: 'Clear filters' })).toBeVisible()
+    })
+
+    test('removes every filter param, not just the last one written', async ({ page }) => {
+        // Two filters at once is the case the old code got wrong: clearing them in a loop restored the
+        // first from a stale snapshot, so the list stayed filtered while the controls read as empty.
+        await page.goto('/products?manufacturer=1,2&status=active')
+        await page.getByRole('button', { name: 'Clear filters' }).click()
+
+        await expect(page).toHaveURL(/\/products$/)
+        await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0)
+    })
+
+    test('widens from its icon to its label on hover, so the row stays compact', async ({ page }) => {
+        await page.goto('/products?manufacturer=1,2')
+        const clear = page.getByRole('button', { name: 'Clear filters' })
+        const collapsed = await clear.boundingBox()
+        await clear.hover()
+        await page.waitForTimeout(350)
+        const expanded = await clear.boundingBox()
+
+        expect(collapsed.width).toBeLessThan(60)
+        expect(expanded.width).toBeGreaterThan(collapsed.width + 30)
+    })
+})

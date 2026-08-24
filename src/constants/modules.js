@@ -5,9 +5,12 @@
 // `navKey` indexes the i18n `nav.*` dictionary so the module name can be shown translated.
 export const PERMISSION_MODULES = [
     { module: 'PRODUCTS', label: 'Products', navKey: 'products', path: '/products' },
+    { module: 'SERVICES', label: 'Services', navKey: 'services', path: '/services' },
     { module: 'MANUFACTURERS', label: 'Manufacturers', navKey: 'manufacturers', path: '/manufacturers' },
     // Categories are managed in a modal launched from the products page (no standalone page).
     { module: 'CATEGORIES', label: 'Categories', navKey: 'categories', path: null },
+    // Service categories are managed in a modal launched from the services page.
+    { module: 'SERVICE_CATEGORIES', label: 'Service Categories', navKey: 'serviceCategories', path: null },
     // Manufacturer categories are managed in a modal launched from the manufacturers page.
     { module: 'PARTNER_CATEGORIES', label: 'Manufacturer Categories', navKey: 'partnerCategories', path: null },
     { module: 'CLIENTS', label: 'Clients', navKey: 'clients', path: '/clients' },

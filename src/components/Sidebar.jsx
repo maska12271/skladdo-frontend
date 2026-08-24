@@ -15,6 +15,7 @@ import {
     PanelLeftClose,
     PanelLeftOpen,
     Warehouse,
+    Wrench,
     Mail,
     ScrollText,
     Building2,
@@ -37,6 +38,7 @@ import LanguageSwitcher from "./LanguageSwitcher"
 const baseLinks = [
     { to: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
     { to: "/products", labelKey: "products", icon: Package, module: "PRODUCTS" },
+    { to: "/services", labelKey: "services", icon: Wrench, module: "SERVICES" },
     { to: "/manufacturers", labelKey: "manufacturers", icon: Factory, module: "MANUFACTURERS" },
     { to: "/clients", labelKey: "clients", icon: Users, module: "CLIENTS" },
     { to: "/sales-orders", labelKey: "salesOrders", icon: ShoppingCart, module: "SALES_ORDERS" },
@@ -52,7 +54,7 @@ const baseLinks = [
  * home administering itself, where it holds no permissions; the server still decides every request.
  */
 const PARTNER_LINKS = new Set([
-    "/dashboard", "/products", "/manufacturers", "/clients", "/sales-orders", "/purchase-orders", "/warehouses",
+    "/dashboard", "/products", "/services", "/manufacturers", "/clients", "/sales-orders", "/purchase-orders", "/warehouses",
 ])
 
 const COLLAPSE_COOKIE = "sidebar_collapsed"

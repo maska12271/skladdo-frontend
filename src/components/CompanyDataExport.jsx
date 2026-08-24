@@ -27,6 +27,10 @@ const EXPORT_SHEETS = [
         columns: ['name', 'sku', 'unit', 'price', 'currency', 'stockQuantity', 'minimumStock', 'reorderQuantity'],
     },
     {
+        key: 'services', path: '/services?size=1000', labelKey: 'nav.services',
+        columns: ['name', 'code', 'price', 'currency'],
+    },
+    {
         key: 'salesOrders', path: '/sales-orders?size=1000', labelKey: 'nav.salesOrders',
         columns: ['orderNumber', 'status', 'orderDate', 'currency', 'totalAmount'],
     },

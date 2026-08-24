@@ -48,6 +48,7 @@ export const DASHBOARD_WIDGETS = [
     { key: 'stockHealth', label: 'Stock health', x: 16, y: 21, w: 8, h: 4, minW: 5, minH: 4 },
     { key: 'topClients', label: 'Top clients', x: 16, y: 26, w: 8, h: 6, minW: 6, minH: 4 },
     { key: 'topProducts', label: 'Top products', x: 16, y: 32, w: 8, h: 6, minW: 6, minH: 4 },
+    { key: 'topServices', label: 'Top services', x: 16, y: 38, w: 8, h: 6, minW: 6, minH: 4 },
 ]
 
 // v8: widgets were resized and rearranged into columns, and the KPI bands re-split into three large

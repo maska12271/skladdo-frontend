@@ -10,6 +10,7 @@ import { Download, UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2 } f
 // Maps the entity slug pages pass to a translated noun for messages.
 const ENTITY_NAV_KEY = {
     products: 'products',
+    services: 'services',
     manufacturers: 'manufacturers',
     categories: 'categories',
     clients: 'clients',

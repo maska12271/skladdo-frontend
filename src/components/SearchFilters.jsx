@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { SlidersHorizontal, ArrowDown, ArrowUp } from 'lucide-react'
+import { SlidersHorizontal, ArrowDown, ArrowUp, X } from 'lucide-react'
 import CustomSelect from "./CustomSelect"
 import Modal from "./Modal"
 import { useBreakpoint } from "../hooks/useBreakpoint"
@@ -56,9 +56,34 @@ export default function SearchFilters({
     if (isDesktop) {
         return (
             <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                <div className="grid gap-4 lg:grid-cols-[2fr_repeat(3,1fr)]">
-                    {searchBox}
-                    {filterControls}
+                <div className="flex items-center gap-3">
+                    {/* Sized to the filters this page actually has, rather than a fixed four columns: a
+                        page with two of them used to leave a quarter of the row empty. Inline because the
+                        count is a runtime value, and Tailwind only emits classes written out in source. */}
+                    <div
+                        className="grid flex-1 gap-4"
+                        style={{ gridTemplateColumns: `2fr repeat(${filters.length}, minmax(0, 1fr))` }}
+                    >
+                        {searchBox}
+                        {filterControls}
+                    </div>
+                    {/* Only once there is something to clear — a permanently visible control that does
+                        nothing most of the time is just noise on the row. Collapsed to its icon and
+                        widening to its label on hover, so it costs almost nothing until wanted. */}
+                    {activeCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => filters.forEach((f) => f.onChange([]))}
+                            title={t('common.clearFilters')}
+                            aria-label={t('common.clearFilters')}
+                            className="group inline-flex shrink-0 items-center rounded-xl border border-slate-300 px-2.5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                        >
+                            <X className="h-5 w-5 shrink-0" />
+                            <span className="max-w-0 overflow-hidden whitespace-nowrap transition-all duration-200 group-hover:max-w-[10rem] group-hover:pl-1.5 group-focus-visible:max-w-[10rem] group-focus-visible:pl-1.5">
+                                {t('common.clearFilters')}
+                            </span>
+                        </button>
+                    )}
                 </div>
                 {rightContent ? <div className="flex justify-end">{rightContent}</div> : null}
             </div>

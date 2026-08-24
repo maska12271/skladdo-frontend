@@ -25,15 +25,20 @@ export default function CustomSelect({
     id,
     ariaLabel,
     onQuickCreate,
+    quickCreateActions,
 }) {
     const { t } = useTranslation()
     const resolvedPlaceholder = placeholder ?? t('select.placeholder')
     const [open, setOpen] = useState(false)
     const [query, setQuery] = useState('')
     const [coords, setCoords] = useState(null)
+    // Whether the full list of selected labels fits the trigger; see the measuring effect below.
+    const [labelsFit, setLabelsFit] = useState(true)
     const triggerRef = useRef(null)
     const panelRef = useRef(null)
     const searchRef = useRef(null)
+    const labelBoxRef = useRef(null)
+    const measureRef = useRef(null)
 
     const selectedValues = multiple ? (Array.isArray(value) ? value.map(String) : []) : []
     const isSelected = (v) =>
@@ -112,6 +117,52 @@ export default function CustomSelect({
         }
     }, [open, searchable])
 
+    // The labels behind the current selection, in the order they were picked. A missing entry means the
+    // option list has not caught up with the value yet (a filter restored from the URL before its
+    // reference data loaded), in which case the count is the only honest thing to show.
+    const selectedLabels = multiple
+        ? selectedValues.map((v) => options.find((opt) => String(opt.value) === v)?.label).filter(Boolean)
+        : []
+    const allLabelsResolved = selectedLabels.length === selectedValues.length
+    const joinedLabels = selectedLabels.join(', ')
+
+    /**
+     * Decides whether the joined labels fit, by comparing a hidden copy of the full text against the
+     * space the visible label has.
+     *
+     * Measuring the *visible* element instead would oscillate: shrinking to "2 selected" makes the text
+     * fit again, which would immediately expand it back. The hidden copy always holds the full string,
+     * so the question it answers ("would this fit?") does not depend on the answer.
+     */
+    useLayoutEffect(() => {
+        if (!multiple || selectedLabels.length < 2) {
+            setLabelsFit(true)
+            return
+        }
+        const measure = () => {
+            const box = labelBoxRef.current
+            const full = measureRef.current
+            if (box && full) setLabelsFit(full.scrollWidth <= box.clientWidth)
+        }
+        measure()
+        // The trigger is in a responsive grid, so its width changes without the selection changing.
+        const observer = new ResizeObserver(measure)
+        if (labelBoxRef.current) observer.observe(labelBoxRef.current)
+        return () => observer.disconnect()
+    }, [multiple, joinedLabels, selectedLabels.length])
+
+    /**
+     * What can be created without leaving the dropdown. `onQuickCreate` is the one-kind shorthand most
+     * callers want; `quickCreateActions` (`[{ key, label, onSelect }]`) is for a picker that offers a
+     * choice — the order line, where the same field sells either a product or a service and the user
+     * should not have to guess which one a bare "create" would make.
+     */
+    const quickActions = quickCreateActions?.length
+        ? quickCreateActions
+        : onQuickCreate
+            ? [{ key: 'default', label: null, onSelect: onQuickCreate }]
+            : []
+
     const handleSelect = (opt) => {
         if (multiple) {
             const set = new Set(selectedValues)
@@ -128,13 +179,13 @@ export default function CustomSelect({
     let triggerLabel = resolvedPlaceholder
     let isPlaceholder = true
     if (multiple) {
-        if (selectedValues.length === 1) {
-            const o = options.find((opt) => String(opt.value) === selectedValues[0])
-            triggerLabel = o ? o.label : t('select.selectedCount', { count: 1 })
+        if (selectedValues.length > 0) {
             isPlaceholder = false
-        } else if (selectedValues.length > 1) {
-            triggerLabel = t('select.selectedCount', { count: selectedValues.length })
-            isPlaceholder = false
+            // Name what is selected while it fits, and only fall back to counting it when it doesn't -
+            // "Active, Low stock" tells you what you filtered by; "2 selected" makes you open the menu.
+            triggerLabel = allLabelsResolved && (selectedLabels.length === 1 || labelsFit)
+                ? joinedLabels
+                : t('select.selectedCount', { count: selectedValues.length })
         }
     } else {
         const o = options.find((opt) => String(opt.value) === String(value ?? ''))
@@ -155,11 +206,26 @@ export default function CustomSelect({
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 aria-label={ariaLabel}
-                className={`flex w-full items-center justify-between gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-left outline-none focus:border-teal-500 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 ${className}`}
+                className={`relative flex w-full items-center justify-between gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-left outline-none focus:border-teal-500 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 ${className}`}
             >
-                <span className={`truncate ${isPlaceholder ? 'text-slate-400 dark:text-slate-500' : ''}`}>
+                <span
+                    ref={labelBoxRef}
+                    className={`min-w-0 flex-1 truncate ${isPlaceholder ? 'text-slate-400 dark:text-slate-500' : ''}`}
+                >
                     {triggerLabel}
                 </span>
+                {/* Off-layout copy of the full text, kept mounted so the measurement above stays valid
+                    whichever version is currently on screen. `invisible` rather than `hidden`: it still
+                    needs a box to measure. */}
+                {multiple && selectedLabels.length > 1 && (
+                    <span
+                        ref={measureRef}
+                        aria-hidden="true"
+                        className="pointer-events-none invisible absolute left-0 top-0 whitespace-nowrap"
+                    >
+                        {joinedLabels}
+                    </span>
+                )}
                 <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${open ? 'rotate-180' : ''}`} />
             </button>
 
@@ -242,20 +308,29 @@ export default function CustomSelect({
                             </div>
                         )}
 
-                        {onQuickCreate && (
+                        {quickActions.length > 0 && (
                             <div className="shrink-0 border-t border-slate-200 dark:border-slate-800">
-                                <button
-                                    type="button"
-                                    onMouseDown={(e) => {
-                                        e.preventDefault()
-                                        setOpen(false)
-                                        onQuickCreate(query.trim())
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-900/20"
-                                >
-                                    <span className="text-base leading-none font-semibold">+</span>
-                                    {query.trim() ? t('select.createNamed', { name: query.trim() }) : t('select.createNew')}
-                                </button>
+                                {quickActions.map((action) => (
+                                    <button
+                                        key={action.key}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault()
+                                            setOpen(false)
+                                            action.onSelect(query.trim())
+                                        }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-900/20"
+                                    >
+                                        <span className="text-base leading-none font-semibold">+</span>
+                                        <span className="truncate">
+                                            {action.label
+                                                // Named action (several kinds to choose between): the kind
+                                                // leads, so the two rows are told apart at a glance.
+                                                ? (query.trim() ? `${action.label}: “${query.trim()}”` : action.label)
+                                                : (query.trim() ? t('select.createNamed', { name: query.trim() }) : t('select.createNew'))}
+                                        </span>
+                                    </button>
+                                ))}
                             </div>
                         )}
                     </div>,
