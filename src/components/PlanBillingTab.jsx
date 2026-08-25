@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiGet, apiPut, apiPost, apiDelete } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import LoadingBlock from './LoadingBlock'
 import { Check, Info, Zap } from 'lucide-react'
@@ -17,6 +18,7 @@ const UNLIMITED = -1
  */
 export default function PlanBillingTab() {
     const { t, i18n } = useTranslation()
+    const { refreshUser } = useAuth()
     const toast = useToast()
 
     const [data, setData] = useState(null)
@@ -50,8 +52,15 @@ export default function PlanBillingTab() {
     const changePlan = (plan) => act(() => apiPut('/subscription/plan', { plan }), 'settings.plan.changed')
     const cancel = () => act(() => apiPost('/subscription/cancel'), 'settings.plan.canceled')
     const resume = () => act(() => apiPost('/subscription/resume'), 'settings.plan.resumed')
-    const enableAddon = (addon) => act(() => apiPost(`/subscription/addons/${addon}`), 'settings.plan.enabled')
-    const disableAddon = (addon) => act(() => apiDelete(`/subscription/addons/${addon}`), 'settings.plan.disabled')
+    /**
+     * Toggling an add-on changes what the whole app offers - the tender and email pages exist only while
+     * one is active - so the session profile is re-read afterwards. Without it the sidebar goes on showing
+     * the old entitlements until the next full page load, offering pages the server now refuses.
+     */
+    const enableAddon = (addon) =>
+        act(() => apiPost(`/subscription/addons/${addon}`), 'settings.plan.enabled').then(refreshUser)
+    const disableAddon = (addon) =>
+        act(() => apiDelete(`/subscription/addons/${addon}`), 'settings.plan.disabled').then(refreshUser)
 
     const fmtDate = (iso) =>
         iso ? new Date(iso).toLocaleDateString(i18n.language, { year: 'numeric', month: 'short', day: 'numeric' }) : ''
@@ -177,8 +186,6 @@ export default function PlanBillingTab() {
                         const current = p.plan === plan
                         const caps = [
                             { label: t('settings.plan.usage.USERS'), value: p.maxUsers },
-                            { label: t('settings.plan.usage.MANUFACTURERS'), value: p.maxManufacturers },
-                            { label: t('settings.plan.usage.PRODUCTS'), value: p.maxProducts },
                         ]
                         return (
                             <div

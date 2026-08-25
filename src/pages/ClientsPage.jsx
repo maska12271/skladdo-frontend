@@ -19,6 +19,7 @@ import { usePermissions } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { safeArray, parseBool } from '../utils/format'
 import {FormField, TextareaField} from "../components/FormField.jsx";
+import PhoneField from '../components/PhoneField'
 import CountrySelectField from "../components/CountrySelectField.jsx";
 import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx";
 import { Eye, Pencil, Trash2, Archive, ArchiveRestore, Users } from 'lucide-react'
@@ -421,12 +422,13 @@ export default function ClientsPage() {
                         className="md:col-span-2"
                     />
 
-                    <FormField
+                    <PhoneField
                         id="client-phone"
                         label={t('common.phone')}
                         name="phone"
                         value={form.phone}
                         onChange={handleChange}
+                        country={form.country}
                         placeholder={t('common.phone')}
                         className="md:col-span-2"
                     />

@@ -8,12 +8,20 @@ let unauthorizedHandler = null
 // Registered by ToastProvider so every failed request surfaces an error notification.
 let errorHandler = null
 
+// Registered by AuthContext. A 403 means the server and this client disagree about what the account may
+// do - a permission an admin changed, an add-on that lapsed - and the client is the one that is stale.
+let forbiddenHandler = null
+
 export function setUnauthorizedHandler(handler) {
     unauthorizedHandler = handler
 }
 
 export function setErrorHandler(handler) {
     errorHandler = handler
+}
+
+export function setForbiddenHandler(handler) {
+    forbiddenHandler = handler
 }
 
 function reportError(message) {
@@ -111,6 +119,13 @@ async function request(path, options = {}) {
 
     if (response.status === 401 && !skipAuthRedirect) {
         throw sessionExpiredError()
+    }
+
+    // Re-read the profile so the interface stops offering whatever was just refused. Without this the
+    // nav keeps a stale idea of the company's add-ons and permissions until the next full page load,
+    // which is how a link to a page that only ever 403s stays on screen.
+    if (response.status === 403 && forbiddenHandler) {
+        forbiddenHandler()
     }
 
     if (!response.ok) {

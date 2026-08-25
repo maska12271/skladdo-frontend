@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiGet, apiPost } from '../api/client'
 import { FormField, FormSelect } from './FormField'
+import PhoneField from './PhoneField'
 import CountrySelectField from './CountrySelectField'
 import { useFrequentCountries } from '../hooks/useFrequentCountries'
 import { useToast } from '../context/ToastContext'
@@ -188,7 +189,7 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
                         <>
                             <CountrySelectField id="qc-country" label={t('common.country')} name="country" value={form.country || ''} onChange={handleChange} frequentCountries={frequentCountries} placeholder={t('common.optional')} />
                             <FormField id="qc-email" label={t('common.email')} name="email" type="email" value={form.email || ''} onChange={handleChange} placeholder={t('common.optional')} />
-                            <FormField id="qc-phone" label={t('common.phone')} name="phone" value={form.phone || ''} onChange={handleChange} placeholder={t('common.optional')} />
+                            <PhoneField id="qc-phone" label={t('common.phone')} name="phone" value={form.phone || ''} onChange={handleChange} country={form.country} placeholder={t('common.optional')} />
                         </>
                     )}
 

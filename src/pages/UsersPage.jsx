@@ -18,8 +18,10 @@ import { useModal } from '../hooks/useModal'
 import { safeArray } from '../utils/format'
 import { FormField, FormSelect } from '../components/FormField.jsx'
 import { PERMISSION_MODULES } from '../constants/modules'
-import { Pencil, Trash2, Archive, ArchiveRestore, ShieldCheck, User, KeyRound, Crown, Warehouse } from 'lucide-react'
+import { Pencil, Trash2, Archive, ArchiveRestore, ShieldCheck, User, KeyRound, Crown, Warehouse, CheckCircle2, Loader2 } from 'lucide-react'
 import Checkbox from '../components/Checkbox'
+import UserAvatar from '../components/UserAvatar'
+import AvatarPicker from '../components/AvatarPicker'
 
 const PERMISSION_ACTIONS = [
     { key: 'canView', labelKey: 'users.perm.view' },
@@ -33,6 +35,11 @@ const emptyForm = {
     fullName: '',
     role: 'USER',
     canSeePrices: true,
+    // Optional: an administrator can give a new colleague a picture or an icon so they do not start as
+    // another grey circle. The user can change it themselves afterwards under My Account.
+    avatarKey: null,
+    avatarIcon: null,
+    avatarColor: null,
 }
 
 // Restricted (permission-governed) roles that also carry the price-visibility toggle.
@@ -52,12 +59,6 @@ const ROLE_ICON = {
     ADMINISTRATOR: ShieldCheck,
     USER: User,
     WAREHOUSE: Warehouse,
-}
-
-/** Up to two initials from a name, falling back to the email — the same rule the sidebar avatar uses. */
-function initials(user) {
-    const source = user?.fullName || user?.email || '?'
-    return source.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
 }
 
 const ROLE_BADGE = {
@@ -97,6 +98,7 @@ export default function UsersPage() {
     const [form, setForm] = useState(emptyForm)
     const [editingId, setEditingId] = useState(null)
     const [deletingItem, setDeletingItem] = useState(null)
+    const [sendingInvite, setSendingInvite] = useState(false)
     const [selectedIds, setSelectedIds] = useState([])
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState([])
@@ -153,6 +155,9 @@ export default function UsersPage() {
             fullName: item.fullName || '',
             role: item.role === 'OWNER' ? 'ADMINISTRATOR' : item.role || 'USER',
             canSeePrices: item.canSeePrices !== false,
+            avatarKey: item.avatarKey || null,
+            avatarIcon: item.avatarIcon || null,
+            avatarColor: item.avatarColor || null,
         })
         formModal.open()
     }
@@ -179,6 +184,9 @@ export default function UsersPage() {
                     fullName: form.fullName,
                     role: form.role,
                     canSeePrices,
+                    avatarKey: form.avatarKey,
+                    avatarIcon: form.avatarIcon,
+                    avatarColor: form.avatarColor,
                 })
                 toast.success(t('users.updated'))
                 formModal.close()
@@ -194,12 +202,15 @@ export default function UsersPage() {
                     fullName: form.fullName,
                     role: form.role,
                     canSeePrices,
+                    avatarKey: form.avatarKey,
+                    avatarIcon: form.avatarIcon,
+                    avatarColor: form.avatarColor,
                 })
                 formModal.close()
                 setEditingId(null)
                 setForm(emptyForm)
                 await loadData()
-                handleInviteOutcome(created, form.email)
+                handleInviteOutcome(created, form.email, created?.user?.id)
             }
         } catch (err) {
             setError(err.message || t('users.couldNotSave'))
@@ -208,14 +219,39 @@ export default function UsersPage() {
         }
     }
 
-    // Shared handling for a setup/reset-link outcome ({ emailSent, setupLink }): confirm the email, or
-    // open the copyable-link dialog as a fallback when it couldn't be delivered.
-    const handleInviteOutcome = (outcome, email) => {
-        if (outcome?.emailSent) {
+    /**
+     * Shared handling for a setup/reset-link outcome ({ emailSent, setupLink }).
+     *
+     * A freshly created account always opens the dialog: the account exists either way, and the only
+     * question left is how the person hears about it - which is the administrator's to answer rather than
+     * ours to assume. Re-sending an existing user's link is already a deliberate "send it again", so that
+     * path just confirms.
+     */
+    const handleInviteOutcome = (outcome, email, userId) => {
+        if (userId) {
+            setSetupLinkInfo({ email, link: outcome?.setupLink, userId, sent: Boolean(outcome?.emailSent) })
+            setupLinkModal.open()
+        } else if (outcome?.emailSent) {
             toast.success(t('users.inviteSent', { email }))
         } else if (outcome?.setupLink) {
             setSetupLinkInfo({ email, link: outcome.setupLink })
             setupLinkModal.open()
+        }
+    }
+
+    /** Sends the invitation from the dialog. The server mints a fresh link, so the shown one is replaced. */
+    const sendInviteFromDialog = async () => {
+        if (!setupLinkInfo?.userId) return
+        setSendingInvite(true)
+        try {
+            const res = await apiPost(`/users/${setupLinkInfo.userId}/setup-email`, {})
+            setSetupLinkInfo((prev) => ({ ...prev, link: res.setupLink || prev.link, sent: Boolean(res.emailSent) }))
+            if (res.emailSent) toast.success(t('users.inviteSent', { email: setupLinkInfo.email }))
+            else toast.error?.(t('users.inviteNotConfigured'))
+        } catch (err) {
+            toast.error?.(err.message || t('users.couldNotSave'))
+        } finally {
+            setSendingInvite(false)
         }
     }
 
@@ -355,11 +391,7 @@ export default function UsersPage() {
             label: '',
             name: t('users.cols.name'),
             hideable: false,
-            render: (row) => (
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                    {initials(row)}
-                </span>
-            ),
+            render: (row) => <UserAvatar user={row} size="sm" />,
         },
         { key: 'fullName', label: t('users.cols.name'), render: (row) => row.fullName || '-' },
         { key: 'email', label: t('common.email') },
@@ -586,6 +618,15 @@ export default function UsersPage() {
                         </label>
                     )}
 
+                    <div className="rounded-xl border border-slate-200 px-4 py-3 dark:border-slate-800">
+                        <p className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-200">{t('users.form.avatar')}</p>
+                        <AvatarPicker
+                            value={form}
+                            onChange={(next) => setForm((prev) => ({ ...prev, ...next }))}
+                            preview={{ fullName: form.fullName, email: form.email }}
+                        />
+                    </div>
+
                     {!editingId && (
                         <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-200">
                             <p className="font-medium">{t('users.form.inviteTitle')}</p>
@@ -720,22 +761,53 @@ export default function UsersPage() {
                 onClose={setupLinkModal.close}
                 width="max-w-lg"
             >
-                <div className="space-y-4">
-                    <p className="text-sm text-slate-600 dark:text-slate-300">
-                        {t('users.setupLinkEmailFailed', { email: setupLinkInfo?.email || '' })}
-                    </p>
-                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/60">
-                        <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">
-                            {setupLinkInfo?.link}
-                        </span>
-                        <CopyButton value={setupLinkInfo?.link || ''} />
+                <div className="space-y-5">
+                    {/* The account already exists - said first, so the two options below read as a choice
+                        about delivery rather than as steps still standing between here and a working user. */}
+                    <div className="flex gap-3 rounded-xl border border-teal-200 bg-teal-50 p-3 dark:border-teal-900/60 dark:bg-teal-950/30">
+                        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+                        <p className="text-sm text-teal-900 dark:text-teal-100">
+                            {setupLinkInfo?.userId
+                                ? t('users.setupLinkCreated', { email: setupLinkInfo?.email || '' })
+                                : t('users.setupLinkEmailFailed', { email: setupLinkInfo?.email || '' })}
+                        </p>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('users.setupLinkHint')}</p>
+
+                    {setupLinkInfo?.userId && (
+                        <div className="space-y-2">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('users.setupLinkSendTitle')}</p>
+                            <button
+                                type="button"
+                                onClick={sendInviteFromDialog}
+                                disabled={sendingInvite || setupLinkInfo?.sent}
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {sendingInvite && <Loader2 className="h-4 w-4 animate-spin" />}
+                                {setupLinkInfo?.sent
+                                    ? t('users.setupLinkSent', { email: setupLinkInfo?.email || '' })
+                                    : t('users.setupLinkSendCta', { email: setupLinkInfo?.email || '' })}
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="space-y-2">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                            {setupLinkInfo?.userId ? t('users.setupLinkOrCopy') : t('users.setupLinkTitle')}
+                        </p>
+                        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/60">
+                            <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">
+                                {setupLinkInfo?.link}
+                            </span>
+                            <CopyButton value={setupLinkInfo?.link || ''} />
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t('users.setupLinkHint')}</p>
+                    </div>
+
                     <div className="flex justify-end">
                         <button
                             type="button"
                             onClick={setupLinkModal.close}
-                            className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700"
+                            className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
                             {t('common.close')}
                         </button>

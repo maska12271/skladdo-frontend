@@ -31,9 +31,12 @@ import { useBreakpoint } from "../hooks/useBreakpoint"
 import { OVERLAY_BACKDROP } from "../constants/overlay"
 import { getCookie, setCookie } from "../utils/cookies"
 import CompanySwitcher from "./CompanySwitcher"
+import UserAvatar from "./UserAvatar"
 import LanguageSwitcher from "./LanguageSwitcher"
 
 // `module` is the permission area gating the link; links without one (Dashboard) are always shown.
+// `addon` additionally requires the company to pay for the feature - an unbought add-on hides the page
+// rather than teasing it, and the server closes its endpoints to match.
 // `labelKey` indexes the i18n `nav.*` dictionary.
 const baseLinks = [
     { to: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
@@ -43,9 +46,9 @@ const baseLinks = [
     { to: "/clients", labelKey: "clients", icon: Users, module: "CLIENTS" },
     { to: "/sales-orders", labelKey: "salesOrders", icon: ShoppingCart, module: "SALES_ORDERS" },
     { to: "/purchase-orders", labelKey: "purchaseOrders", icon: Truck, module: "PURCHASE_ORDERS" },
-    { to: "/tenders", labelKey: "tenders", icon: FileText, module: "TENDERS" },
+    { to: "/tenders", labelKey: "tenders", icon: FileText, module: "TENDERS", addon: "TENDERS" },
     { to: "/warehouses", labelKey: "warehouses", icon: Warehouse, module: "WAREHOUSES" },
-    { to: "/emails", labelKey: "manufacturerEmails", icon: Mail, module: "MANUFACTURER_EMAILS" },
+    { to: "/emails", labelKey: "manufacturerEmails", icon: Mail, module: "MANUFACTURER_EMAILS", addon: "MANUFACTURER_EMAILS" },
 ]
 
 /**
@@ -58,16 +61,6 @@ const PARTNER_LINKS = new Set([
 ])
 
 const COLLAPSE_COOKIE = "sidebar_collapsed"
-
-function initials(user) {
-    const source = user?.fullName || user?.email || "?"
-    return source
-        .split(/\s+/)
-        .map((part) => part[0])
-        .slice(0, 2)
-        .join("")
-        .toUpperCase()
-}
 
 // Tooltip shown to the right of an item when the sidebar is collapsed.
 function Tooltip({ label }) {
@@ -87,7 +80,7 @@ function Tooltip({ label }) {
  */
 export default function Sidebar({ open = false, onClose = () => {} }) {
     const { t } = useTranslation()
-    const { user, isHomeAdmin, can, logout, isWarehouseAccount, isPartnerSession, isPlatformAdmin, isPlatformCompany, companies, switchCompany, lastClientId } = useAuth()
+    const { user, isHomeAdmin, can, hasAddon, logout, isWarehouseAccount, isPartnerSession, isPlatformAdmin, isPlatformCompany, companies, switchCompany, lastClientId } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
     const { theme, toggleTheme } = useTheme()
@@ -173,7 +166,8 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     const clients = companies.filter((company) => !company.home)
     const visibleLinks = atHome
         ? (clients.length > 0 ? baseLinks.filter((link) => PARTNER_LINKS.has(link.to)) : [])
-        : baseLinks.filter((link) => !link.module || can(link.module, "canView"))
+        : baseLinks.filter((link) => (!link.module || can(link.module, "canView"))
+            && (!link.addon || hasAddon(link.addon)))
 
     // Administering the account itself, as opposed to working in a company's data. A warehouse account has
     // no activity trail of its own to read, so it does not get one. `ownCompany` marks the divider.
@@ -273,6 +267,20 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
         </nav>
     )
 
+    /**
+     * Which build is running, kept deliberately faint and tiny — it is not information anyone needs while
+     * working, only while asking "did the deploy land?". The commit and build time hang off the tooltip
+     * rather than the label, so the answer is one hover away without ever taking up room.
+     */
+    const version = (
+        <p
+            className="px-2 pt-2 text-[10px] leading-none text-slate-300 dark:text-slate-600"
+            title={`${__APP_COMMIT__} · built ${new Date(__APP_BUILT_AT__).toLocaleString()}`}
+        >
+            v{__APP_VERSION__}
+        </p>
+    )
+
     const account = (
         <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
             {collapsed ? (
@@ -281,12 +289,10 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                         to="/account"
                         aria-label={t('nav.account')}
                         className={({ isActive }) =>
-                            `group relative flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200 ${
-                                isActive ? 'ring-2 ring-teal-500' : ''
-                            }`
+                            `group relative flex rounded-full ${isActive ? 'ring-2 ring-teal-500' : ''}`
                         }
                     >
-                        {initials(user)}
+                        <UserAvatar user={user} size="md" />
                         <Tooltip label={t('nav.account')} />
                     </NavLink>
                     <button
@@ -306,18 +312,21 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                     <NavLink
                         to="/account"
                         className={({ isActive }) =>
-                            `block min-w-0 flex-1 rounded-lg px-2 py-1.5 transition lg:mb-2 ${
+                            `flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 transition lg:mb-2 ${
                                 isActive ? "bg-slate-100 dark:bg-slate-800" : "hover:bg-slate-100 dark:hover:bg-slate-800"
                             }`
                         }
                     >
-                        <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">
-                            {user?.fullName || user?.email}
-                        </p>
-                        <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                            {user?.role ? t(`roles.${user.role}`) : ""}
-                            {user?.companyName ? ` · ${user.companyName}` : ""}
-                        </p>
+                        <UserAvatar user={user} size="sm" />
+                        <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-slate-700 dark:text-slate-200">
+                                {user?.fullName || user?.email}
+                            </span>
+                            <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                                {user?.role ? t(`roles.${user.role}`) : ""}
+                                {user?.companyName ? ` · ${user.companyName}` : ""}
+                            </span>
+                        </span>
                     </NavLink>
                     <button
                         onClick={logout}
@@ -354,14 +363,14 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                     }`}
                 >
                     <div className="mb-3 flex items-center justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-2.5">
+                        <NavLink to="/dashboard" className="flex min-w-0 items-center gap-2.5 rounded-lg">
                             <img src="/skladdo-logo.svg" alt="" aria-hidden="true" className="h-8 w-auto shrink-0" />
                             {/* Not a heading: every page already has its own h1, and a second one in the
                                 chrome makes the brand compete with the page title in the heading outline. */}
                             <span className="truncate text-xl font-bold tracking-tight text-teal-700 dark:text-teal-400">
                                 {t('nav.appName')}
                             </span>
-                        </div>
+                        </NavLink>
                         <button
                             onClick={onClose}
                             aria-label={t('nav.closeMenu')}
@@ -398,6 +407,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                     </div>
 
                     {account}
+                    {version}
                 </aside>
             </>
         )
@@ -411,16 +421,18 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
         >
             <div className={`mb-4 flex ${collapsed ? "flex-col items-center gap-3" : "items-center justify-between"}`}>
                 {collapsed ? (
-                    <img src="/skladdo-logo.svg" alt={t('nav.appName')} className="h-8 w-auto" />
+                    <NavLink to="/dashboard" aria-label={t('nav.dashboard')} className="rounded-lg">
+                        <img src="/skladdo-logo.svg" alt={t('nav.appName')} className="h-8 w-auto" />
+                    </NavLink>
                 ) : (
-                    <div className="flex items-center gap-2.5">
+                    <NavLink to="/dashboard" className="flex items-center gap-2.5 rounded-lg">
                         <img src="/skladdo-logo.svg" alt="" aria-hidden="true" className="h-8 w-auto shrink-0" />
                         {/* Not a heading: every page already has its own h1, and a second one in the
                             chrome makes the brand compete with the page title in the heading outline. */}
                         <span className="text-xl font-bold tracking-tight text-teal-700 dark:text-teal-400">
                             {t('nav.appName')}
                         </span>
-                    </div>
+                    </NavLink>
                 )}
                 <button
                     onClick={toggle}
@@ -433,6 +445,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
 
             {nav}
             {account}
+            {!collapsed && version}
         </aside>
     )
 }

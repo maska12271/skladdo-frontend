@@ -11,12 +11,12 @@ import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import { useModal } from '../hooks/useModal'
 import { FormField, FormSelect, PasswordAwareInput } from '../components/FormField.jsx'
+import PhoneField from '../components/PhoneField'
 import UnitSelect from '../components/UnitSelect.jsx'
 import { SUPPORTED_LANGUAGES } from '../i18n'
 import AddressAutocompleteField from '../components/AddressAutocompleteField.jsx'
 import EmailTemplatesManager from '../components/EmailTemplatesManager'
 import PlanBillingTab from '../components/PlanBillingTab'
-import CompanyDataExport from '../components/CompanyDataExport'
 import { usePresignedUrl } from '../hooks/usePresignedUrl'
 import { PERMISSION_MODULES } from '../constants/modules'
 import ConnectionsTab from '../components/ConnectionsTab'
@@ -83,9 +83,13 @@ export default function SettingsPage() {
     const { t } = useTranslation()
     const toast = useToast()
     const { refresh: refreshDisplaySettings, currencies } = useSettings()
-    const { updateUser, isWarehouseAccount } = useAuth()
+    const { updateUser, isWarehouseAccount, hasAddon } = useAuth()
 
-    const tabs = isWarehouseAccount ? TABS.filter(({ key }) => WAREHOUSE_ACCOUNT_TABS.has(key)) : TABS
+    // The Email tab configures the SMTP account manufacturer outreach is sent from, so it is only worth
+    // showing to a company that pays for that outreach. `tab` falls back to the first remaining tab, so a
+    // stale `?tab=email` link cannot strand anyone on a tab that is no longer there.
+    const tabs = (isWarehouseAccount ? TABS.filter(({ key }) => WAREHOUSE_ACCOUNT_TABS.has(key)) : TABS)
+        .filter(({ key }) => key !== 'email' || hasAddon('MANUFACTURER_EMAILS'))
     // Kept in the URL so the company switcher can link straight to Connections, and so a refresh stays put.
     const [searchParams, setSearchParams] = useSearchParams()
     const requestedTab = searchParams.get('tab')
@@ -1122,7 +1126,7 @@ export default function SettingsPage() {
                                 <AddressAutocompleteField id="company-address" label={t('settings.company.address')} name="companyAddress" value={settings.companyAddress || ''} onChange={handleSettingsChange} />
                                 <FormField id="vat-number" label={t('settings.company.vatNumber')} name="vatNumber" value={settings.vatNumber || ''} onChange={handleSettingsChange} />
                                 <FormField id="company-email" label={t('settings.company.email')} type="email" name="companyEmail" value={settings.companyEmail || ''} onChange={handleSettingsChange} />
-                                <FormField id="company-phone" label={t('settings.company.phone')} name="companyPhone" value={settings.companyPhone || ''} onChange={handleSettingsChange} />
+                                <PhoneField id="company-phone" label={t('settings.company.phone')} name="companyPhone" value={settings.companyPhone || ''} onChange={handleSettingsChange} />
                                 <FormField id="bank-name" label={t('settings.company.bankName')} name="bankName" value={settings.bankName || ''} onChange={handleSettingsChange} />
                                 <FormField id="bank-iban" label={t('settings.company.bankIban')} name="bankIban" value={settings.bankIban || ''} onChange={handleSettingsChange} />
                             </div>
@@ -1132,7 +1136,7 @@ export default function SettingsPage() {
                         <SaveBar saving={saving} label={t('settings.save')} savingLabel={t('common.saving')} />
                     </form>
 
-                    {!isWarehouseAccount && <CompanyDataExport />}
+
                 </div>
             )}
 

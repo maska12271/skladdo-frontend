@@ -16,10 +16,11 @@ import ConfirmModal from '../components/ConfirmModal'
 import { useModal } from '../hooks/useModal'
 import { useQuickCreate } from '../hooks/useQuickCreate'
 import { useFrequentCountries } from '../hooks/useFrequentCountries'
-import { usePermissions } from '../context/AuthContext'
+import { useAuth, usePermissions } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { safeArray, parseBool } from '../utils/format'
 import {FormField, TextareaField} from "../components/FormField.jsx";
+import PhoneField from '../components/PhoneField'
 import CountrySelectField from "../components/CountrySelectField.jsx";
 import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx";
 import CustomSelect from '../components/CustomSelect'
@@ -65,7 +66,10 @@ export default function ManufacturersPage() {
     const { t } = useTranslation()
     const { canCreate, canEdit, canDelete } = usePermissions('MANUFACTURERS')
     const { canCreate: canCreateCategory, canEdit: canEditCategory, canDelete: canDeleteCategory } = usePermissions('PARTNER_CATEGORIES')
-    const { canCreate: canSendEmail } = usePermissions('MANUFACTURER_EMAILS')
+    // Sending needs both halves: the company pays for outreach, and this user may send it.
+    const { hasAddon } = useAuth()
+    const { canCreate: canSendEmailPerm } = usePermissions('MANUFACTURER_EMAILS')
+    const canSendEmail = canSendEmailPerm && hasAddon('MANUFACTURER_EMAILS')
     const canManageCategories = canCreateCategory || canEditCategory || canDeleteCategory
     const toast = useToast()
     const navigate = useNavigate()
@@ -494,12 +498,13 @@ export default function ManufacturersPage() {
                         className="md:col-span-2"
                     />
 
-                    <FormField
+                    <PhoneField
                         id="manufacturer-phone"
                         label={t('common.phone')}
                         name="phone"
                         value={form.phone}
                         onChange={handleChange}
+                        country={form.country}
                         placeholder={t('common.phone')}
                         className="md:col-span-2"
                     />

@@ -267,7 +267,11 @@ export default function DataTable({
     // Container queries, not viewport ones: `xl:grid-cols-3` put three columns inside a 340px dashboard
     // widget whenever the *window* was wide, giving one word per line and labels colliding with their
     // values. How many columns fit depends on how wide this list actually is.
-    const cardGridClass = `@container grid content-start grid-cols-1 @[34rem]:grid-cols-2 @[60rem]:grid-cols-3 ${bare ? 'gap-1.5' : 'gap-2 p-3'}`
+    // `@container` has to sit on the WRAPPER, not on the grid itself: `container-type: inline-size`
+    // establishes a query container for an element's descendants, never for the element carrying it. With
+    // both on one div every `@[…]` here resolved against no container at all, so the breakpoints never
+    // fired and the "gallery" was a single full-width column at every size.
+    const cardGridClass = `grid content-start grid-cols-1 @[34rem]:grid-cols-2 @[60rem]:grid-cols-3 @[86rem]:grid-cols-4 ${bare ? 'gap-2' : 'gap-2 p-3'}`
 
     const cardSplit = splitForCards(visibleColumns)
     // Cards have no column headers to click, so sorting needs a control of its own, and no header row to
@@ -363,6 +367,7 @@ export default function DataTable({
             {asCards ? (
                 // One column on a phone; on a wider screen the cards become a gallery rather than a
                 // single tall stack, which is the shape that makes this view worth choosing there.
+                <div className="@container">
                 <div className={cardGridClass}>
                     {loading && pageRows.length === 0 ? (
                         <CardSkeleton count={Math.min(paginate ? pageSize : 4, 6)} />
@@ -389,6 +394,7 @@ export default function DataTable({
                             )
                         })
                     )}
+                </div>
                 </div>
             ) : (
             <div className="overflow-x-auto">
@@ -589,7 +595,7 @@ function RowCard({ split, row, selectable, selected, onToggleSelect, onClick, se
     return (
         <div
             onClick={onClick}
-            className={`rounded-xl border transition ${dense ? 'p-1.5' : 'p-3'} ${
+            className={`rounded-xl border transition ${dense ? 'px-3 py-2.5' : 'p-3'} ${
                 selected
                     ? 'border-teal-300 bg-teal-50/60 dark:border-teal-800 dark:bg-teal-950/20'
                     : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'

@@ -200,11 +200,11 @@ export default function App() {
                 />
                 <Route
                     path="/tenders"
-                    element={<RequirePermission module="TENDERS"><TendersPage /></RequirePermission>}
+                    element={<RequirePermission module="TENDERS" addon="TENDERS"><TendersPage /></RequirePermission>}
                 />
                 <Route
                     path="/tenders/:id"
-                    element={<RequirePermission module="TENDERS"><TenderDetailPage /></RequirePermission>}
+                    element={<RequirePermission module="TENDERS" addon="TENDERS"><TenderDetailPage /></RequirePermission>}
                 />
                 <Route
                     path="/warehouses"
@@ -216,11 +216,11 @@ export default function App() {
                 />
                 <Route
                     path="/emails"
-                    element={<RequirePermission module="MANUFACTURER_EMAILS"><SentEmailsPage /></RequirePermission>}
+                    element={<RequirePermission module="MANUFACTURER_EMAILS" addon="MANUFACTURER_EMAILS"><SentEmailsPage /></RequirePermission>}
                 />
                 <Route
                     path="/emails/:batchId"
-                    element={<RequirePermission module="MANUFACTURER_EMAILS"><EmailBatchDetailPage /></RequirePermission>}
+                    element={<RequirePermission module="MANUFACTURER_EMAILS" addon="MANUFACTURER_EMAILS"><EmailBatchDetailPage /></RequirePermission>}
                 />
                 <Route
                     path="/users"

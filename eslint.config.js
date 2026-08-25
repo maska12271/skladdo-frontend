@@ -14,7 +14,8 @@ export default defineConfig([
       reactRefresh.configs.vite,
     ],
     languageOptions: {
-      globals: globals.browser,
+      // Replaced at build time by vite's `define`, so they exist in the bundle but not in any lib.
+      globals: { ...globals.browser, __APP_VERSION__: 'readonly', __APP_COMMIT__: 'readonly', __APP_BUILT_AT__: 'readonly' },
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },

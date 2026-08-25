@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext'
 import { apiGet } from '../api/client'
 import { FormField } from '../components/FormField.jsx'
 import PasswordStrength from '../components/PasswordStrength.jsx'
-import { PLANS, PLAN_IDS, DEFAULT_PLAN } from '../config/plans'
+import { PLANS, PLAN_IDS, DEFAULT_PLAN, ADDONS, monthlyTotal } from '../config/plans'
 
 /** Mirrors the backend CompanyType. Chosen here and never editable again. */
 const ACCOUNT_TYPES = ['BUSINESS', 'WAREHOUSE']
@@ -62,10 +62,14 @@ export default function RegisterPage() {
     const [inviteChecked, setInviteChecked] = useState(!inviteCode)
 
     const [step, setStep] = useState(0)
-    // Arriving from a pricing card already implies a business account, so that is preselected - but the
-    // choice is still shown, because it is the one answer that can never be corrected later.
-    const [accountType, setAccountType] = useState(deepLinkedPlan ? 'BUSINESS' : null)
+    // Business is what almost every visitor is here for, so it starts selected - but the choice is still
+    // shown, because it is the one answer that can never be corrected later.
+    const [accountType, setAccountType] = useState('BUSINESS')
     const [plan, setPlan] = useState(deepLinkedPlan || DEFAULT_PLAN)
+    // Tenders and manufacturer emails are sold separately, and without them those pages do not exist at
+    // all - so the choice is made here rather than left to be discovered in Settings later. None by default:
+    // a signup should never quietly cost more than the plan the visitor picked.
+    const [addons, setAddons] = useState([])
     const [companyName, setCompanyName] = useState('')
     const [fullName, setFullName] = useState('')
     const [email, setEmail] = useState('')
@@ -131,6 +135,9 @@ export default function RegisterPage() {
     const current = steps[step]
     const isLast = step === steps.length - 1
     const selectedPlan = PLANS.find((p) => p.id === plan) || PLANS[0]
+    const total = monthlyTotal(selectedPlan.id, addons)
+    const toggleAddon = (id) =>
+        setAddons((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]))
     const pwType = showPw ? 'text' : 'password'
 
     // First payment is one month out; shown so the visitor knows they are not charged today.
@@ -191,7 +198,7 @@ export default function RegisterPage() {
                 email: email.trim(),
                 password,
                 accountType,
-                ...(isWarehouse ? {} : { plan }),
+                ...(isWarehouse ? {} : { plan, addons }),
                 // Only sent when it actually works. A code the server would reject is never attached, so
                 // somebody arriving on a dead link still gets an ordinary signup rather than an error —
                 // they were told about it above, so nothing is being decided behind their back.
@@ -390,11 +397,7 @@ export default function RegisterPage() {
                             <div role="radiogroup" aria-label={t('register.choosePlan')} className="grid gap-3 sm:grid-cols-3">
                                 {PLANS.map((p) => {
                                     const active = p.id === plan
-                                    const caps = [
-                                        { key: 'users', value: p.caps.users },
-                                        { key: 'manufacturers', value: p.caps.manufacturers },
-                                        { key: 'products', value: p.caps.products },
-                                    ]
+
                                     return (
                                         <button
                                             type="button"
@@ -426,17 +429,19 @@ export default function RegisterPage() {
                                             <span className="mt-0.5 block text-xs leading-snug text-slate-500 dark:text-slate-400">
                                                 {t(`landing.plans.${p.id}.tagline`)}
                                             </span>
-                                            {/* The caps are the whole difference between the tiers, so they sit
-                                                in the same order in every card and carry the emphasis. */}
+                                            {/* Seats are the whole difference between the tiers, so that is
+                                                what the card leads with - followed by what does not change,
+                                                or one number on its own reads like something is missing. */}
                                             <ul className="mt-3 space-y-1.5 border-t border-slate-200 pt-3 dark:border-slate-700">
-                                                {caps.map((cap) => (
-                                                    <li key={cap.key} className="text-sm text-slate-600 dark:text-slate-300">
-                                                        <span className="font-semibold text-slate-800 dark:text-slate-100">
-                                                            {cap.value === -1 ? t('landing.caps.unlimited') : cap.value}
-                                                        </span>{' '}
-                                                        {t(`landing.caps.${cap.key}`)}
-                                                    </li>
-                                                ))}
+                                                <li className="text-sm text-slate-600 dark:text-slate-300">
+                                                    <span className="font-semibold text-slate-800 dark:text-slate-100">
+                                                        {p.users === -1 ? t('landing.caps.unlimited') : p.users}
+                                                    </span>{' '}
+                                                    {t('landing.caps.users')}
+                                                </li>
+                                                <li className="text-sm text-slate-600 dark:text-slate-300">
+                                                    {t('landing.caps.everythingElse')}
+                                                </li>
                                             </ul>
                                         </button>
                                     )
@@ -458,7 +463,60 @@ export default function RegisterPage() {
                                         </li>
                                     ))}
                                 </ul>
-                                <p className="pt-1 text-xs text-slate-500 dark:text-slate-400">{t('register.planAddons')}</p>
+                            </div>
+
+                            {/* Sold separately, and genuinely absent without them - so they are offered
+                                here rather than left to be found in Settings after signing up. */}
+                            <div className={boxClass}>
+                                <p className={sectionHeading}>
+                                    <Sparkles className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                                    {t('register.addonsTitle')}
+                                </p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">{t('register.addonsSubtitle')}</p>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    {ADDONS.map((addon) => {
+                                        const on = addons.includes(addon.id)
+                                        return (
+                                            <button
+                                                type="button"
+                                                role="checkbox"
+                                                aria-checked={on}
+                                                key={addon.id}
+                                                onClick={() => toggleAddon(addon.id)}
+                                                className={`flex flex-col rounded-xl border p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/50 motion-safe:active:scale-[0.99] ${
+                                                    on
+                                                        ? 'border-teal-500 bg-teal-50 ring-1 ring-teal-500 dark:border-teal-400 dark:bg-teal-500/10 dark:ring-teal-400'
+                                                        : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
+                                                }`}
+                                            >
+                                                <span className="flex items-center justify-between gap-2">
+                                                    <span className="text-sm font-semibold">{t(`settings.plan.addon.${addon.id}`)}</span>
+                                                    {on
+                                                        ? <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
+                                                        : <span className="h-4 w-4 shrink-0 rounded-full border border-slate-300 dark:border-slate-600" />}
+                                                </span>
+                                                <span className="mt-0.5 text-sm font-bold text-slate-800 dark:text-slate-100">
+                                                    +€{addon.price}
+                                                    <span className="text-xs font-normal text-slate-500 dark:text-slate-400">{t('landing.perMonth')}</span>
+                                                </span>
+                                                <span className="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">
+                                                    {t(`settings.plan.addon.${addon.id}_desc`)}
+                                                </span>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                                <p className="pt-1 text-xs text-slate-400 dark:text-slate-500">{t('register.addonsLater')}</p>
+                            </div>
+
+                            {/* The number that actually changes as the extras are toggled, so nobody
+                                reaches the card step and finds a different figure than they expected. */}
+                            <div className="flex items-baseline justify-between gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 dark:border-teal-900/60 dark:bg-teal-950/30">
+                                <span className="text-sm font-semibold text-teal-800 dark:text-teal-200">{t('register.monthlyTotal')}</span>
+                                <span className="text-base font-bold tabular-nums text-teal-800 dark:text-teal-100">
+                                    €{total}
+                                    <span className="text-xs font-normal text-teal-700/80 dark:text-teal-300/80">{t('landing.perMonth')}</span>
+                                </span>
                             </div>
                         </section>
                     )}
@@ -499,7 +557,7 @@ export default function RegisterPage() {
                                 <p className="mt-1 text-xs leading-snug text-teal-700/90 dark:text-teal-300/90">
                                     {t('register.firstPaymentLine', {
                                         plan: t(`landing.plans.${selectedPlan.id}.name`),
-                                        price: selectedPlan.price,
+                                        price: total,
                                         date: firstPaymentStr,
                                     })}
                                 </p>
