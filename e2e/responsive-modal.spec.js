@@ -93,7 +93,14 @@ test.describe('desktop', () => {
         await openProductModal(page)
         const { dialog: d, backdrop } = await boxes(page, DIALOG)
 
-        expect(d.width).toBeLessThan(backdrop.width)
+        // The exact cap, not merely "narrower than the screen". `max-w-3xl` is 768px, and asserting the
+        // number is what makes this test worth having: the cap used to be built as `sm:${width}` at
+        // runtime, which Tailwind never emitted a rule for, so every modal filled the window. The old
+        // assertion still passed, because the overlay's 16px padding left the dialog a hair narrower
+        // than the backdrop.
+        expect(Math.round(d.width)).toBe(768)
+        expect(d.width).toBeLessThan(backdrop.width - 100)
+
         // Centred: the margins either side of it match.
         const left = d.x - backdrop.x
         const right = backdrop.width - (d.x - backdrop.x) - d.width

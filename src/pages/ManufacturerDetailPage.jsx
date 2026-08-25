@@ -12,7 +12,7 @@ import CopyButton from '../components/CopyButton'
 import CategoryChips from '../components/CategoryChips'
 import ComposeEmailModal from '../components/ComposeEmailModal'
 import SentEmailDetailModal from '../components/SentEmailDetailModal'
-import { usePermissions } from '../context/AuthContext'
+import { useAuth, usePermissions } from '../context/AuthContext'
 import { useModal } from '../hooks/useModal'
 import { formatMoney, formatDate, formatDateTime, safeArray } from '../utils/format'
 import { PERIOD_KEYS, periodRange } from '../utils/period'
@@ -23,7 +23,12 @@ export default function ManufacturerDetailPage() {
     const { id } = useParams()
     const navigate = useNavigate()
     const { canEdit } = usePermissions('MANUFACTURERS')
-    const { canCreate: canSendEmail, canView: canViewEmails } = usePermissions('MANUFACTURER_EMAILS')
+    // Outreach also needs the company to pay for it, not just the user to be allowed to send.
+    const { hasAddon } = useAuth()
+    const emailsSold = hasAddon('MANUFACTURER_EMAILS')
+    const { canCreate: sendPerm, canView: viewPerm } = usePermissions('MANUFACTURER_EMAILS')
+    const canSendEmail = sendPerm && emailsSold
+    const canViewEmails = viewPerm && emailsSold
     const composeModal = useModal()
     const [emailRows, setEmailRows] = useState([])
     const [emailDetailId, setEmailDetailId] = useState(null)

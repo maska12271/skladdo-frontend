@@ -222,7 +222,10 @@ export default function ComposeEmailModal({ isOpen, manufacturerIds = [], onClos
 
                 {/* Attachments */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('emails.compose.attachments')}</label>
+                    {/* `block` is load-bearing: a bare <label> is inline, so it shared a line with the
+                        inline-flex button below and the two ended up touching. Every other labelled field
+                        here gets away with it because its control is a block-level input. */}
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">{t('emails.compose.attachments')}</label>
                     <input ref={fileInputRef} type="file" multiple onChange={onPickFiles} className="hidden" />
                     <button
                         type="button"

@@ -67,7 +67,16 @@ const PAYMENT_STATUSES = [
 
 const NO_PAYMENT = { paymentStatus: 'NOT_INVOICED', amountDue: 0, penaltyAmount: 0, overdue: false, currency: null }
 
-const emptyItem = { productId: '', quantity: 1, unitPrice: 0, discountPercent: '', taxRatePercent: '' }
+const emptyItem = { productId: '', serviceId: '', quantity: 1, unitPrice: 0, discountPercent: '', taxRatePercent: '' }
+
+// A line sells either a product or a service, and the two have independent id sequences, so the one
+// picker that offers both encodes which kind each option is into its value.
+// Exported for unit testing: this pair is the only thing standing between "product 3" and "service 3".
+export const refValue = (item) => (item.serviceId ? `s-${item.serviceId}` : item.productId ? `p-${item.productId}` : '')
+export const decodeRef = (encoded) => {
+    const str = String(encoded || '')
+    return { isService: str.startsWith('s-'), id: str.slice(2) }
+}
 
 const emptyForm = {
     clientId: '',
@@ -103,6 +112,7 @@ export default function SalesOrdersPage() {
 
     const [clients, setClients] = useState([])
     const [products, setProducts] = useState([])
+    const [services, setServices] = useState([])
     const [warehouses, setWarehouses] = useState([])
     const [taxRates, setTaxRates] = useState([])
     const [tenders, setTenders] = useState([])
@@ -204,15 +214,17 @@ export default function SalesOrdersPage() {
 
     // Reference lists for the form + filters (fetched in full — the order list is paged server-side).
     const loadReferences = async () => {
-        const [clientsRes, productsRes, warehousesRes, taxRes] = await Promise.all([
+        const [clientsRes, productsRes, servicesRes, warehousesRes, taxRes] = await Promise.all([
             apiGet('/clients?page=0&size=500&sortBy=id&sortDir=asc'),
             apiGet('/products?page=0&size=500&sortBy=id&sortDir=asc'),
+            apiGet('/services?page=0&size=500&sortBy=id&sortDir=asc'),
             apiGet('/warehouses'),
             apiGet('/settings/tax-rates'),
         ])
 
         setClients(safeArray(clientsRes))
         setProducts(safeArray(productsRes))
+        setServices(safeArray(servicesRes))
         setWarehouses(safeArray(warehousesRes))
         setTaxRates(Array.isArray(taxRes) ? taxRes : [])
 
@@ -326,6 +338,7 @@ export default function SalesOrdersPage() {
             items: item.items?.length
                 ? item.items.map((it) => ({
                     productId: it.product?.id || '',
+                    serviceId: it.service?.id || '',
                     quantity: it.quantity ?? 1,
                     unitPrice: it.unitPrice ?? 0,
                     discountPercent: it.discountPercent ?? '',
@@ -363,20 +376,25 @@ export default function SalesOrdersPage() {
         }))
     }
 
-    // Picking a product prefills its unit price and tax rate (the product's own rate, else the default).
-    const handleProductChange = (index, productId) => {
-        const product = products.find((p) => String(p.id) === String(productId))
+    // Picking a product or a service prefills its unit price and tax rate (its own rate, else the
+    // default), and clears whichever of the two ids the line is no longer for.
+    const handleItemRefChange = (index, encoded) => {
+        const { isService, id } = decodeRef(encoded)
+        const ref = isService
+            ? services.find((s) => String(s.id) === id)
+            : products.find((p) => String(p.id) === id)
         setForm((prev) => ({
             ...prev,
             items: prev.items.map((item, i) =>
                 i === index
                     ? {
                           ...item,
-                          productId,
-                          unitPrice: product ? product.price : item.unitPrice,
+                          productId: isService ? '' : id,
+                          serviceId: isService ? id : '',
+                          unitPrice: ref ? ref.price : item.unitPrice,
                           taxRatePercent:
-                              product?.taxRate?.percentage != null
-                                  ? String(Number(product.taxRate.percentage))
+                              ref?.taxRate?.percentage != null
+                                  ? String(Number(ref.taxRate.percentage))
                                   : defaultTaxValue,
                       }
                     : item
@@ -410,12 +428,14 @@ export default function SalesOrdersPage() {
         if (!form.items.length) return t('salesOrders.validation.itemRequired')
         for (let i = 0; i < form.items.length; i++) {
             const it = form.items[i]
-            if (!it.productId) return t('salesOrders.validation.productRequired', { line: i + 1 })
+            if (!it.productId && !it.serviceId) return t('salesOrders.validation.productRequired', { line: i + 1 })
             if (!(Number(it.quantity) > 0)) return t('salesOrders.validation.quantityRequired', { line: i + 1 })
         }
-        // Block overselling: no line may exceed what the chosen warehouse holds.
+        // Block overselling: no line may exceed what the chosen warehouse holds. Service lines are
+        // skipped — there is no stock to oversell.
         for (let i = 0; i < form.items.length; i++) {
             const it = form.items[i]
+            if (!it.productId) continue
             const available = availableFor(it.productId)
             if (Number(it.quantity) > available) {
                 return t('salesOrders.validation.overStock', { line: i + 1, available })
@@ -453,7 +473,9 @@ export default function SalesOrdersPage() {
             exchangeRate: form.exchangeRate ? Number(form.exchangeRate) : null,
             tenderId: form.tenderId ? Number(form.tenderId) : null,
             items: form.items.map((item) => ({
-                productId: Number(item.productId),
+                // Exactly one of the two is set; the backend rejects a line that names both or neither.
+                productId: item.productId ? Number(item.productId) : null,
+                serviceId: item.serviceId ? Number(item.serviceId) : null,
                 quantity: Number(item.quantity),
                 unitPrice: Number(item.unitPrice),
                 discountPercent: item.discountPercent !== '' && item.discountPercent != null ? Number(item.discountPercent) : 0,
@@ -841,37 +863,69 @@ export default function SalesOrdersPage() {
                             return (
                                 <div key={index} className="space-y-3 rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
                                     <div className="flex items-end gap-3">
-                                        <div className="flex-1">
+                                            {/* One picker for both catalogues rather than a kind toggle:
+                                                the user searches for what they are selling and picks it,
+                                                without first having to say which sort of thing it is.
+                                                `flex-1` sits on the field itself rather than a wrapper
+                                                around it: the wrapper ran taller than the control inside
+                                                it, so `items-end` lined the delete button up with the
+                                                wrapper's edge and left it sitting below the select. */}
                                             <FormSelect
+                                                className="flex-1"
                                                 id={`sales-order-item-product-${index}`}
-                                                label={t('salesOrders.form.product')}
-                                                name={`productId-${index}`}
-                                                value={item.productId}
-                                                onChange={(e) => handleProductChange(index, e.target.value)}
+                                                label={t('salesOrders.form.item')}
+                                                name={`itemRef-${index}`}
+                                                value={refValue(item)}
+                                                onChange={(e) => handleItemRefChange(index, e.target.value)}
                                                 required
                                                 searchable
-                                                placeholder={t('salesOrders.form.selectProduct')}
-                                                options={products.map((product) => ({
-                                                    value: String(product.id),
-                                                    label: product.sku ? `${product.name} · ${product.sku}` : product.name,
-                                                    search: product.sku,
-                                                }))}
-                                                onQuickCreate={(name) => openQuickCreate('product', name, (created) => {
-                                                    setProducts((prev) => [...prev, created.raw])
-                                                    handleProductChange(index, created.value)
-                                                })}
+                                                placeholder={t('salesOrders.form.selectItem')}
+                                                options={[
+                                                    ...products.map((product) => ({
+                                                        value: `p-${product.id}`,
+                                                        label: product.sku ? `${product.name} · ${product.sku}` : product.name,
+                                                        search: product.sku,
+                                                    })),
+                                                    ...services.map((service) => ({
+                                                        value: `s-${service.id}`,
+                                                        label: `${service.name} · ${t('salesOrders.form.serviceTag')}`,
+                                                        search: service.code,
+                                                    })),
+                                                ]}
+                                                // Both kinds, named: one merged picker means a bare
+                                                // "create" could not say which of the two it would make.
+                                                quickCreateActions={[
+                                                    {
+                                                        key: 'product',
+                                                        label: t('quickCreate.product'),
+                                                        onSelect: (name) => openQuickCreate('product', name, (created) => {
+                                                            setProducts((prev) => [...prev, created.raw])
+                                                            handleItemRefChange(index, `p-${created.value}`)
+                                                        }),
+                                                    },
+                                                    {
+                                                        key: 'service',
+                                                        label: t('quickCreate.service'),
+                                                        onSelect: (name) => openQuickCreate('service', name, (created) => {
+                                                            setServices((prev) => [...prev, created.raw])
+                                                            handleItemRefChange(index, `s-${created.value}`)
+                                                        }),
+                                                    },
+                                                ]}
                                             />
-                                        </div>
+                                        {/* Absent rather than disabled on the only line: an order must
+                                            have something on it, so there is no action to offer here. */}
+                                        {form.items.length > 1 && (
                                         <button
                                             type="button"
                                             onClick={() => removeItem(index)}
-                                            disabled={form.items.length === 1}
                                             aria-label={t('common.remove')}
                                             title={t('common.remove')}
-                                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-rose-500 hover:bg-rose-50 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-rose-950/40"
+                                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-rose-500 hover:bg-rose-50 dark:border-slate-700 dark:hover:bg-rose-950/40"
                                         >
                                             <Trash2 className="h-4 w-4" />
                                         </button>
+                                        )}
                                     </div>
 
                                     {showAvailability && (

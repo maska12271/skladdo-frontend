@@ -19,25 +19,30 @@ export default function OrderFulfilmentPanel({ orderId, type, lines, canFulfil, 
     const [draft, setDraft] = useState({})
     const [saving, setSaving] = useState(false)
 
+    // Only physical goods are picked or received. A service line has no product and nothing to take off
+    // a shelf, so it is left out of the progress entirely - counting it would make an order that is
+    // fully picked read as incomplete forever.
+    const pickable = useMemo(() => (lines || []).filter((l) => l.productId != null), [lines])
+
     // Reset the inputs whenever the order's lines change (initial load, or after a save returns fresh data).
     useEffect(() => {
-        setDraft(Object.fromEntries((lines || []).map((l) => [l.lineId, l.fulfilledQuantity ?? 0])))
-    }, [lines])
+        setDraft(Object.fromEntries(pickable.map((l) => [l.lineId, l.fulfilledQuantity ?? 0])))
+    }, [pickable])
 
     const totals = useMemo(() => {
-        const ordered = (lines || []).reduce((sum, l) => sum + (l.quantity || 0), 0)
-        const done = (lines || []).reduce((sum, l) => sum + (Number(draft[l.lineId]) || 0), 0)
+        const ordered = pickable.reduce((sum, l) => sum + (l.quantity || 0), 0)
+        const done = pickable.reduce((sum, l) => sum + (Number(draft[l.lineId]) || 0), 0)
         return { ordered, done, complete: ordered > 0 && done >= ordered }
-    }, [lines, draft])
+    }, [pickable, draft])
 
-    const dirty = (lines || []).some((l) => (Number(draft[l.lineId]) || 0) !== (l.fulfilledQuantity ?? 0))
+    const dirty = pickable.some((l) => (Number(draft[l.lineId]) || 0) !== (l.fulfilledQuantity ?? 0))
 
     const save = async () => {
         setSaving(true)
         try {
             const path = isSales ? `/sales-orders/${orderId}/fulfilment` : `/purchase-orders/${orderId}/receipt`
             const updated = await apiPut(path, {
-                lines: (lines || []).map((l) => ({ lineId: l.lineId, quantity: Number(draft[l.lineId]) || 0 })),
+                lines: pickable.map((l) => ({ lineId: l.lineId, quantity: Number(draft[l.lineId]) || 0 })),
             })
             onUpdated?.(updated)
             toast.success(t('fulfilment.saved'))
@@ -49,10 +54,11 @@ export default function OrderFulfilmentPanel({ orderId, type, lines, canFulfil, 
     }
 
     const fillAll = () => {
-        setDraft(Object.fromEntries((lines || []).map((l) => [l.lineId, l.quantity || 0])))
+        setDraft(Object.fromEntries(pickable.map((l) => [l.lineId, l.quantity || 0])))
     }
 
-    if (!lines?.length) return null
+    // Nothing physical on the order (a services-only sale) means nothing to pick.
+    if (!pickable.length) return null
 
     const pct = totals.ordered > 0 ? Math.min(100, Math.round((totals.done / totals.ordered) * 100)) : 0
 
@@ -92,7 +98,7 @@ export default function OrderFulfilmentPanel({ orderId, type, lines, canFulfil, 
                         </tr>
                     </thead>
                     <tbody>
-                        {lines.map((line) => {
+                        {pickable.map((line) => {
                             const value = Number(draft[line.lineId]) || 0
                             const diff = value - (line.quantity || 0)
                             return (

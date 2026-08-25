@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { User, Lock, SlidersHorizontal, PenLine, Loader2, Moon, Sun, Bell } from 'lucide-react'
+import { User, Lock, SlidersHorizontal, PenLine, Loader2, Moon, Sun, Bell, Smile } from 'lucide-react'
 import { apiGet, apiPut } from '../api/client'
 import { NOTIFICATION_TYPES } from '../constants/notifications'
 import { useAuth } from '../context/AuthContext'
@@ -12,6 +12,7 @@ import PasswordStrength from '../components/PasswordStrength.jsx'
 import RichTextEditor from '../components/RichTextEditor'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import Checkbox from '../components/Checkbox'
+import AvatarPicker from '../components/AvatarPicker'
 
 /** A titled card section wrapping one part of the account form. */
 function Section({ icon: Icon, title, description, children }) {
@@ -40,6 +41,38 @@ export default function AccountPage() {
     const { user, updateUser, isWarehouseAccount } = useAuth()
     const { theme, toggleTheme } = useTheme()
     const toast = useToast()
+
+    // --- Avatar ---
+    // Held locally until saved, so trying icons on does not write one request per click. The comparison
+    // is against the saved profile, which is what disables the button until something actually changed.
+    const [avatar, setAvatar] = useState({
+        avatarKey: user?.avatarKey || null,
+        avatarIcon: user?.avatarIcon || null,
+        avatarColor: user?.avatarColor || null,
+    })
+    const [savingAvatar, setSavingAvatar] = useState(false)
+    const avatarChanged =
+        (avatar.avatarKey || null) !== (user?.avatarKey || null)
+        || (avatar.avatarIcon || null) !== (user?.avatarIcon || null)
+        || (avatar.avatarColor || null) !== (user?.avatarColor || null)
+
+    const saveAvatar = async (e) => {
+        e.preventDefault()
+        setSavingAvatar(true)
+        try {
+            const updated = await apiPut('/auth/me/avatar', avatar)
+            updateUser({
+                avatarKey: updated.avatarKey,
+                avatarIcon: updated.avatarIcon,
+                avatarColor: updated.avatarColor,
+            })
+            toast.success(t('account.avatar.saved'))
+        } catch {
+            /* error toast already surfaced by the API client */
+        } finally {
+            setSavingAvatar(false)
+        }
+    }
 
     // --- Profile ---
     const [fullName, setFullName] = useState(user?.fullName || '')
@@ -151,6 +184,18 @@ export default function AccountPage() {
 
             <div className="space-y-6">
                 {/* Profile */}
+                <Section icon={Smile} title={t('account.avatar.heading')} description="account.avatar.description">
+                    <form onSubmit={saveAvatar} className="space-y-4">
+                        <AvatarPicker value={avatar} onChange={setAvatar} preview={user} />
+                        <div className="flex justify-end">
+                            <button type="submit" disabled={savingAvatar || !avatarChanged} className={btnPrimary}>
+                                {savingAvatar && <Loader2 className="h-4 w-4 animate-spin" />}
+                                {t('account.avatar.save')}
+                            </button>
+                        </div>
+                    </form>
+                </Section>
+
                 <Section icon={User} title={t('account.profile.heading')}>
                     <form onSubmit={saveProfile} className="space-y-4">
                         <FormField

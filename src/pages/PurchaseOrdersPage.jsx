@@ -245,6 +245,22 @@ export default function PurchaseOrdersPage() {
         setForm((prev) => ({ ...prev, [name]: value }))
     }
 
+    /**
+     * Picking the warehouse fills the delivery address with that warehouse's own, since a purchase is
+     * delivered to the warehouse receiving it. Mirrors how choosing a client fills it on a sales order.
+     *
+     * Only fills a blank field: on an existing order the address may have been edited deliberately, and
+     * overwriting that on an unrelated warehouse change would silently discard it.
+     */
+    const handleWarehouseChange = (warehouseId) => {
+        const warehouse = warehouses.find((w) => String(w.id) === String(warehouseId))
+        setForm((prev) => ({
+            ...prev,
+            warehouseId,
+            deliveryAddress: prev.deliveryAddress?.trim() ? prev.deliveryAddress : (warehouse?.address || ''),
+        }))
+    }
+
     const handleItemChange = (index, field, value) => {
         setForm((prev) => ({
             ...prev,
@@ -601,7 +617,7 @@ export default function PurchaseOrdersPage() {
                             label={t('purchaseOrders.form.warehouse')}
                             name="warehouseId"
                             value={form.warehouseId}
-                            onChange={handleChange}
+                            onChange={(e) => handleWarehouseChange(e.target.value)}
                             required
                             placeholder={t('purchaseOrders.form.selectWarehouse')}
                             options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
@@ -819,18 +835,21 @@ export default function PurchaseOrdersPage() {
                                     placeholder={t('orderDetail.cols.unitPrice')}
                                 />
 
-                                <div className="flex items-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => removeItem(index)}
-                                        disabled={form.items.length === 1}
-                                        aria-label={t('common.remove')}
-                                        title={t('common.remove')}
-                                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-rose-500 hover:bg-rose-50 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-rose-950/40"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
-                                </div>
+                                {/* Absent rather than disabled on the only line, matching sales orders:
+                                    an order must have something on it, so there is no action to offer. */}
+                                {form.items.length > 1 && (
+                                    <div className="flex items-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => removeItem(index)}
+                                            aria-label={t('common.remove')}
+                                            title={t('common.remove')}
+                                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-rose-500 hover:bg-rose-50 dark:border-slate-700 dark:hover:bg-rose-950/40"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                )}
                                 </div>
 
                                 <div className="space-y-2">

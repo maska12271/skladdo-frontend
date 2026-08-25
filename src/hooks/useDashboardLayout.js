@@ -48,6 +48,7 @@ export const DASHBOARD_WIDGETS = [
     { key: 'stockHealth', label: 'Stock health', x: 16, y: 21, w: 8, h: 4, minW: 5, minH: 4 },
     { key: 'topClients', label: 'Top clients', x: 16, y: 26, w: 8, h: 6, minW: 6, minH: 4 },
     { key: 'topProducts', label: 'Top products', x: 16, y: 32, w: 8, h: 6, minW: 6, minH: 4 },
+    { key: 'topServices', label: 'Top services', x: 16, y: 38, w: 8, h: 6, minW: 6, minH: 4 },
 ]
 
 // v8: widgets were resized and rearranged into columns, and the KPI bands re-split into three large
@@ -56,6 +57,49 @@ export const DASHBOARD_WIDGETS = [
 const STORAGE_PREFIX = 'dashboard-grid-v8'
 
 export const widgetMeta = (key) => DASHBOARD_WIDGETS.find((w) => w.key === key)
+
+/**
+ * The four plain-count tiles, in the order they sit in the band.
+ *
+ * They are laid out as one row shared equally between however many of them the company actually has -
+ * see {@link reflowCountBand}. Every other widget keeps its own fixed default.
+ */
+const COUNT_BAND = ['kpiLowStock', 'kpiActiveSales', 'kpiActivePurchases', 'kpiActiveTenders']
+
+/** The widths the band assigns itself, by how many tiles are in it. Keyed so the check below is exact. */
+const BAND_WIDTHS = { 1: COLS, 2: COLS / 2, 3: COLS / 3, 4: COLS / 4 }
+const AUTO_BAND_WIDTHS = new Set(Object.values(BAND_WIDTHS))
+
+/**
+ * Spreads the count tiles evenly across their row.
+ *
+ * Without this, a company that does not pay for tenders loses `kpiActiveTenders` and the remaining three
+ * sit at their default 6 columns, leaving a quarter of the row empty - a hole where a widget used to be,
+ * which reads as something failing to load rather than as a feature nobody bought. Buying tenders back
+ * puts the fourth tile in and narrows the others again, so the band is always full either way.
+ *
+ * <p>Left alone the moment someone has resized one of them by hand: a width that is not one of the four
+ * this function itself produces is a deliberate choice, and overruling it every render would make the
+ * band impossible to customise.</p>
+ */
+function reflowCountBand(items) {
+    const band = items.filter((it) => COUNT_BAND.includes(it.key))
+    if (band.length === 0) return items
+
+    const width = BAND_WIDTHS[band.length]
+    if (!width || band.some((it) => !AUTO_BAND_WIDTHS.has(it.w))) {
+        return items
+    }
+
+    const order = band.slice().sort((a, b) => COUNT_BAND.indexOf(a.key) - COUNT_BAND.indexOf(b.key))
+    const y = Math.min(...band.map((it) => it.y))
+    order.forEach((it, index) => {
+        it.w = width
+        it.x = index * width
+        it.y = y
+    })
+    return items
+}
 
 const defaultItem = (key) => {
     const m = widgetMeta(key)
@@ -98,7 +142,8 @@ export function resolveLayout(stored, availableKeys) {
         .filter((meta) => availableKeys.has(meta.key) && !seen.has(meta.key))
         .map((meta) => meta.key)
 
-    return { items: compact(items), hidden }
+    // Before compaction, which only closes vertical gaps - a short row stays short.
+    return { items: compact(reflowCountBand(items)), hidden }
 }
 
 function readStored(storageKey) {

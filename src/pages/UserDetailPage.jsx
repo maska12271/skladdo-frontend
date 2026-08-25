@@ -16,6 +16,7 @@ import { formatMoney, formatDate, formatDateTime, safeArray } from '../utils/for
 import { PERIOD_KEYS, periodRange } from '../utils/period'
 import { PERMISSION_MODULES } from '../constants/modules'
 import Checkbox from '../components/Checkbox'
+import UserAvatar from '../components/UserAvatar'
 
 const ROLE_BADGE = {
     OWNER: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
@@ -329,9 +330,7 @@ export default function UserDetailPage() {
             {/* Header */}
             <div className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 md:flex-row md:items-center">
                 <div className="flex items-center gap-4">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-500 text-xl font-bold text-white">
-                        {(user.fullName || user.email || '?').trim().charAt(0).toUpperCase()}
-                    </div>
+                    <UserAvatar user={user} size="lg" />
                     <div className="space-y-1.5">
                         <h1 className="text-2xl font-bold tracking-tight">{user.fullName || user.email}</h1>
                         <p className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
@@ -379,6 +378,12 @@ export default function UserDetailPage() {
                             <Fact label={t('userDetail.general.role')} value={t(`roles.${user.role}`)} />
                             <Fact label={t('userDetail.general.accountStatus')} value={user.archived ? t('userDetail.general.archived') : t('userDetail.general.active')} />
                             <Fact label={t('userDetail.general.company')} value={user.companyName || '—'} />
+                            {/* "Never" is the useful answer here, not a dash: an invited colleague who has
+                                not signed in yet is exactly what an administrator is looking for. */}
+                            <Fact
+                                label={t('userDetail.general.lastLogin')}
+                                value={user.lastLoginAt ? formatDateTime(user.lastLoginAt) : t('userDetail.general.neverSignedIn')}
+                            />
                         </dl>
                     </div>
 

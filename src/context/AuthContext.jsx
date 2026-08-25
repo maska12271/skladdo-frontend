@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { apiGet, apiPost, setUnauthorizedHandler } from '../api/client'
+import { apiGet, apiPost, setUnauthorizedHandler, setForbiddenHandler } from '../api/client'
 import i18n from '../i18n'
 
 const AuthContext = createContext(null)
@@ -84,23 +84,47 @@ export function AuthProvider({ children }) {
         return () => setUnauthorizedHandler(null)
     }, [logout])
 
+    /**
+     * Re-reads the profile from the server. Unlike `updateUser` this replaces the whole thing, so it also
+     * picks up what the client cannot know it changed - permissions an admin edited, and the company's
+     * add-ons, which decide whether the tender and email pages exist at all. Buying one in Settings has to
+     * call this or the sidebar keeps describing the old entitlements until the next full load.
+     */
+    const refreshUser = useCallback(() => apiGet('/auth/me')
+        .then((fresh) => {
+            if (fresh) persistUser(fresh)
+            return fresh
+        })
+        .catch(() => {
+            /* 401 is handled by the unauthorized handler; ignore other transient errors. */
+        }), [persistUser])
+
     // Refresh the profile (and its permissions) from the server whenever a token is present, so
     // permission changes made by an admin take effect on the next load and sessions stored before
     // permissions existed get backfilled.
     useEffect(() => {
         if (!token) return
-        let cancelled = false
-        apiGet('/auth/me')
-            .then((fresh) => {
-                if (!cancelled && fresh) persistUser(fresh)
-            })
-            .catch(() => {
-                /* 401 is handled by the unauthorized handler; ignore other transient errors. */
-            })
-        return () => {
-            cancelled = true
-        }
-    }, [token, persistUser])
+        refreshUser()
+    }, [token, refreshUser])
+
+    /**
+     * A 403 means this client's idea of what the account may do is out of date - an add-on that lapsed,
+     * a permission an admin revoked - so the profile is re-read and the interface stops offering it.
+     *
+     * Rate-limited to one refresh every few seconds: a page that fires several requests at once would
+     * otherwise answer one stale profile with a burst of identical fetches.
+     */
+    const lastForbiddenRefresh = useRef(0)
+    useEffect(() => {
+        if (!token) return undefined
+        setForbiddenHandler(() => {
+            const now = Date.now()
+            if (now - lastForbiddenRefresh.current < 5000) return
+            lastForbiddenRefresh.current = now
+            refreshUser()
+        })
+        return () => setForbiddenHandler(null)
+    }, [token, refreshUser])
 
     // Keep the switcher's list in step with the session. Refreshed alongside the profile so a connection
     // accepted (or ended) elsewhere shows up on the next load without needing a sign-out.
@@ -190,6 +214,19 @@ export function AuthProvider({ children }) {
         return Boolean(flags && flags[action])
     }, [user])
 
+    /**
+     * Whether the company the session is working in pays for `addon` ('TENDERS' | 'MANUFACTURER_EMAILS').
+     *
+     * The company-level twin of `can`: an add-on says whether the feature is sold to this company at all,
+     * a permission says whether this user may use it, and both must hold. A feature that is not paid for
+     * is hidden outright rather than teased, so the server closes those endpoints too - see
+     * `AddonAuthorization`.
+     *
+     * Sessions stored before add-ons were on the profile have no `addons` array; those are treated as
+     * "not entitled", which matches what the server will answer.
+     */
+    const hasAddon = useCallback((addon) => Boolean(user?.addons?.includes(addon)), [user])
+
     // True while working inside a client company through a warehouse connection: access is capped at
     // warehouse staff there, however senior the account is in its own company.
     const isPartnerSession = user?.partnerSession === true
@@ -218,10 +255,12 @@ export function AuthProvider({ children }) {
         canSeePrices,
         permissions: user?.permissions || {},
         can,
+        hasAddon,
         login,
         register,
         logout,
         updateUser,
+        refreshUser,
         companies,
         switchCompany,
         refreshCompanies,
@@ -231,7 +270,7 @@ export function AuthProvider({ children }) {
         isPlatformCompany,
         lastClientId,
         switchingRef,
-    }), [token, user, isAdmin, isHomeAdmin, canSeePrices, can, login, register, logout, updateUser,
+    }), [token, user, isAdmin, isHomeAdmin, canSeePrices, can, hasAddon, login, register, logout, updateUser, refreshUser,
         companies, switchCompany, refreshCompanies, isPartnerSession, isWarehouseAccount, isPlatformAdmin,
         isPlatformCompany, lastClientId])
 

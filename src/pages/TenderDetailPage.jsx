@@ -13,13 +13,13 @@ import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import MoneyWithBase from '../components/MoneyWithBase'
-import { FormField, TextareaField } from '../components/FormField.jsx'
+import { FormField, FormSelect, TextareaField } from '../components/FormField.jsx'
 import UnitSelect from '../components/UnitSelect.jsx'
 import { formatDate, formatMoney, toCompanyAmount } from '../utils/format'
 import Checkbox from '../components/Checkbox'
 
 const emptyPart = { partNumber: '', title: '', description: '', estimatedValue: '', samplesRequired: false, requirements: [] }
-const emptyRequirementRow = () => ({ description: '', quantity: '', unit: '', sampleQuantity: '' })
+const emptyRequirementRow = () => ({ description: '', serviceId: '', quantity: '', unit: '', sampleQuantity: '' })
 const emptyParticipant = { manufacturerName: '', offeredPrice: '', notes: '', participating: true }
 
 // Total pieces across a part's requirement items (used to derive per-piece figures). Rows without a
@@ -43,6 +43,7 @@ export default function TenderDetailPage() {
     const [tender, setTender] = useState(null)
     const [parts, setParts] = useState([])
     const [orderData, setOrderData] = useState(null)
+    const [services, setServices] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(false)
     const [saving, setSaving] = useState(false)
@@ -72,6 +73,14 @@ export default function TenderDetailPage() {
         setParts(Array.isArray(partsRes) ? partsRes : [])
         setOrderData(ordersRes || null)
     }
+
+    // Only needed to populate the optional service picker on the part form, so a failure here must not
+    // take the page down with it — the requirement's free-text description works without it.
+    useEffect(() => {
+        apiGet('/services?page=0&size=500&sortBy=name&sortDir=asc')
+            .then((res) => setServices(Array.isArray(res?.content) ? res.content : Array.isArray(res) ? res : []))
+            .catch(() => setServices([]))
+    }, [])
 
     useEffect(() => {
         let cancelled = false
@@ -108,6 +117,7 @@ export default function TenderDetailPage() {
             samplesRequired: !!part.samplesRequired,
             requirements: (part.requirements || []).map((r) => ({
                 description: r.description || '',
+                serviceId: r.serviceId ?? '',
                 quantity: r.quantity ?? '',
                 unit: r.unit || '',
                 sampleQuantity: r.sampleQuantity ?? '',
@@ -139,6 +149,7 @@ export default function TenderDetailPage() {
                     .filter((r) => r.description && r.description.trim())
                     .map((r) => ({
                         description: r.description.trim(),
+                        serviceId: r.serviceId ? Number(r.serviceId) : null,
                         quantity: r.quantity === '' || r.quantity == null ? null : Number(r.quantity),
                         unit: r.unit || null,
                         sampleQuantity: partForm.samplesRequired && r.sampleQuantity !== '' && r.sampleQuantity != null
@@ -420,15 +431,17 @@ export default function TenderDetailPage() {
                         {partForm.requirements.map((r, i) => (
                             <div key={i} className="space-y-3 rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
                                 <div className="flex items-end gap-3">
-                                    <div className="flex-1">
-                                        <FormField
-                                            id={`req-desc-${i}`}
-                                            label={t('tenderDetail.requirements.description')}
-                                            value={r.description}
-                                            onChange={(e) => setReqRow(i, 'description', e.target.value)}
-                                            placeholder={t('tenderDetail.requirements.descriptionPlaceholder')}
-                                        />
-                                    </div>
+                                    {/* `flex-1` on the field itself, not a wrapper: a wrapper runs taller
+                                        than the input inside it, which left the delete button sitting
+                                        below the field rather than level with it. */}
+                                    <FormField
+                                        className="flex-1"
+                                        id={`req-desc-${i}`}
+                                        label={t('tenderDetail.requirements.description')}
+                                        value={r.description}
+                                        onChange={(e) => setReqRow(i, 'description', e.target.value)}
+                                        placeholder={t('tenderDetail.requirements.descriptionPlaceholder')}
+                                    />
                                     <button
                                         type="button"
                                         onClick={() => removeReqRow(i)}
@@ -470,6 +483,18 @@ export default function TenderDetailPage() {
                                         />
                                     )}
                                 </div>
+                                {/* Optional: ties the requirement to a catalogue service. The description
+                                    above stays the authoritative wording — this is a cross-reference, not
+                                    a replacement for it. */}
+                                <FormSelect
+                                    id={`req-service-${i}`}
+                                    label={t('tenderDetail.requirements.service')}
+                                    value={r.serviceId}
+                                    onChange={(e) => setReqRow(i, 'serviceId', e.target.value)}
+                                    searchable
+                                    placeholder={t('tenderDetail.requirements.selectService')}
+                                    options={services.map((s) => ({ value: String(s.id), label: s.name, search: s.code }))}
+                                />
                             </div>
                         ))}
                         {partForm.requirements.length === 0 && <p className="text-sm text-slate-400">{t('tenderDetail.requirements.empty')}</p>}
@@ -558,7 +583,14 @@ function PartCard({ part, canEdit, currency, money, t, onEditPart, onDeletePart,
                     <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                         {part.requirements.map((req) => (
                             <li key={req.id} className="flex items-start justify-between gap-3 py-2 text-sm">
-                                <span className="text-slate-700 dark:text-slate-200">{req.description}</span>
+                                <span className="text-slate-700 dark:text-slate-200">
+                                    {req.description}
+                                    {req.serviceName && (
+                                        <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                            {req.serviceName}
+                                        </span>
+                                    )}
+                                </span>
                                 {(req.quantity != null || (part.samplesRequired && req.sampleQuantity != null)) && (
                                     <span className="shrink-0 text-right text-slate-400">
                                         {req.quantity != null ? `${req.quantity}${req.unit ? ` ${req.unit}` : ''}` : ''}

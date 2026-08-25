@@ -16,6 +16,8 @@ const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const ProductsPage = lazy(() => import('./pages/ProductsPage'))
 const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'))
+const ServicesPage = lazy(() => import('./pages/ServicesPage'))
+const ServiceDetailPage = lazy(() => import('./pages/ServiceDetailPage'))
 const ManufacturersPage = lazy(() => import('./pages/ManufacturersPage'))
 const ManufacturerDetailPage = lazy(() => import('./pages/ManufacturerDetailPage'))
 const ClientsPage = lazy(() => import('./pages/ClientsPage'))
@@ -157,6 +159,14 @@ export default function App() {
                     element={<RequirePermission module="PRODUCTS"><ProductDetailPage /></RequirePermission>}
                 />
                 <Route
+                    path="/services"
+                    element={<RequirePermission module="SERVICES"><ServicesPage /></RequirePermission>}
+                />
+                <Route
+                    path="/services/:id"
+                    element={<RequirePermission module="SERVICES"><ServiceDetailPage /></RequirePermission>}
+                />
+                <Route
                     path="/manufacturers"
                     element={<RequirePermission module="MANUFACTURERS"><ManufacturersPage /></RequirePermission>}
                 />
@@ -190,11 +200,11 @@ export default function App() {
                 />
                 <Route
                     path="/tenders"
-                    element={<RequirePermission module="TENDERS"><TendersPage /></RequirePermission>}
+                    element={<RequirePermission module="TENDERS" addon="TENDERS"><TendersPage /></RequirePermission>}
                 />
                 <Route
                     path="/tenders/:id"
-                    element={<RequirePermission module="TENDERS"><TenderDetailPage /></RequirePermission>}
+                    element={<RequirePermission module="TENDERS" addon="TENDERS"><TenderDetailPage /></RequirePermission>}
                 />
                 <Route
                     path="/warehouses"
@@ -206,11 +216,11 @@ export default function App() {
                 />
                 <Route
                     path="/emails"
-                    element={<RequirePermission module="MANUFACTURER_EMAILS"><SentEmailsPage /></RequirePermission>}
+                    element={<RequirePermission module="MANUFACTURER_EMAILS" addon="MANUFACTURER_EMAILS"><SentEmailsPage /></RequirePermission>}
                 />
                 <Route
                     path="/emails/:batchId"
-                    element={<RequirePermission module="MANUFACTURER_EMAILS"><EmailBatchDetailPage /></RequirePermission>}
+                    element={<RequirePermission module="MANUFACTURER_EMAILS" addon="MANUFACTURER_EMAILS"><EmailBatchDetailPage /></RequirePermission>}
                 />
                 <Route
                     path="/users"

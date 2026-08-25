@@ -93,6 +93,7 @@ export default function DashboardPage() {
         if (stats.tenders) keys.add('tenders')
         if (hasSales) keys.add('topClients')
         if (hasSales) keys.add('topProducts')
+        if (hasSales) keys.add('topServices')
         return keys
     }, [stats])
 
@@ -162,6 +163,8 @@ export default function DashboardPage() {
                 return t('dashboard.titles.topClients')
             case 'topProducts':
                 return t('dashboard.titles.topProducts')
+            case 'topServices':
+                return t('dashboard.titles.topServices')
             default:
                 // KPI widgets fall through to their catalogue label.
                 return t(`dashboard.widgets.${key}`, { defaultValue: widgetMeta(key)?.label || key })
@@ -203,7 +206,10 @@ export default function DashboardPage() {
                 return (
                     // No tableId: the column picker belongs on the full list pages, not on a dashboard card.
                     <div className="flex h-full flex-col">
-                        <div className="min-h-0 flex-1 overflow-hidden">
+                        {/* Scrolls rather than clips. The row count above is an estimate of what fits,
+                            and an estimate is wrong at some zoom level, font size or card height - when
+                            it is, the reader should be able to reach the rest instead of losing it. */}
+                        <div className="min-h-0 flex-1 overflow-y-auto">
                             <DataTable
                                 bare
                                 columns={lowStockColumns(t)}
@@ -225,7 +231,10 @@ export default function DashboardPage() {
                 const rows = (stats.tenders?.latest || []).slice(0, tenderRows)
                 return (
                     <div className="flex h-full flex-col">
-                        <div className="min-h-0 flex-1 overflow-hidden">
+                        {/* Scrolls rather than clips. The row count above is an estimate of what fits,
+                            and an estimate is wrong at some zoom level, font size or card height - when
+                            it is, the reader should be able to reach the rest instead of losing it. */}
+                        <div className="min-h-0 flex-1 overflow-y-auto">
                             <DataTable
                                 bare
                                 alwaysCards
@@ -246,6 +255,8 @@ export default function DashboardPage() {
                 return <RankList rows={stats.topClients || []} emptyText={t('dashboard.rank.noSales')} />
             case 'topProducts':
                 return <RankList rows={stats.topProducts || []} emptyText={t('dashboard.rank.noSales')} unit={t('dashboard.rank.units')} />
+            case 'topServices':
+                return <RankList rows={stats.topServices || []} emptyText={t('dashboard.rank.noSales')} unit={t('dashboard.rank.units')} />
             default:
                 return null
         }
@@ -388,6 +399,7 @@ const WIDGET_LINKS = {
     tenders: '/tenders',
     topClients: '/clients',
     topProducts: '/products',
+    topServices: '/services',
 }
 
 /** Widget title per KPI, reusing the translations the old summary-card block already shipped. */

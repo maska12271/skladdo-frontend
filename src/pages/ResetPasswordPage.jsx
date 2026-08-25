@@ -2,15 +2,22 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import BackToHome from '../components/BackToHome'
 import { useTranslation } from 'react-i18next'
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, PartyPopper } from 'lucide-react'
 import { apiGet, apiPost } from '../api/client'
 import { FormField } from '../components/FormField.jsx'
 import PasswordStrength from '../components/PasswordStrength.jsx'
 
 /**
- * Public page where a user sets their own password from an emailed link. Handles both first-time setup
- * (invited accounts) and forgotten-password resets — the same token flow drives both. The token is
- * validated on load so an expired/used link shows a clear message instead of a dead form.
+ * Public page where a user sets their own password from an emailed link.
+ *
+ * <p>One token flow, two things to say. Somebody resetting a forgotten password already knows what
+ * Skladdo is and wants the form; somebody following an invitation has never seen the product and needs
+ * to be told where they have landed and who put them there. The server says which it is (the account is
+ * still awaiting its first password), so the page greets them accordingly rather than opening on a bare
+ * "reset your password" — which reads, to a new colleague, like a mistake.</p>
+ *
+ * <p>The token is validated on load either way, so an expired or spent link shows a clear message
+ * instead of a dead form.</p>
  */
 export default function ResetPasswordPage() {
     const { t } = useTranslation()
@@ -20,6 +27,10 @@ export default function ResetPasswordPage() {
     // 'checking' | 'valid' | 'invalid' | 'done'
     const [state, setState] = useState('checking')
     const [email, setEmail] = useState('')
+    // Whether this link is a colleague's invitation rather than a password reset, and the company it is
+    // into. Both come from the server: the client cannot tell one token from another.
+    const [invitation, setInvitation] = useState(false)
+    const [companyName, setCompanyName] = useState('')
     const [password, setPassword] = useState('')
     const [confirm, setConfirm] = useState('')
     const [error, setError] = useState('')
@@ -36,6 +47,8 @@ export default function ResetPasswordPage() {
                 if (cancelled) return
                 if (info?.valid) {
                     setEmail(info.email || '')
+                    setInvitation(Boolean(info.invitation))
+                    setCompanyName(info.companyName || '')
                     setState('valid')
                 } else {
                     setState('invalid')
@@ -81,11 +94,15 @@ export default function ResetPasswordPage() {
                 <div className="mb-8 text-center">
                     <img src="/skladdo-logo.svg" alt="" aria-hidden="true" className="mx-auto mb-3 h-12 w-auto" />
                     <h1 className="text-2xl font-bold tracking-tight text-teal-700 dark:text-teal-400">
-                        {t('resetPassword.title')}
+                        {invitation ? t('resetPassword.welcomeTitle') : t('resetPassword.title')}
                     </h1>
-                    {state === 'valid' && email && (
+                    {state === 'valid' && (
                         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                            {t('resetPassword.subtitle', { email })}
+                            {invitation
+                                ? (companyName
+                                    ? t('resetPassword.welcomeSubtitle', { company: companyName })
+                                    : t('resetPassword.welcomeSubtitleNoCompany'))
+                                : (email ? t('resetPassword.subtitle', { email }) : null)}
                         </p>
                     )}
                 </div>
@@ -123,6 +140,18 @@ export default function ResetPasswordPage() {
                         >
                             {t('resetPassword.goToLogin')}
                         </Link>
+                    </div>
+                )}
+
+                {state === 'valid' && invitation && (
+                    <div className="mb-6 flex gap-3 rounded-2xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-900/60 dark:bg-teal-950/30">
+                        <PartyPopper className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+                        <div className="min-w-0 text-sm">
+                            <p className="font-medium text-teal-900 dark:text-teal-100">{t('resetPassword.welcomeLead')}</p>
+                            <p className="mt-1 text-teal-800/90 dark:text-teal-200/80">
+                                {t('resetPassword.welcomeBody', { email })}
+                            </p>
+                        </div>
                     </div>
                 )}
 

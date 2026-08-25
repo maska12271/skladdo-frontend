@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Ban, CircleCheck } from 'lucide-react'
 import { apiDelete, apiGet, apiPost } from '../api/client'
-import { formatDate, formatDateTime, safeArray } from '../utils/format'
+import { formatDate, formatDateTime, formatBytes, safeArray } from '../utils/format'
 import { useToast } from '../context/ToastContext'
 import PageHeader from '../components/PageHeader'
 import LoadingBlock from '../components/LoadingBlock'
@@ -284,6 +284,17 @@ export default function AdminCompanyDetailPage() {
                             : <span className="text-slate-400">Never signed in</span>}
                     </Field>
                     <Field label="Users">{company.userCount}</Field>
+                    {/* What this customer costs to host, split by where it actually sits. */}
+                    <Field label="File storage">
+                        {formatBytes(detail.storageBytes)}
+                        <span className="ml-1.5 text-slate-400">
+                            ({detail.storageFiles} file{detail.storageFiles === 1 ? '' : 's'})
+                        </span>
+                    </Field>
+                    <Field label="Database">
+                        {formatBytes(detail.databaseBytes)}
+                        <span className="ml-1.5 text-slate-400">row data</span>
+                    </Field>
                 </Card>
 
                 <Card title="Billing">

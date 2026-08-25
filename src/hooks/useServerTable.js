@@ -41,22 +41,34 @@ export function useServerTable({
         filters[key] = raw ? raw.split(',').filter(Boolean) : []
     }
 
+    /**
+     * The params as last written from here, so several updates in one tick compose.
+     *
+     * `setSearchParams((prev) => …)` looks like it would do this, but `prev` is the value from the last
+     * *render* — so two calls in the same tick both start from the pre-click URL and the second silently
+     * discards the first (F-016). Writing the result back here synchronously is what lets a control
+     * change more than one param, e.g. clearing every filter at once.
+     */
+    const paramsRef = useRef(searchParams)
+    // Resync for navigations that did not come from here: Back, a link, another component's write.
+    useEffect(() => {
+        paramsRef.current = searchParams
+    }, [searchParams])
+
     // Writes a single query param (arrays comma-joined), dropping empties to keep the URL tidy.
     // Changing a filter, the search, or the page size resets pagination to page 1.
     const updateParam = useCallback((key, value, { resetPage = true } = {}) => {
-        setSearchParams((prev) => {
-            const next = new URLSearchParams(prev)
-            const serialized = Array.isArray(value) ? value.join(',') : value
-            if (serialized) next.set(key, String(serialized))
-            else next.delete(key)
-            if (resetPage) next.delete('page')
-            return next
-        }, { replace: true })
+        const next = new URLSearchParams(paramsRef.current)
+        const serialized = Array.isArray(value) ? value.join(',') : value
+        if (serialized) next.set(key, String(serialized))
+        else next.delete(key)
+        if (resetPage) next.delete('page')
+        paramsRef.current = next
+        setSearchParams(next, { replace: true })
     }, [setSearchParams])
 
-    // Sort writes both params in ONE setSearchParams call on purpose. Two updateParam calls in the same
-    // tick would each resolve against the params from the last render, and the second would discard the
-    // first — the bug that made the page-size control do nothing (F-016).
+    // Sort writes both params in ONE setSearchParams call. Two updateParam calls would now compose
+    // correctly (see paramsRef above), but one write for one user action is still the clearer shape.
     const setSort = useCallback((nextSortBy, nextSortDir) => {
         setSearchParams((prev) => {
             const next = new URLSearchParams(prev)
