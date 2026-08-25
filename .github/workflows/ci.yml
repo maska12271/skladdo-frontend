@@ -34,16 +34,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Playwright drives the real app, so it needs the API too. skladdo-backend is private, so this
-      # needs a token with read access to it (BACKEND_CHECKOUT_TOKEN — see DEPLOY.md). Pinning to
-      # master keeps a backend change from silently breaking the frontend build.
+      # Playwright drives the real app, so it needs the API too. skladdo-backend is public, so this needs
+      # no token. Pinning to master keeps a backend change from silently breaking the frontend build.
+      # TODO: once skladdo-backend goes private, add `token: ${{ secrets.BACKEND_CHECKOUT_TOKEN }}` here
+      # (a fine-grained PAT with read-only contents on skladdo-backend) in the same change that sets it.
       - name: Check out the backend
         uses: actions/checkout@v4
         with:
           repository: maska12271/skladdo-backend
           ref: master
           path: backend
-          token: ${{ secrets.BACKEND_CHECKOUT_TOKEN }}
 
       - uses: actions/setup-java@v4
         with:
