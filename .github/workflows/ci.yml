@@ -34,14 +34,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Playwright drives the real app, so it needs the API too. skladdo-backend is public, so this needs
-      # no token. Pinning to master keeps a backend change from silently breaking the frontend build.
+      # Playwright drives the real app, so it needs the API too. skladdo-backend is private, so this
+      # needs a token with read access to it (BACKEND_CHECKOUT_TOKEN — see DEPLOY.md). Pinning to
+      # master keeps a backend change from silently breaking the frontend build.
       - name: Check out the backend
         uses: actions/checkout@v4
         with:
           repository: maska12271/skladdo-backend
           ref: master
           path: backend
+          token: ${{ secrets.BACKEND_CHECKOUT_TOKEN }}
 
       - uses: actions/setup-java@v4
         with:
@@ -124,3 +126,23 @@ jobs:
             backend.log
             frontend.log
           retention-days: 7
+
+  deploy:
+    name: Deploy
+    needs: [unit, e2e]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/skladdo
+            git -C frontend pull origin master
+            docker run --rm -v "$(pwd)/frontend:/app" -w /app node:20-alpine sh -c "npm ci && npm run build"
+            docker compose -f deploy/docker-compose.prod.yml restart caddy
