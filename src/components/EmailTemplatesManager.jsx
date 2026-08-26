@@ -10,6 +10,7 @@ import { FormField } from './FormField.jsx'
 import RichTextEditor from './RichTextEditor'
 import { safeArray } from '../utils/format'
 import Checkbox from './Checkbox'
+import ModalActions from './ModalActions'
 
 const emptyForm = { name: '', subject: '', body: '', active: true }
 
@@ -172,12 +173,12 @@ export default function EmailTemplatesManager() {
                             <span className="font-medium text-slate-700 dark:text-slate-200">{t('common.active')}</span>
                         </label>
                     )}
-                    <div className="flex justify-end gap-3">
+                    <ModalActions>
                         <button type="button" onClick={formModal.close} className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700">{t('common.cancel')}</button>
                         <button type="submit" disabled={saving || bodyEmpty} className="rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-60">
                             {saving ? t('common.saving') : t('common.save')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 

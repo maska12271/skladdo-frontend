@@ -4,6 +4,7 @@ import { Building2, Plus } from 'lucide-react'
 import { apiGet, apiPost } from '../api/client'
 import { formatDate, formatBytes } from '../utils/format'
 import { useServerTable } from '../hooks/useServerTable'
+import { sortOptionsFromColumns } from '../utils/sortOptions'
 import PageHeader from '../components/PageHeader'
 import DataTable from '../components/DataTable'
 import SearchFilters from '../components/SearchFilters'
@@ -12,6 +13,7 @@ import Modal from '../components/Modal'
 import CopyButton from '../components/CopyButton'
 import { FormField, FormSelect } from '../components/FormField'
 import { COMPANY_STATUSES, COMPANY_TYPES, PLANS, Pill, StatusBadge, relativeDays } from '../components/AdminBits'
+import ModalActions from '../components/ModalActions'
 
 const EMPTY_FORM = {
     companyName: '',
@@ -152,7 +154,7 @@ function CreateCompanyModal({ isOpen, onClose, onCreated }) {
                     </p>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-2">
+                <ModalActions>
                     <button type="button" onClick={close}
                         className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium dark:border-slate-700">
                         Cancel
@@ -161,7 +163,7 @@ function CreateCompanyModal({ isOpen, onClose, onCreated }) {
                         className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-60">
                         {saving ? 'Creating…' : 'Create company'}
                     </button>
-                </div>
+                </ModalActions>
             </form>
         </Modal>
     )
@@ -302,6 +304,7 @@ export default function AdminCompaniesPage() {
                         options: PLANS.map((v) => ({ value: v, label: v })),
                     },
                 ]}
+                sort={{ sortBy, sortDir, onSortChange: setSort, options: sortOptionsFromColumns(columns) }}
             />
 
             <DataTable
@@ -326,6 +329,7 @@ export default function AdminCompaniesPage() {
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSortChange={setSort}
+                hideCardSort
             />
 
             <CreateCompanyModal

@@ -10,6 +10,7 @@ import Modal from '../components/Modal'
 import { FormField } from '../components/FormField'
 import { FREE_PERIOD_PRESETS, Pill, StatusBadge, daysUntil, relativeDays } from '../components/AdminBits'
 import Checkbox from '../components/Checkbox'
+import ModalActions from '../components/ModalActions'
 
 function Card({ title, children }) {
     return (
@@ -43,7 +44,7 @@ function SuspendModal({ isOpen, company, onClose, onConfirm, busy }) {
                     sign in, and anyone currently signed in is locked out on their next request. Their data is
                     untouched and you can lift this at any time.
                 </p>
-                <div className="flex justify-end gap-3">
+                <ModalActions>
                     <button onClick={onClose} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium dark:border-slate-700">
                         Cancel
                     </button>
@@ -51,7 +52,7 @@ function SuspendModal({ isOpen, company, onClose, onConfirm, busy }) {
                         className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-60">
                         {busy ? 'Suspending…' : 'Suspend'}
                     </button>
-                </div>
+                </ModalActions>
             </div>
         </Modal>
     )
@@ -154,7 +155,7 @@ function SponsorshipModal({ isOpen, company, onClose, onSaved }) {
                 />
                 <p className="-mt-2 text-xs text-slate-500">Never shown to the company.</p>
 
-                <div className="flex justify-end gap-3 pt-2">
+                <ModalActions>
                     <button type="button" onClick={close}
                         className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium dark:border-slate-700">
                         Cancel
@@ -163,7 +164,7 @@ function SponsorshipModal({ isOpen, company, onClose, onSaved }) {
                         className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-60">
                         {saving ? 'Saving…' : active ? 'Extend' : 'Grant'}
                     </button>
-                </div>
+                </ModalActions>
             </form>
         </Modal>
     )

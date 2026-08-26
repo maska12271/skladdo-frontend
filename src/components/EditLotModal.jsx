@@ -4,6 +4,7 @@ import Modal from './Modal'
 import { FormField } from './FormField.jsx'
 import { apiPut } from '../api/client'
 import { useToast } from '../context/ToastContext'
+import ModalActions from './ModalActions'
 
 /**
  * Edits a lot's identifying details (number, production/expiry dates). The quantity is changed only
@@ -76,7 +77,7 @@ export default function EditLotModal({ product, batch, isOpen, onClose, onSaved 
                     placeholder={t('inventory.lotNumberPlaceholder')}
                 />
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2">
                     <FormField
                         id="edit-lot-production"
                         label={t('inventory.productionDate')}
@@ -95,14 +96,14 @@ export default function EditLotModal({ product, batch, isOpen, onClose, onSaved 
                     />
                 </div>
 
-                <div className="flex justify-end gap-3">
+                <ModalActions>
                     <button type="button" onClick={onClose} className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700">
                         {t('common.cancel')}
                     </button>
                     <button type="submit" disabled={saving} className="rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-60">
                         {saving ? t('common.saving') : t('inventory.saveLot')}
                     </button>
-                </div>
+                </ModalActions>
             </form>
         </Modal>
     )

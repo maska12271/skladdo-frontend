@@ -23,6 +23,8 @@ import PhoneField from '../components/PhoneField'
 import CountrySelectField from "../components/CountrySelectField.jsx";
 import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx";
 import { Eye, Pencil, Trash2, Archive, ArchiveRestore, Users } from 'lucide-react'
+import InfoHint from '../components/InfoHint'
+import ModalActions from '../components/ModalActions'
 
 // One schema drives both export (headers localised to the current language) and import (headers
 // matched against each field's label in every app language). `id` is export-only.
@@ -363,22 +365,7 @@ export default function ClientsPage() {
                         label={
                             <span className="inline-flex items-center gap-2">
                     {t('clients.registrationCode')}
-                    <span className="group relative inline-flex">
-                        <button
-                            type="button"
-                            tabIndex={0}
-                            aria-label={t('clients.regCodeTooltipAria')}
-                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-                        >
-                            ?
-                        </button>
-                        <span
-                            role="tooltip"
-                            className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-normal text-white shadow-lg group-hover:block group-focus-within:block dark:bg-slate-700"
-                        >
-                            {t('clients.regCodeTooltip')}
-                        </span>
-                    </span>
+                    <InfoHint label={t('clients.regCodeTooltipAria')} text={t('clients.regCodeTooltip')} />
                 </span>
                         }
                         name="registrationCode"
@@ -453,7 +440,7 @@ export default function ClientsPage() {
                         className="md:col-span-4"
                     />
 
-                    <div className="md:col-span-4 flex justify-end gap-3">
+                    <ModalActions className="md:col-span-4">
                         <button
                             type="button"
                             onClick={formModal.close}
@@ -468,7 +455,7 @@ export default function ClientsPage() {
                         >
                             {loading ? t('common.saving') : editingId ? t('common.saveChanges') : t('clients.createBtn')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 

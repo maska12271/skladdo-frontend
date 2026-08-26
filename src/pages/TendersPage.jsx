@@ -24,6 +24,7 @@ import { FormField, FormSelect, TextareaField } from '../components/FormField.js
 import { useSettings } from '../context/SettingsContext'
 import CurrencyRateField from '../components/CurrencyRateField.jsx'
 import { Pencil, Trash2, ClipboardList, Eye } from 'lucide-react'
+import ModalActions from '../components/ModalActions'
 
 const emptyTenderForm = {
     title: '',
@@ -484,23 +485,27 @@ export default function TendersPage() {
                         currencies={currencies}
                     />
 
-                    <FormField
-                        id="tender-published-at"
-                        label={t('tenders.form.publishedAt')}
-                        type="date"
-                        name="publishedAt"
-                        value={form.publishedAt}
-                        onChange={handleChange}
-                    />
+                    {/* Paired: two dates read together, and short enough to share a row on a phone.
+                        `md:contents` dissolves the wrapper once the form is two columns wide. */}
+                    <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 md:contents">
+                        <FormField
+                            id="tender-published-at"
+                            label={t('tenders.form.publishedAt')}
+                            type="date"
+                            name="publishedAt"
+                            value={form.publishedAt}
+                            onChange={handleChange}
+                        />
 
-                    <FormField
-                        id="tender-deadline"
-                        label={t('tenders.form.deadline')}
-                        type="date"
-                        name="deadline"
-                        value={form.deadline}
-                        onChange={handleChange}
-                    />
+                        <FormField
+                            id="tender-deadline"
+                            label={t('tenders.form.deadline')}
+                            type="date"
+                            name="deadline"
+                            value={form.deadline}
+                            onChange={handleChange}
+                        />
+                    </div>
 
                     <TextareaField
                         id="tender-description"
@@ -513,7 +518,7 @@ export default function TendersPage() {
                         className="md:col-span-2"
                     />
 
-                    <div className="md:col-span-2 flex justify-end gap-3">
+                    <ModalActions className="md:col-span-2">
                         <button
                             type="button"
                             onClick={formModal.close}
@@ -528,7 +533,7 @@ export default function TendersPage() {
                         >
                             {loading ? t('common.saving') : editingId ? t('common.saveChanges') : t('tenders.createBtn')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 

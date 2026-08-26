@@ -82,7 +82,7 @@ export default function AdminDashboardPage() {
                 }
             />
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
                 <StatCard
                     title="Total companies"
                     value={stats.totalCompanies}
@@ -111,7 +111,7 @@ export default function AdminDashboardPage() {
                 />
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
                 <StatCard
                     title="New this month"
                     value={windowCount(stats.newCompanies, 30)}
@@ -166,7 +166,7 @@ export default function AdminDashboardPage() {
                 </div>
             ) : null}
 
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
                 <StatCard
                     title="Suspended"
                     value={stats.suspendedCompanies}

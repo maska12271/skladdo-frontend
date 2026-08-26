@@ -30,7 +30,7 @@ export default function StatCard({ title, value, hint, color = 'teal', trend, co
     return (
         <div className={`shadow-card rounded-2xl border border-slate-200 bg-white transition-shadow hover:shadow-card-md dark:border-slate-800 dark:bg-slate-900 ${compact ? 'p-3 sm:p-4' : 'p-3 sm:p-5'}`}>
             <div className="flex items-start justify-between gap-3">
-                <p className="truncate text-xs font-medium text-slate-500 sm:text-sm dark:text-slate-400">{title}</p>
+                <p className="line-clamp-2 text-xs font-medium text-slate-500 sm:truncate sm:text-sm dark:text-slate-400">{title}</p>
                 {Icon ? (
                     <span className={`inline-flex shrink-0 items-center justify-center rounded-xl ${accent.badge} ${compact ? 'h-7 w-7 sm:h-8 sm:w-8' : 'h-8 w-8 sm:h-9 sm:w-9'}`}>
                         <Icon className={compact ? 'h-3.5 w-3.5 sm:h-4 sm:w-4' : 'h-4 w-4 sm:h-[18px] sm:w-[18px]'} />

@@ -355,6 +355,17 @@ html {
   scrollbar-color: color-mix(in srgb, var(--neutral-400) 60%, transparent) transparent;
 }
 
+/* A strip that scrolls sideways with no visible bar. For the rows that turn into a swipeable strip on a
+   phone — the settings tabs — where the 10px track above would read as a broken layout rather than an
+   affordance; the tab clipped at the edge is the affordance instead. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* ============================================================
    ANIMATIONS
    ============================================================ */
@@ -410,12 +421,28 @@ html {
   }
 }
 
+/* An action sheet is attached to the bottom edge, so it enters by sliding up off that edge. An 8px nudge
+   — what `dialog-in` does — reads as a glitch on something anchored to the screen rather than floating
+   above it. The global prefers-reduced-motion rule collapses this like every other animation. */
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 .overlay-enter {
   animation: overlay-in 0.18s ease-out;
 }
 
 .dialog-enter {
   animation: dialog-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sheet-enter {
+  animation: sheet-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes fade-in-up {

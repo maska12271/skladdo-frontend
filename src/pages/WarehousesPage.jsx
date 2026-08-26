@@ -18,6 +18,7 @@ import { safeArray } from '../utils/format'
 import { FormField } from '../components/FormField.jsx'
 import AddressAutocompleteField from '../components/AddressAutocompleteField.jsx'
 import Checkbox from '../components/Checkbox'
+import ModalActions from '../components/ModalActions'
 
 const emptyForm = { name: '', address: '', active: true }
 
@@ -247,7 +248,7 @@ export default function WarehousesPage() {
                         </label>
                     )}
 
-                    <div className="md:col-span-2 flex justify-end gap-3">
+                    <ModalActions className="md:col-span-2">
                         <button
                             type="button"
                             onClick={formModal.close}
@@ -262,7 +263,7 @@ export default function WarehousesPage() {
                         >
                             {loading ? t('common.saving') : editingId ? t('common.saveChanges') : t('warehouses.add')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 

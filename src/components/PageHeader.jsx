@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MoreHorizontal } from 'lucide-react'
+import ActionSheet from './ActionSheet'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 
 // Side by side only once there is room for both halves. The busier lists carry three or four action
@@ -52,34 +53,24 @@ export default function PageHeader({ title, description, action, primaryAction }
 /**
  * The secondary actions, behind one button.
  *
- * The children are whatever the page already passes — ordinary buttons, and in most cases a `DataToolbar`
- * that owns its own menus. So rather than re-describing them as data, they are re-laid-out: the container
- * stacks them and stretches each one to the full width of the sheet. That keeps every page's existing
- * handlers, permissions and labels exactly as they are.
+ * The children are whatever the page already passes — ordinary buttons, and in most cases a `DataToolbar`.
+ * So rather than re-describing them as data, they are re-styled where they land, by the child selectors on
+ * the sheet. That keeps every page's existing handlers, permissions and labels exactly as they are.
+ *
+ * The panel used to be a dropdown hung off this button. It was never a good fit for a phone: it opened
+ * mid-screen at the top of the display, was as narrow as the trigger allowed, and had to be measured and
+ * clamped every time just to stay on screen — the version before that opened 46px off the left edge with
+ * every label cut off. A sheet is the platform's own answer to this and needs none of that arithmetic.
  */
 function OverflowActions({ label, children }) {
     const [open, setOpen] = useState(false)
-    const ref = useRef(null)
-
-    useEffect(() => {
-        if (!open) return undefined
-        const onPointerDown = (event) => {
-            if (ref.current && !ref.current.contains(event.target)) setOpen(false)
-        }
-        const onKeyDown = (event) => event.key === 'Escape' && setOpen(false)
-        document.addEventListener('mousedown', onPointerDown)
-        document.addEventListener('keydown', onKeyDown)
-        return () => {
-            document.removeEventListener('mousedown', onPointerDown)
-            document.removeEventListener('keydown', onKeyDown)
-        }
-    }, [open])
+    const close = useCallback(() => setOpen(false), [])
 
     return (
-        <div className="relative" ref={ref}>
+        <>
             <button
                 type="button"
-                onClick={() => setOpen((value) => !value)}
+                onClick={() => setOpen(true)}
                 aria-haspopup="menu"
                 aria-expanded={open}
                 aria-label={label}
@@ -88,19 +79,9 @@ function OverflowActions({ label, children }) {
                 <MoreHorizontal className="h-5 w-5" />
             </button>
 
-            {open && (
-                // `left-0` so it opens into the page rather than off the left edge — the button sits at
-                // the right of the header, and a right-anchored panel would be fine, but the sheet is
-                // wider than the button and needs the room. The children are stretched by the arbitrary
-                // child selector, which is what lets untouched page markup lay out sensibly here.
-                <div
-                    role="menu"
-                    onClick={() => setOpen(false)}
-                    className="absolute right-0 z-50 mt-2 flex w-60 max-w-[calc(100vw-2rem)] flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-800 [&_button]:w-full [&_button]:justify-start [&>*]:w-full"
-                >
-                    {children}
-                </div>
-            )}
-        </div>
+            <ActionSheet open={open} title={label} onClose={close}>
+                {children}
+            </ActionSheet>
+        </>
     )
 }

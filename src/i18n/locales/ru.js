@@ -1350,6 +1350,13 @@ export default {
         removeImage: 'Удалить изображение',
         addImages: 'Добавить изображения',
     },
+    datePicker: {
+        open: 'Открыть календарь',
+        previous: 'Предыдущий',
+        next: 'Следующий',
+        today: 'Сегодня',
+        clear: 'Очистить',
+    },
     select: {
         placeholder: 'Выберите...',
         noMatches: 'Совпадений нет',

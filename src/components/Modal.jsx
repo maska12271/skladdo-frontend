@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import { OVERLAY_BACKDROP } from '../constants/overlay'
@@ -105,7 +106,11 @@ export default function Modal({ isOpen, title, children, onClose, width = DEFAUL
     // and leaves the form squeezed inside it.
     const widthFromSm = WIDTHS[width] ?? WIDTHS[DEFAULT_WIDTH]
 
-    return (
+    // Portalled to the body rather than rendered where it was declared. `fixed` is resolved against the
+    // nearest transformed or filtered ancestor rather than the viewport, and a dialog opened from inside a
+    // hidden container inherits the hiding — which is exactly what happened to the import dialog once the
+    // toolbar that owns it moved into the action sheet: the sheet closed, and the dialog went with it.
+    return createPortal(
         <div
             className={`overlay-enter fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4 ${OVERLAY_BACKDROP}`}
             onMouseDown={(e) => {
@@ -115,9 +120,13 @@ export default function Modal({ isOpen, title, children, onClose, width = DEFAUL
         >
             {/* A column with a scrolling body rather than a block with a tall child: it keeps the title and
                 the close button pinned while the content moves, which matters most on the screen where the
-                content is longest relative to the viewport. */}
+                content is longest relative to the viewport.
+
+                Capped in `dvh` rather than `vh`: on a phone `vh` counts the space behind the browser's own
+                collapsing toolbars, so a 92vh sheet can still run off the bottom of what you can see —
+                taking the buttons, which are pinned to the bottom of the body, with it. */}
             <div
-                className={`dialog-enter shadow-pop flex max-h-[92vh] w-full flex-col rounded-t-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 sm:max-h-[85vh] sm:rounded-3xl ${widthFromSm}`}
+                className={`dialog-enter shadow-pop flex max-h-[92dvh] w-full flex-col rounded-t-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 sm:max-h-[85dvh] sm:rounded-3xl ${widthFromSm}`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="modal-title"
@@ -137,13 +146,13 @@ export default function Modal({ isOpen, title, children, onClose, width = DEFAUL
                     </button>
                 </div>
 
-                {/* Every edge spelled out rather than a `p-*` shorthand, so the safe-area allowance below
-                    cannot be overridden by the `sm` padding depending on which utility Tailwind emits last.
-                    The allowance keeps the last field clear of a phone's home indicator. */}
-                <div className="flex-1 overflow-y-auto px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 sm:pb-6">
+                {/* No safe-area allowance here: `ModalActions` is the bottom-most thing in every dialog
+                    that has buttons, and it carries the allowance itself. */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6">
                     {children}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     )
 }

@@ -26,6 +26,7 @@ import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx
 import CurrencyRateField from "../components/CurrencyRateField.jsx";
 import MoneyWithBase from "../components/MoneyWithBase.jsx";
 import { Pencil, Trash2, ShoppingCart } from 'lucide-react'
+import ModalActions from '../components/ModalActions'
 
 const exportColumns = [
     { header: 'ID', value: (r) => r.id },
@@ -100,8 +101,12 @@ export default function SalesOrdersPage() {
     const { t } = useTranslation()
     const { canCreate, canEdit, canDelete } = usePermissions('SALES_ORDERS')
     const invoicePerms = usePermissions('INVOICES')
+    // The permission alone is not enough: a company that has not bought the Tenders add-on has the
+    // module closed on the server, so asking for the options 403s and raises a "Forbidden" toast on
+    // every visit to this page. The nav hides the Tenders page for exactly the same reason.
     const tenderPerms = usePermissions('TENDERS')
-    const { canSeePrices } = useAuth()
+    const { canSeePrices, hasAddon } = useAuth()
+    const canUseTenders = tenderPerms.canView && hasAddon('TENDERS')
     const { defaultWarehouseId, currency: baseCurrency, currencies, currencySymbol } = useSettings()
     const navigate = useNavigate()
     const toast = useToast()
@@ -229,7 +234,7 @@ export default function SalesOrdersPage() {
         setTaxRates(Array.isArray(taxRes) ? taxRes : [])
 
         // Tender options power the optional "part of a tender" picker; only for users who can view tenders.
-        if (tenderPerms.canView) {
+        if (canUseTenders) {
             try {
                 setTenders(safeArray(await apiGet('/tenders/options')))
             } catch { /* leave the picker empty if tenders can't be loaded */ }
@@ -766,23 +771,28 @@ export default function SalesOrdersPage() {
                             ]}
                         />
 
-                        <FormField
-                            id="sales-order-date"
-                            label={t('salesOrders.form.orderDate')}
-                            type="date"
-                            name="orderDate"
-                            value={form.orderDate}
-                            onChange={handleChange}
-                        />
+                        {/* Two dates that are read together and are short enough to sit together, rather than
+                            two full-width rows of a phone. `md:contents` dissolves this wrapper once the
+                            form is two columns wide, so the desktop layout is exactly what it was. */}
+                        <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 md:contents">
+                            <FormField
+                                id="sales-order-date"
+                                label={t('salesOrders.form.orderDate')}
+                                type="date"
+                                name="orderDate"
+                                value={form.orderDate}
+                                onChange={handleChange}
+                            />
 
-                        <FormField
-                            id="sales-order-closing-date"
-                            label={t('salesOrders.form.closingDate')}
-                            type="date"
-                            name="closingDate"
-                            value={form.closingDate}
-                            onChange={handleChange}
-                        />
+                            <FormField
+                                id="sales-order-closing-date"
+                                label={t('salesOrders.form.closingDate')}
+                                type="date"
+                                name="closingDate"
+                                value={form.closingDate}
+                                onChange={handleChange}
+                            />
+                        </div>
 
                         <FormField
                             id="sales-order-delivery-price"
@@ -802,7 +812,7 @@ export default function SalesOrdersPage() {
                             currencies={currencies}
                         />
 
-                        {tenderPerms.canView && (
+                        {canUseTenders && (
                             <FormSelect
                                 id="sales-order-tender"
                                 label={t('orders.form.tender')}
@@ -938,7 +948,7 @@ export default function SalesOrdersPage() {
                                         </p>
                                     )}
 
-                                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                                         <FormField
                                             id={`sales-order-item-quantity-${index}`}
                                             label={t('common.quantity')}
@@ -1010,7 +1020,7 @@ export default function SalesOrdersPage() {
                         </div>
                     )}
 
-                    <div className="flex justify-end gap-3">
+                    <ModalActions>
                         <button
                             type="button"
                             onClick={formModal.close}
@@ -1025,7 +1035,7 @@ export default function SalesOrdersPage() {
                         >
                             {loading ? t('common.saving') : editingId ? t('common.saveChanges') : t('salesOrders.createBtn')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 

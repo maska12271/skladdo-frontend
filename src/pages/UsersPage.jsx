@@ -22,6 +22,7 @@ import { Pencil, Trash2, Archive, ArchiveRestore, ShieldCheck, User, KeyRound, C
 import Checkbox from '../components/Checkbox'
 import UserAvatar from '../components/UserAvatar'
 import AvatarPicker from '../components/AvatarPicker'
+import ModalActions from '../components/ModalActions'
 
 const PERMISSION_ACTIONS = [
     { key: 'canView', labelKey: 'users.perm.view' },
@@ -634,7 +635,7 @@ export default function UsersPage() {
                         </div>
                     )}
 
-                    <div className="flex justify-end gap-3">
+                    <ModalActions>
                         <button
                             type="button"
                             onClick={formModal.close}
@@ -649,7 +650,7 @@ export default function UsersPage() {
                         >
                             {loading ? t('common.saving') : editingId ? t('common.saveChanges') : t('users.createBtn')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 
@@ -735,7 +736,7 @@ export default function UsersPage() {
                         </div>
                     )}
 
-                    <div className="flex justify-end gap-3">
+                    <ModalActions>
                         <button
                             type="button"
                             onClick={permModal.close}
@@ -751,7 +752,7 @@ export default function UsersPage() {
                         >
                             {permLoading ? t('common.saving') : t('users.perm.save')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </div>
             </Modal>
 

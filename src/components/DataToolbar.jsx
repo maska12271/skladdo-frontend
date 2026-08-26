@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Download, Upload, ChevronDown, FileText, FileSpreadsheet } from 'lucide-react'
 import { downloadTable, exportColumnsFromFields } from '../utils/spreadsheet'
+import { useAnchoredMenu } from '../hooks/useAnchoredMenu'
+import { useInActionSheet } from '../context/ActionSheetContext'
 import ImportModal from './ImportModal'
 
 /**
@@ -22,19 +25,16 @@ export default function DataToolbar({ entityLabel, fields, exportColumns, rows, 
     const [importOpen, setImportOpen] = useState(false)
     const [menuOpen, setMenuOpen] = useState(false)
     const [exporting, setExporting] = useState(false)
-    const menuRef = useRef(null)
+    const inSheet = useInActionSheet()
     const canImport = Boolean(importConfig?.canImport)
     const exportCount = count ?? rows.length
 
-    // Close the format menu on an outside click.
-    useEffect(() => {
-        if (!menuOpen) return
-        const onClick = (e) => {
-            if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
-        }
-        document.addEventListener('mousedown', onClick)
-        return () => document.removeEventListener('mousedown', onClick)
-    }, [menuOpen])
+    // Measured against the viewport rather than hung off the button. Below `lg` this whole toolbar moves
+    // into the page header's "More actions" sheet, where the export button is only about 130px wide and
+    // two thirds of the way across a phone — a right-aligned panel under it started at a negative x, with
+    // "Export as CSV"/"Export as Excel" clipped by the edge of the screen.
+    const closeMenu = useCallback(() => setMenuOpen(false), [])
+    const { triggerRef, menuRef, style } = useAnchoredMenu({ open: menuOpen, onClose: closeMenu, maxWidth: 176 })
 
     const handleExport = async (format) => {
         setMenuOpen(false)
@@ -57,8 +57,22 @@ export default function DataToolbar({ entityLabel, fields, exportColumns, rows, 
 
     return (
         <>
-            <div className="relative" ref={menuRef}>
+            {/* In the sheet the two formats are rows of their own. A dropdown opening off a full-width
+                row would cover the rows under it, and it would be the one thing in there that does not
+                simply do what it says. */}
+            {inSheet ? (
+                <>
+                    <button type="button" onClick={() => handleExport('csv')} disabled={exportCount === 0 || exporting}>
+                        <FileText /> {t('toolbar.exportCsv')}
+                    </button>
+                    <button type="button" onClick={() => handleExport('xlsx')} disabled={exportCount === 0 || exporting}>
+                        <FileSpreadsheet /> {t('toolbar.exportExcel')}
+                    </button>
+                </>
+            ) : (
+            <div className="relative">
                 <button
+                    ref={triggerRef}
                     type="button"
                     onClick={() => setMenuOpen((v) => !v)}
                     disabled={exportCount === 0 || exporting}
@@ -68,25 +82,32 @@ export default function DataToolbar({ entityLabel, fields, exportColumns, rows, 
                     <Download className="h-4 w-4" /> {t('toolbar.export')}
                     <ChevronDown className="h-4 w-4 opacity-60" />
                 </button>
-                {menuOpen && (
-                    <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                        <button
-                            type="button"
-                            onClick={() => handleExport('csv')}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                {menuOpen && style &&
+                    createPortal(
+                        <div
+                            ref={menuRef}
+                            style={style}
+                            className="z-[60] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
                         >
-                            <FileText className="h-4 w-4 text-slate-400" /> {t('toolbar.exportCsv')}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => handleExport('xlsx')}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                            <FileSpreadsheet className="h-4 w-4 text-emerald-500" /> {t('toolbar.exportExcel')}
-                        </button>
-                    </div>
-                )}
+                            <button
+                                type="button"
+                                onClick={() => handleExport('csv')}
+                                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                            >
+                                <FileText className="h-4 w-4 text-slate-400" /> {t('toolbar.exportCsv')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleExport('xlsx')}
+                                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                            >
+                                <FileSpreadsheet className="h-4 w-4 text-emerald-500" /> {t('toolbar.exportExcel')}
+                            </button>
+                        </div>,
+                        document.body,
+                    )}
             </div>
+            )}
 
             {canImport && (
                 <button

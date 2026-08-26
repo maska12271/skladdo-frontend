@@ -54,7 +54,7 @@ test.describe('mobile', () => {
         await expect.poll(() => drawerX(page)).toBeLessThan(0)
     })
 
-    test('language and theme move out of the header and into the drawer', async ({ page }) => {
+    test('language and theme move out of the header and share one drawer row', async ({ page }) => {
         await login(page)
 
         // Both are set once and rarely revisited, so a phone header is the wrong place to spend width on
@@ -62,13 +62,26 @@ test.describe('mobile', () => {
         await expect(headerLanguage(page)).toBeHidden()
 
         await hamburger(page).click()
-        // Laid out flat, not as a menu: a panel anchored to a button at the left of the drawer opened
-        // 70px off the side of the screen, which is what this replaced.
-        const languages = drawer(page).getByRole('group', { name: en.header.language })
-        await expect(languages).toBeVisible()
-        await expect(languages.getByRole('button')).toHaveCount(3)
+        // One picker, not one button per language: a row of buttons cost a whole row of the drawer and
+        // would cost two the moment a fourth language ships. The panel is portalled and clamped to the
+        // viewport, which is what lets it live at the left of the drawer at all.
+        const language = drawer(page).getByRole('button', { name: en.header.language })
+        const theme = drawer(page).getByRole('button', { name: new RegExp(en.nav.theme) })
+        await expect(language).toBeVisible()
+        await expect(theme).toBeVisible()
 
-        await expect(drawer(page).getByRole('button', { name: new RegExp(en.nav.theme) })).toBeVisible()
+        // Side by side: same row, and between them no wider than the drawer.
+        const [langBox, themeBox] = [await language.boundingBox(), await theme.boundingBox()]
+        expect(Math.abs((langBox.y + langBox.height / 2) - (themeBox.y + themeBox.height / 2))).toBeLessThanOrEqual(4)
+        expect(themeBox.x).toBeGreaterThan(langBox.x + langBox.width - 1)
+
+        // Every language is still reachable, and the panel opens inside the screen rather than off it.
+        await language.click()
+        const options = page.getByRole('listbox')
+        await expect(options.getByRole('option')).toHaveCount(3)
+        const panel = await options.boundingBox()
+        expect(panel.x).toBeGreaterThanOrEqual(0)
+        expect(panel.x + panel.width).toBeLessThanOrEqual(MOBILE.width)
     })
 
     test('nothing in the drawer is positioned off the side of the screen', async ({ page }) => {

@@ -17,6 +17,7 @@ import { FormField, FormSelect, TextareaField } from '../components/FormField.js
 import UnitSelect from '../components/UnitSelect.jsx'
 import { formatDate, formatMoney, toCompanyAmount } from '../utils/format'
 import Checkbox from '../components/Checkbox'
+import ModalActions from '../components/ModalActions'
 
 const emptyPart = { partNumber: '', title: '', description: '', estimatedValue: '', samplesRequired: false, requirements: [] }
 const emptyRequirementRow = () => ({ description: '', serviceId: '', quantity: '', unit: '', sampleQuantity: '' })
@@ -683,10 +684,10 @@ function Fact({ label, value }) {
 
 function ModalButtons({ onCancel, saving, t }) {
     return (
-        <div className="flex justify-end gap-3 md:col-span-2">
+        <ModalActions className="md:col-span-2">
             <button type="button" onClick={onCancel} className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700">{t('common.cancel')}</button>
             <button type="submit" disabled={saving} className="rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-60">{saving ? t('common.saving') : t('common.save')}</button>
-        </div>
+        </ModalActions>
     )
 }
 

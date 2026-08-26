@@ -18,6 +18,7 @@ import { useSettings } from '../context/SettingsContext'
 import { useToast } from '../context/ToastContext'
 import { formatMoney, formatDate, toCompanyAmount } from '../utils/format'
 import { triggerDownload } from '../utils/download'
+import ModalActions from '../components/ModalActions'
 
 // Invoices carry their own currency snapshot; format per-invoice rather than with the EUR-only helper.
 function invoiceMoney(value, currency) {
@@ -683,14 +684,22 @@ function CreateInvoiceModal({ isOpen, onClose, orderId, activeTypes, orderGross,
                         options={typeOptions}
                     />
                     <div className="hidden md:block" />
-                    <FormField id="inv-issue" label={t('invoices.create.issueDate')} type="date" name="issueDate" value={form.issueDate} onChange={(e) => onIssueChange(e.target.value)} />
-                    <FormField id="inv-term" label={t('invoices.create.termDays')} type="number" min={0} name="termDays" value={form.termDays} onChange={(e) => onTermChange(e.target.value)} placeholder={t('invoices.create.optionalDefault')} />
+                    {/* Issue date and payment term derive the due date between them, so they read as one
+                        setting; `md:contents` leaves the two-column desktop grid exactly as it was. */}
+                    <div className="grid grid-cols-2 gap-4 md:contents">
+                        <FormField id="inv-issue" label={t('invoices.create.issueDate')} type="date" name="issueDate" value={form.issueDate} onChange={(e) => onIssueChange(e.target.value)} />
+                        <FormField id="inv-term" label={t('invoices.create.termDays')} type="number" min={0} name="termDays" value={form.termDays} onChange={(e) => onTermChange(e.target.value)} placeholder={t('invoices.create.optionalDefault')} />
+                    </div>
                     <FormField id="inv-due" label={t('invoices.create.dueDate')} type="date" name="dueDate" value={form.dueDate} onChange={(e) => set({ dueDate: e.target.value })} />
                     <div className="hidden md:block" />
                     {form.type === 'PREPAYMENT' && (
                         <>
-                            <FormField id="inv-pre-pct" label={t('invoices.create.prepaymentPercent')} type="number" step="0.01" min={0} max={100} name="prepaymentPercent" value={form.prepaymentPercent} onChange={(e) => onPrepayPercentChange(e.target.value)} placeholder="0" />
-                            <FormField id="inv-pre-amt" label={`${t('invoices.create.prepaymentAmount')} (${settings.currencySymbol(invoiceCurrency)})`} type="number" step="0.01" min={0} name="prepaymentAmount" value={form.prepaymentAmount} onChange={(e) => onPrepayAmountChange(e.target.value)} placeholder="0.00" />
+                            {/* The same prepayment, expressed two ways - each edit rewrites the other, so
+                                they belong on one row. */}
+                            <div className="grid grid-cols-2 gap-4 md:contents">
+                                <FormField id="inv-pre-pct" label={t('invoices.create.prepaymentPercent')} type="number" step="0.01" min={0} max={100} name="prepaymentPercent" value={form.prepaymentPercent} onChange={(e) => onPrepayPercentChange(e.target.value)} placeholder="0" />
+                                <FormField id="inv-pre-amt" label={`${t('invoices.create.prepaymentAmount')} (${settings.currencySymbol(invoiceCurrency)})`} type="number" step="0.01" min={0} name="prepaymentAmount" value={form.prepaymentAmount} onChange={(e) => onPrepayAmountChange(e.target.value)} placeholder="0.00" />
+                            </div>
                         </>
                     )}
                     <FormField id="inv-penalty" label={t('invoices.create.penaltyPercent')} type="number" step="0.01" min={0} name="penaltyPercent" value={form.penaltyPercent} onChange={(e) => set({ penaltyPercent: e.target.value })} placeholder={t('invoices.create.optionalDefault')} />
@@ -708,14 +717,14 @@ function CreateInvoiceModal({ isOpen, onClose, orderId, activeTypes, orderGross,
 
                 {form.type === 'PREPAYMENT' && <p className="text-xs text-slate-500 dark:text-slate-400">{t('invoices.create.prepaymentHint')}</p>}
 
-                <div className="flex justify-end gap-3">
+                <ModalActions>
                     <button type="button" onClick={onClose} className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700">
                         {t('common.cancel')}
                     </button>
                     <button type="submit" disabled={saving} className="rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-60">
                         {saving ? t('common.saving') : t('invoices.create.submit')}
                     </button>
-                </div>
+                </ModalActions>
             </form>
         </Modal>
     )
@@ -749,14 +758,14 @@ function MarkPaidModal({ isOpen, onClose, invoice, onPaid }) {
             <form onSubmit={submit} className="space-y-5">
                 <p className="text-sm text-slate-500 dark:text-slate-400">{t('invoices.markPaidPrompt', { number: invoice.invoiceNumber })}</p>
                 <FormField id="paid-date" label={t('invoices.paymentDate')} type="date" name="paidDate" value={date} onChange={(e) => setDate(e.target.value)} min={invoice.issueDate || undefined} max={invToday()} />
-                <div className="flex justify-end gap-3">
+                <ModalActions>
                     <button type="button" onClick={onClose} className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700">
                         {t('common.cancel')}
                     </button>
                     <button type="submit" disabled={saving} className="rounded-xl bg-emerald-600 px-4 py-2.5 font-medium text-white hover:bg-emerald-700 disabled:opacity-60">
                         {saving ? t('common.saving') : t('invoices.confirmPaid')}
                     </button>
-                </div>
+                </ModalActions>
             </form>
         </Modal>
     )

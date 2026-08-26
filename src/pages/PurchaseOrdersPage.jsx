@@ -26,6 +26,7 @@ import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx
 import CurrencyRateField from "../components/CurrencyRateField.jsx";
 import MoneyWithBase from "../components/MoneyWithBase.jsx";
 import { Info, Pencil, Trash2, Upload, FileText, X } from 'lucide-react'
+import ModalActions from '../components/ModalActions'
 
 const exportColumns = [
     { header: 'ID', value: (r) => r.id },
@@ -83,8 +84,12 @@ const todayStr = () => new Date().toISOString().slice(0, 10)
 export default function PurchaseOrdersPage() {
     const { t } = useTranslation()
     const { canCreate, canEdit, canDelete } = usePermissions('PURCHASE_ORDERS')
+    // The permission alone is not enough: a company that has not bought the Tenders add-on has the
+    // module closed on the server, so asking for the options 403s and raises a "Forbidden" toast on
+    // every visit to this page. The nav hides the Tenders page for exactly the same reason.
     const tenderPerms = usePermissions('TENDERS')
-    const { canSeePrices } = useAuth()
+    const { canSeePrices, hasAddon } = useAuth()
+    const canUseTenders = tenderPerms.canView && hasAddon('TENDERS')
     const { defaultWarehouseId, currency: baseCurrency, currencies, currencySymbol } = useSettings()
     const navigate = useNavigate()
     const toast = useToast()
@@ -160,7 +165,7 @@ export default function PurchaseOrdersPage() {
         setWarehouses(safeArray(warehousesRes))
 
         // Tender options power the optional "part of a tender" picker; only for users who can view tenders.
-        if (tenderPerms.canView) {
+        if (canUseTenders) {
             try {
                 setTenders(safeArray(await apiGet('/tenders/options')))
             } catch { /* leave the picker empty if tenders can't be loaded */ }
@@ -649,23 +654,27 @@ export default function PurchaseOrdersPage() {
                             ]}
                         />
 
-                        <FormField
-                            id="purchase-order-date"
-                            label={t('purchaseOrders.form.orderDate')}
-                            type="date"
-                            name="orderDate"
-                            value={form.orderDate}
-                            onChange={handleChange}
-                        />
+                        {/* Paired: two dates read together, and short enough to share a row on a phone.
+                            `md:contents` dissolves the wrapper once the form is two columns wide. */}
+                        <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 md:contents">
+                            <FormField
+                                id="purchase-order-date"
+                                label={t('purchaseOrders.form.orderDate')}
+                                type="date"
+                                name="orderDate"
+                                value={form.orderDate}
+                                onChange={handleChange}
+                            />
 
-                        <FormField
-                            id="purchase-order-closing-date"
-                            label={t('purchaseOrders.form.closingDate')}
-                            type="date"
-                            name="closingDate"
-                            value={form.closingDate}
-                            onChange={handleChange}
-                        />
+                            <FormField
+                                id="purchase-order-closing-date"
+                                label={t('purchaseOrders.form.closingDate')}
+                                type="date"
+                                name="closingDate"
+                                value={form.closingDate}
+                                onChange={handleChange}
+                            />
+                        </div>
 
                         <FormField
                             id="purchase-order-expected-delivery"
@@ -694,7 +703,7 @@ export default function PurchaseOrdersPage() {
                             currencies={currencies}
                         />
 
-                        {tenderPerms.canView && (
+                        {canUseTenders && (
                             <FormSelect
                                 id="purchase-order-tender"
                                 label={t('orders.form.tender')}
@@ -853,6 +862,8 @@ export default function PurchaseOrdersPage() {
                                 </div>
 
                                 <div className="space-y-2">
+                                    {/* The lot number keeps a row to itself on a phone - it is the long
+                                        one - while its two dates share the next. */}
                                     <div className="grid gap-3 md:grid-cols-3">
                                         <FormField
                                             id={`purchase-order-item-lot-${index}`}
@@ -865,27 +876,29 @@ export default function PurchaseOrdersPage() {
                                             placeholder={t('purchaseOrders.form.lotNumberPlaceholder')}
                                         />
 
-                                        <FormField
-                                            id={`purchase-order-item-production-${index}`}
-                                            label={t('purchaseOrders.form.productionDate')}
-                                            type="date"
-                                            name={`productionDate-${index}`}
-                                            value={item.productionDate}
-                                            onChange={(e) => handleItemChange(index, 'productionDate', e.target.value)}
-                                            disabled={item.lotExists}
-                                            inputClassName={item.lotExists ? 'cursor-not-allowed bg-slate-100 dark:bg-slate-800/60' : ''}
-                                        />
+                                        <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:contents">
+                                            <FormField
+                                                id={`purchase-order-item-production-${index}`}
+                                                label={t('purchaseOrders.form.productionDate')}
+                                                type="date"
+                                                name={`productionDate-${index}`}
+                                                value={item.productionDate}
+                                                onChange={(e) => handleItemChange(index, 'productionDate', e.target.value)}
+                                                disabled={item.lotExists}
+                                                inputClassName={item.lotExists ? 'cursor-not-allowed bg-slate-100 dark:bg-slate-800/60' : ''}
+                                            />
 
-                                        <FormField
-                                            id={`purchase-order-item-expiry-${index}`}
-                                            label={t('purchaseOrders.form.expiryDate')}
-                                            type="date"
-                                            name={`expiryDate-${index}`}
-                                            value={item.expiryDate}
-                                            onChange={(e) => handleItemChange(index, 'expiryDate', e.target.value)}
-                                            disabled={item.lotExists}
-                                            inputClassName={item.lotExists ? 'cursor-not-allowed bg-slate-100 dark:bg-slate-800/60' : ''}
-                                        />
+                                            <FormField
+                                                id={`purchase-order-item-expiry-${index}`}
+                                                label={t('purchaseOrders.form.expiryDate')}
+                                                type="date"
+                                                name={`expiryDate-${index}`}
+                                                value={item.expiryDate}
+                                                onChange={(e) => handleItemChange(index, 'expiryDate', e.target.value)}
+                                                disabled={item.lotExists}
+                                                inputClassName={item.lotExists ? 'cursor-not-allowed bg-slate-100 dark:bg-slate-800/60' : ''}
+                                            />
+                                        </div>
                                     </div>
                                     {item.lotExists && (
                                         <p className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
@@ -897,7 +910,7 @@ export default function PurchaseOrdersPage() {
                         ))}
                     </div>
 
-                    <div className="flex justify-end gap-3">
+                    <ModalActions>
                         <button
                             type="button"
                             onClick={formModal.close}
@@ -912,7 +925,7 @@ export default function PurchaseOrdersPage() {
                         >
                             {loading ? t('common.saving') : editingId ? t('common.saveChanges') : t('purchaseOrders.createBtn')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 

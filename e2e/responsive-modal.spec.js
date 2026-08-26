@@ -4,7 +4,8 @@ import { login } from './helpers.js'
 // Modal geometry, which only a real browser can settle — the jsdom tests cover the focus trap and the
 // scroll lock, but jsdom performs no layout, so nothing there can tell a centred `max-w-lg` box apart
 // from a full-width sheet. Below `sm` the dialog is anchored to the bottom edge and spans the screen;
-// from `sm` up it is the centred dialog it has always been.
+// from `sm` up it is the centred dialog it has always been. Either way the buttons are pinned to the
+// bottom of the body, so they are on screen the moment it opens.
 //
 // Everything is measured against the backdrop rather than the viewport: emulated Chromium keeps a classic
 // scrollbar, so the fixed overlay is ~10px narrower than `viewportSize()` reports, while a real phone's
@@ -55,7 +56,7 @@ test.describe('phone', () => {
         await openProductModal(page)
         const { dialog: d, backdrop } = await boxes(page, DIALOG)
 
-        // Capped at 92vh, so the backdrop still shows above it and the sheet reads as a layer.
+        // Capped, so the backdrop still shows above it and the sheet reads as a layer.
         expect(d.height).toBeLessThan(backdrop.height)
 
         // The header stays put while the body moves — that is what the flex column buys.
@@ -64,6 +65,23 @@ test.describe('phone', () => {
             return getComputedStyle(body).overflowY === 'auto'
         }, DIALOG)
         expect(bodyScrolls).toBe(true)
+    })
+
+    test('the submit button is on screen before anything is scrolled, and stays there', async ({ page }) => {
+        await openProductModal(page)
+
+        // Add product is eight fields deep on a phone. Before the actions were pinned, opening it showed
+        // a wall of inputs and no way to finish without scrolling to the very end.
+        const submit = page.locator(`${DIALOG} button[type="submit"]`)
+        const onOpen = await submit.boundingBox()
+        expect(onOpen.y + onOpen.height).toBeLessThanOrEqual(MOBILE.height + 1)
+        expect(onOpen.y).toBeGreaterThanOrEqual(0)
+
+        await page.evaluate((s) => { document.querySelector(`${s} > div:last-child`).scrollTop = 99999 }, DIALOG)
+        await page.waitForTimeout(300)
+        const atEnd = await submit.boundingBox()
+        // Pinned, not merely last: scrolling to the bottom must not move it.
+        expect(Math.abs(atEnd.y - onOpen.y)).toBeLessThanOrEqual(2)
     })
 
     test('nothing inside the form overflows the sheet sideways', async ({ page }) => {

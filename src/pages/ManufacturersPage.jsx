@@ -28,8 +28,9 @@ import CategoryChips from '../components/CategoryChips'
 import QuickCreateModal from '../components/QuickCreateModal'
 import CategoryManagerModal from '../components/CategoryManagerModal'
 import ComposeEmailModal from '../components/ComposeEmailModal'
-import { Eye, Pencil, Trash2, Factory, Mail } from 'lucide-react'
+import { Eye, Pencil, Trash2, Factory, Mail, Tags } from 'lucide-react'
 import Checkbox from '../components/Checkbox'
+import ModalActions from '../components/ModalActions'
 
 // One schema drives both export (headers localised to the current language) and import (headers
 // matched against each field's label in every app language). `id` is export-only. Categories are a
@@ -347,8 +348,8 @@ export default function ManufacturersPage() {
                             onImported={reload}
                         />
                         {canManageCategories && (
-                            <button onClick={categoryModal.open} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
-                                {t('common.configureCategories')}
+                            <button onClick={categoryModal.open} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <Tags className="h-4 w-4" /> {t('common.configureCategories')}
                             </button>
                         )}
                     </div>
@@ -546,7 +547,7 @@ export default function ManufacturersPage() {
                         </label>
                     )}
 
-                    <div className="md:col-span-4 flex justify-end gap-3">
+                    <ModalActions className="md:col-span-4">
                         <button
                             type="button"
                             onClick={formModal.close}
@@ -561,7 +562,7 @@ export default function ManufacturersPage() {
                         >
                             {loading ? t('common.saving') : editingId ? t('common.saveChanges') : t('manufacturers.createBtn')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 

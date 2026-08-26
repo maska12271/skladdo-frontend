@@ -1343,6 +1343,13 @@ export default {
         removeImage: 'Remove image',
         addImages: 'Add images',
     },
+    datePicker: {
+        open: 'Open the calendar',
+        previous: 'Previous',
+        next: 'Next',
+        today: 'Today',
+        clear: 'Clear',
+    },
     select: {
         placeholder: 'Select...',
         noMatches: 'No matches',
