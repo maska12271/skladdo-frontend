@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, ArrowUp, ArrowDown, ChevronsUpDown, LayoutGrid, Rows3 } from 'lucide-react'
+import { X, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal, ArrowUp, ArrowDown, ChevronsUpDown, LayoutGrid, Rows3 } from 'lucide-react'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import Checkbox from './Checkbox'
 
@@ -180,6 +180,20 @@ export default function DataTable({
     const pageSize = controlledPageSize ?? internalPageSize
     const setPage = (next) => (onPageChange ? onPageChange(next) : setInternalPage(next))
     const setPageSize = (next) => (onPageSizeChange ? onPageSizeChange(next) : setInternalPageSize(next))
+
+    /**
+     * Shared by both renderings of the size picker — the compact one on a phone and the labelled one from
+     * `sm` up.
+     *
+     * Only resets the page itself in uncontrolled mode. A controlled parent keeps this state in the URL,
+     * and two setSearchParams calls in one tick both resolve against the params from the last render — the
+     * second would recompute from stale params and drop the size change, leaving the size silently
+     * unchanged. useServerTable already clears the page as part of its own size update.
+     */
+    const changePageSize = (next) => {
+        setPageSize(next)
+        if (!onPageSizeChange) setPage(1)
+    }
 
     // Server mode: the parent already fetched just this page and tells us the grand total.
     const serverMode = serverTotal != null
@@ -495,37 +509,29 @@ export default function DataTable({
             )}
 
             {paginate && total > 0 && (
-                <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-sm text-slate-500 dark:text-slate-400">
-                        {t('table.showing')} <span className="font-semibold text-slate-700 dark:text-slate-200">{rangeStart}–{rangeEnd}</span>{' '}
-                        {t('table.of')} <span className="font-semibold text-slate-700 dark:text-slate-200">{total}</span>
+                // Two tidy rows on a phone rather than three ragged ones: the readout and the page-size
+                // picker share the first, pushed to opposite edges, and the pager gets the second to
+                // itself, spread edge to edge where the thumbs are. From `sm` up it is one row again.
+                <div className="flex flex-col gap-2 border-t border-slate-200 px-4 py-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                    <div className="flex items-center justify-between gap-3 sm:justify-start sm:gap-4">
+                        <span className="text-sm text-slate-500 dark:text-slate-400">
+                            {t('table.showing')} <span className="font-semibold text-slate-700 dark:text-slate-200">{rangeStart}–{rangeEnd}</span>{' '}
+                            {t('table.of')} <span className="font-semibold text-slate-700 dark:text-slate-200">{total}</span>
+                        </span>
+                        {/* One picker, not one per breakpoint: rendering a second copy and hiding it with
+                            `sm:hidden` puts two of the same control in the DOM, which is a real duplicate
+                            to anything that does not resolve media queries — assistive tech, and the jsdom
+                            tests, where `getByRole('combobox')` found two. Only its label is responsive:
+                            beside "Showing 1-10 of 87" a bare number reads as nothing but a page size. */}
+                        <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                            <span className="sr-only sm:not-sr-only">{t('table.rowsPerPage')}</span>
+                            <PageSizeSelect value={pageSize} onChange={changePageSize} />
+                        </label>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-                        <label className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                            {t('table.rowsPerPage')}
-                            <select
-                                value={pageSize}
-                                onChange={(e) => {
-                                    setPageSize(Number(e.target.value))
-                                    // Only reset the page ourselves in uncontrolled mode. A controlled
-                                    // parent keeps this state in the URL, and two setSearchParams calls in
-                                    // one tick both resolve against the params from the last render — the
-                                    // second would recompute from stale params and drop the size change,
-                                    // leaving the size silently unchanged. useServerTable already clears
-                                    // the page as part of its own size update.
-                                    if (!onPageSizeChange) setPage(1)
-                                }}
-                                className="min-h-11 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 outline-none focus:border-teal-500 lg:min-h-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-                            >
-                                {PAGE_SIZE_OPTIONS.map((size) => (
-                                    <option key={size} value={size}>{size}</option>
-                                ))}
-                            </select>
-                        </label>
-
+                    <div className="flex items-center justify-between gap-x-4 gap-y-3 sm:justify-end">
                         {totalPages > 1 && (
-                            <div className="flex items-center gap-1">
+                            <div className="flex flex-1 items-center justify-between gap-1 sm:flex-none sm:justify-end">
                                 <PageButton onClick={() => setPage(1)} disabled={safePage === 1} ariaLabel={t('table.firstPage')}>
                                     <ChevronsLeft className="h-4 w-4" />
                                 </PageButton>
@@ -854,6 +860,31 @@ function SortIcon({ active, dir }) {
     return dir === 'asc'
         ? <ArrowUp className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
         : <ArrowDown className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+}
+
+/**
+ * The rows-per-page picker as it appears on a phone: the number and a chevron, nothing else.
+ *
+ * Native rather than the app's `CustomSelect` because this is a short list of numbers, and a native
+ * `select` hands a phone its own wheel picker — easier to hit than any menu we could draw, and the one
+ * place where the platform control genuinely beats a custom one. `appearance-none` drops the browser's
+ * own arrow so the chevron matches every other picker in the app.
+ */
+function PageSizeSelect({ value, onChange }) {
+    return (
+        <span className="relative inline-flex items-center">
+            <select
+                value={value}
+                onChange={(e) => onChange(Number(e.target.value))}
+                className="min-h-11 appearance-none rounded-xl border border-slate-300 bg-white py-1 pl-3 pr-8 text-sm font-medium text-slate-700 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+            >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                ))}
+            </select>
+            <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 h-4 w-4 text-slate-400" />
+        </span>
+    )
 }
 
 function PageButton({ onClick, disabled, ariaLabel, children }) {

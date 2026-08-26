@@ -389,20 +389,21 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                     {nav}
 
                     {/* Preferences, below the links and above the account: both were in the header, where
-                        neither fits at phone width. Laid out flat rather than as menus — see the note in
-                        LanguageSwitcher about panels opening off-screen from a left-hand button. */}
-                    <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800">
-                        <LanguageSwitcher variant="inline" />
+                        neither fits at phone width. Side by side rather than stacked — two rows of
+                        settings that are chosen once and never revisited were taking room from the links,
+                        which are what the drawer is for. Both halves shrink to fit; neither label wraps. */}
+                    <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+                        <div className="min-w-0 flex-1">
+                            <LanguageSwitcher variant="inline" />
+                        </div>
                         <button
                             type="button"
                             onClick={toggleTheme}
-                            className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                            aria-label={t('nav.theme')}
+                            className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
-                            <span>{t('nav.theme')}</span>
-                            <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
-                                {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                                {theme === 'dark' ? t('nav.themeDark') : t('nav.themeLight')}
-                            </span>
+                            {theme === 'dark' ? <Moon className="h-4 w-4 shrink-0" /> : <Sun className="h-4 w-4 shrink-0" />}
+                            <span className="truncate">{theme === 'dark' ? t('nav.themeDark') : t('nav.themeLight')}</span>
                         </button>
                     </div>
 

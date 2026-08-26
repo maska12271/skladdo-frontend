@@ -10,6 +10,7 @@ import Modal from '../components/Modal'
 import CopyButton from '../components/CopyButton'
 import { FormField, FormSelect } from '../components/FormField'
 import { COMPANY_TYPES, FREE_PERIOD_PRESETS, PLANS, Pill, StatusBadge, daysUntil } from '../components/AdminBits'
+import ModalActions from '../components/ModalActions'
 
 const EMPTY_FORM = {
     label: '',
@@ -158,7 +159,7 @@ function CreateLinkModal({ isOpen, onClose, onCreated }) {
                     />
                 </div>
 
-                <div className="flex justify-end gap-3 pt-2">
+                <ModalActions className="pt-2">
                     <button type="button" onClick={close}
                         className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium dark:border-slate-700">
                         Cancel
@@ -167,7 +168,7 @@ function CreateLinkModal({ isOpen, onClose, onCreated }) {
                         className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-60">
                         {saving ? 'Creating…' : 'Create link'}
                     </button>
-                </div>
+                </ModalActions>
             </form>
         </Modal>
     )

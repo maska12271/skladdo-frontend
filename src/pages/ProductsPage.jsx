@@ -25,11 +25,13 @@ import { useToast } from '../context/ToastContext'
 import { safeArray, parseBool, toNumber } from '../utils/format'
 import {FormField, FormSelect, TextareaField} from "../components/FormField.jsx";
 import UnitSelect from "../components/UnitSelect.jsx";
-import { Eye, Pencil, Trash2, PackagePlus, Package } from 'lucide-react'
+import { Eye, Pencil, Trash2, PackagePlus, Package, Tags } from 'lucide-react'
 import ImageUploadField from '../components/ImageUploadField.jsx'
 import { usePresignedUrl } from '../hooks/usePresignedUrl'
 import { stockStatusOf } from '../utils/stock'
 import Checkbox from '../components/Checkbox'
+import InfoHint from '../components/InfoHint'
+import ModalActions from '../components/ModalActions'
 
 // One schema drives both export (headers localised to the current language) and import (headers
 // matched against each field's label in every app language). `id` is export-only. Manufacturer and
@@ -512,8 +514,8 @@ export default function ProductsPage() {
                             onImported={reload}
                         />
                         {canManageCategories && (
-                            <button onClick={categoryModal.open} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
-                                {t('common.configureCategories')}
+                            <button onClick={categoryModal.open} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <Tags className="h-4 w-4" /> {t('common.configureCategories')}
                             </button>
                         )}
                     </div>
@@ -647,22 +649,7 @@ export default function ProductsPage() {
                             label={
                                 <span className="inline-flex items-center gap-2">
                         {t('common.sku')}
-                        <span className="group relative inline-flex">
-                            <button
-                                type="button"
-                                tabIndex={0}
-                                aria-label={t('products.form.skuTooltipAria')}
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-                            >
-                                ?
-                            </button>
-                            <span
-                                role="tooltip"
-                                className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-normal text-white shadow-lg group-hover:block group-focus-within:block dark:bg-slate-700"
-                            >
-                                {t('products.form.skuTooltip')}
-                            </span>
-                        </span>
+                        <InfoHint label={t('products.form.skuTooltipAria')} text={t('products.form.skuTooltip')} />
                     </span>
                             }
                             name="sku"
@@ -769,22 +756,7 @@ export default function ProductsPage() {
                         label={
                             <span className="inline-flex items-center gap-2">
                                 {t('products.cols.minStock')}
-                            <span className="group relative inline-flex">
-                        <button
-                            type="button"
-                            tabIndex={0}
-                            aria-label={t('products.form.minStockTooltipAria')}
-                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-                        >
-                            ?
-                        </button>
-                        <span
-                            role="tooltip"
-                            className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-normal text-white shadow-lg group-hover:block group-focus-within:block dark:bg-slate-700"
-                        >
-                            {t('products.form.minStockTooltip')}
-                        </span>
-                    </span>
+                            <InfoHint label={t('products.form.minStockTooltipAria')} text={t('products.form.minStockTooltip')} />
                 </span>
                         }
                         type="number"
@@ -811,22 +783,7 @@ export default function ProductsPage() {
                         label={
                             <span className="inline-flex items-center gap-2">
                                 {t('products.form.warehouseMethod')}
-                                <span className="group relative inline-flex">
-                                    <button
-                                        type="button"
-                                        tabIndex={0}
-                                        aria-label={t('products.form.warehouseMethodTooltipAria')}
-                                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
-                                    >
-                                        ?
-                                    </button>
-                                    <span
-                                        role="tooltip"
-                                        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-normal text-white shadow-lg group-hover:block group-focus-within:block dark:bg-slate-700"
-                                    >
-                                        {t('products.form.warehouseMethodTooltip')}
-                                    </span>
-                                </span>
+                                <InfoHint label={t('products.form.warehouseMethodTooltipAria')} text={t('products.form.warehouseMethodTooltip')} />
                             </span>
                         }
                         name="warehouseMethod"
@@ -858,7 +815,7 @@ export default function ProductsPage() {
                         </label>
                     )}
 
-                    <div className="md:col-span-4 flex justify-end gap-3">
+                    <ModalActions className="md:col-span-4">
                         <button
                             type="button"
                             onClick={formModal.close}
@@ -873,7 +830,7 @@ export default function ProductsPage() {
                         >
                             {loading ? t('common.saving') : editingId ? t('common.saveChanges') : t('products.createBtn')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 

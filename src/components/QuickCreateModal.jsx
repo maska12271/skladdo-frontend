@@ -143,8 +143,11 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
 
     return (
         <div className={`fixed inset-0 z-[60] flex items-center justify-center p-4 ${OVERLAY_BACKDROP}`}>
-            <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
-                <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+            {/* Capped and scrolling inside, like the shared Modal: the product and client variants run to
+                five fields, which is taller than a short phone and had nowhere to go — the buttons at the
+                bottom were simply off the screen with no way to reach them. */}
+            <div className="flex max-h-[90vh] w-full max-w-sm flex-col rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+                <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
                     <h2 className="text-lg font-semibold">{t(config.titleKey)}</h2>
                     <button
                         type="button"
@@ -155,7 +158,7 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4 p-6">
+                <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto p-6">
                     <FormField
                         id="qc-name"
                         label={t('common.name')}

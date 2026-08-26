@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Loader2, ZoomIn, ZoomOut } from 'lucide-react'
 import Modal from './Modal'
+import ModalActions from './ModalActions'
 
 /** Side of the square the crop is written out at. Comfortably above the largest place it is drawn (80px). */
 const OUTPUT_SIZE = 512
@@ -171,7 +172,7 @@ export default function AvatarCropModal({ file, isOpen, onCancel, onConfirm, bus
                     </button>
                 </div>
 
-                <div className="flex justify-end gap-3">
+                <ModalActions>
                     <button
                         type="button"
                         onClick={onCancel}
@@ -188,7 +189,7 @@ export default function AvatarCropModal({ file, isOpen, onCancel, onConfirm, bus
                         {busy && <Loader2 className="h-4 w-4 animate-spin" />}
                         {t('avatar.usePicture')}
                     </button>
-                </div>
+                </ModalActions>
             </div>
             <canvas ref={canvasRef} className="hidden" />
         </Modal>

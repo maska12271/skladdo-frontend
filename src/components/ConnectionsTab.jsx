@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { safeArray } from '../utils/format'
 import Checkbox from './Checkbox'
+import ModalActions from './ModalActions'
 
 /**
  * Who works inside this company, or which companies we work inside — the two readings of the same list.
@@ -296,14 +297,14 @@ export default function ConnectionsTab() {
                         required
                         placeholder="CO-XXXX-XXXX"
                     />
-                    <div className="flex justify-end gap-3">
+                    <ModalActions>
                         <button type="button" onClick={redeemModal.close} className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700">
                             {t('common.cancel')}
                         </button>
                         <button type="submit" disabled={loading} className="rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-60">
                             {loading ? t('common.saving') : t('connections.connect')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Eye, EyeOff } from "lucide-react";
 import CustomSelect from "./CustomSelect";
+import DateField from "./DateField";
 
 /** Field label with a red asterisk appended when the field is required. */
 function FieldLabel({ id, label, required }) {
@@ -33,7 +34,13 @@ export function FormSelect({
                                quickCreateActions,
                            }) {
     return (
-        <div className={`space-y-2 ${className}`}>
+        // `min-w-0` because the trigger below cannot shrink on its own: its label is `truncate`, and
+        // `white-space: nowrap` makes the *whole* placeholder the control's min-content width — 262px for
+        // "Select a product or service". A flex or grid parent honours that minimum by default, so the
+        // select pushed whatever sat beside it out of the container; on the sales-order item row that was
+        // the delete button, hanging 21px past the card's border on a phone. Only ever permits shrinking,
+        // so it changes nothing for a select that already fits.
+        <div className={`min-w-0 space-y-2 ${className}`}>
             <FieldLabel id={id} label={label} required={required} />
             {/* The control and its validation proxy share a wrapper so the proxy is not a `space-y-2`
                 sibling. As one it picked up the stack's margin and left ~8px of dead space under every
@@ -80,13 +87,20 @@ export function FormField({
                               inputClassName = "",
                               ...props
                           }) {
+    // Dates go through the app's own picker rather than the browser's. Routed here rather than at the
+    // call sites so every `type="date"` field in the app changes at once, and so `min`/`max`/`disabled`
+    // keep arriving the way they always did. The `type` itself is not forwarded to it: the picker's own
+    // box is a text input, and handing it `type="date"` would give the field straight back to the browser.
+    const isDate = type === "date";
+    const Control = isDate ? DateField : PasswordAwareInput;
+
     return (
         <div className={`space-y-2 ${className}`}>
             <FieldLabel id={id} label={label} required={required} />
-            <PasswordAwareInput
+            <Control
                 id={id}
                 name={name}
-                type={type}
+                {...(isDate ? {} : { type })}
                 value={value}
                 onChange={onChange}
                 required={required}

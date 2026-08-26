@@ -1338,6 +1338,13 @@ export default {
         removeImage: 'Eemalda pilt',
         addImages: 'Lisa pilte',
     },
+    datePicker: {
+        open: 'Ava kalender',
+        previous: 'Eelmine',
+        next: 'Järgmine',
+        today: 'Täna',
+        clear: 'Tühjenda',
+    },
     select: {
         placeholder: 'Vali...',
         noMatches: 'Vasteid pole',

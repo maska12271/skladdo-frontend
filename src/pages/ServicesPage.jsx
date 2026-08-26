@@ -22,8 +22,9 @@ import CategoryManagerModal from '../components/CategoryManagerModal'
 import { useToast } from '../context/ToastContext'
 import { safeArray, parseBool, toNumber } from '../utils/format'
 import { FormField, FormSelect, TextareaField } from '../components/FormField.jsx'
-import { Eye, Pencil, Trash2, Wrench } from 'lucide-react'
+import { Eye, Pencil, Trash2, Wrench, Tags } from 'lucide-react'
 import Checkbox from '../components/Checkbox'
+import ModalActions from '../components/ModalActions'
 
 // One schema drives both export (headers localised to the current language) and import (headers
 // matched against each field's label in every app language). `id` is export-only. Category is
@@ -364,8 +365,8 @@ export default function ServicesPage() {
                             onImported={reload}
                         />
                         {canManageCategories && (
-                            <button onClick={categoryModal.open} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
-                                {t('common.configureCategories')}
+                            <button onClick={categoryModal.open} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                                <Tags className="h-4 w-4" /> {t('common.configureCategories')}
                             </button>
                         )}
                     </div>
@@ -537,7 +538,7 @@ export default function ServicesPage() {
                         </label>
                     )}
 
-                    <div className="md:col-span-4 flex justify-end gap-3">
+                    <ModalActions className="md:col-span-4">
                         <button
                             type="button"
                             onClick={formModal.close}
@@ -552,7 +553,7 @@ export default function ServicesPage() {
                         >
                             {loading ? t('common.saving') : editingId ? t('common.saveChanges') : t('services.createBtn')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 

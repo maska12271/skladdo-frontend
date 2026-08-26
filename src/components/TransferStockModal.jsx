@@ -6,6 +6,7 @@ import { FormField, FormSelect, TextareaField } from './FormField.jsx'
 import { apiGet, apiPost } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { safeArray } from '../utils/format'
+import ModalActions from './ModalActions'
 
 /**
  * Moves stock of a product from one warehouse to another. The source list is limited to warehouses that
@@ -212,7 +213,7 @@ export default function TransferStockModal({ product, warehouseStock = [], batch
                     </>
                 )}
 
-                <div className="flex justify-end gap-3">
+                <ModalActions>
                     <button type="button" onClick={onClose} className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700">
                         {t('common.cancel')}
                     </button>
@@ -223,7 +224,7 @@ export default function TransferStockModal({ product, warehouseStock = [], batch
                     >
                         {saving ? t('common.saving') : t('transfer.submit')}
                     </button>
-                </div>
+                </ModalActions>
             </form>
         </Modal>
     )

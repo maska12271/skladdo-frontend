@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Languages, Check } from 'lucide-react'
+import CustomSelect from './CustomSelect'
 import { SUPPORTED_LANGUAGES } from '../i18n'
 
 /**
@@ -32,31 +33,24 @@ export default function LanguageSwitcher({ onChange, variant = 'menu' }) {
     }
 
     /**
-     * All three languages laid out at once, for the nav drawer.
+     * The nav drawer's version: one picker rather than one button per language.
      *
-     * A dropdown cannot work there: its panel is anchored to the right edge of a button sitting at the
-     * *left* of a 320px drawer, so it opened 70px off the side of the screen. With only three languages
-     * there is nothing to collapse anyway — showing them costs less room than the menu did.
+     * The menu below cannot be used there — its panel is anchored to the right edge of a button sitting at
+     * the *left* of a 320px drawer, so it opened 70px off the side of the screen. A row of buttons was the
+     * first answer to that and it does not scale: it costs a full row of the drawer today and would cost
+     * two the moment a fourth language ships. `CustomSelect` renders its panel in a portal positioned
+     * against the viewport and flips it upwards when the trigger is near the bottom, which is exactly
+     * where this sits, so it is the one control here that cannot open off-screen.
      */
     if (variant === 'inline') {
         return (
-            <div role="group" aria-label={t('header.language')} className="flex gap-1">
-                {SUPPORTED_LANGUAGES.map((lang) => (
-                    <button
-                        key={lang.code}
-                        type="button"
-                        onClick={() => pick(lang.code)}
-                        aria-pressed={current.code === lang.code}
-                        className={`min-h-11 flex-1 rounded-lg px-3 text-sm font-semibold transition ${
-                            current.code === lang.code
-                                ? 'bg-teal-600 text-white'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                        }`}
-                    >
-                        {lang.short}
-                    </button>
-                ))}
-            </div>
+            <CustomSelect
+                options={SUPPORTED_LANGUAGES.map((lang) => ({ value: lang.code, label: lang.label }))}
+                value={current.code}
+                onChange={pick}
+                ariaLabel={t('header.language')}
+                className="min-h-11 px-3 text-sm font-medium"
+            />
         )
     }
 

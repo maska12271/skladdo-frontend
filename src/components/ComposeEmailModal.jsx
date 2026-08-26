@@ -8,6 +8,7 @@ import Modal from './Modal'
 import { FormField, FormSelect } from './FormField.jsx'
 import RichTextEditor from './RichTextEditor'
 import { safeArray } from '../utils/format'
+import ModalActions from './ModalActions'
 
 // The tokens the backend substitutes at send time (must match EmailTemplateRenderer's whitelist).
 const AVAILABLE_TOKENS = [
@@ -316,7 +317,7 @@ export default function ComposeEmailModal({ isOpen, manufacturerIds = [], onClos
                     </div>
                 )}
 
-                <div className="flex justify-end gap-3">
+                <ModalActions>
                     <button type="button" onClick={onClose} className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700">
                         {t('common.cancel')}
                     </button>
@@ -327,7 +328,7 @@ export default function ComposeEmailModal({ isOpen, manufacturerIds = [], onClos
                     >
                         {sending ? t('emails.compose.sending') : t('emails.compose.send')}
                     </button>
-                </div>
+                </ModalActions>
             </form>
         </Modal>
     )

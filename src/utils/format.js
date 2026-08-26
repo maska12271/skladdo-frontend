@@ -1,3 +1,5 @@
+import i18n from '../i18n'
+
 export function formatMoney(value, currency = 'EUR') {
     const number = Number(value || 0)
     return new Intl.NumberFormat('en-US', {
@@ -17,14 +19,26 @@ export function toCompanyAmount(amount, exchangeRate) {
     return Number(amount || 0) / rate
 }
 
+/**
+ * The user's chosen language decides how a date reads, not the browser's.
+ *
+ * These used to pass no locale at all, which meant an app running in Estonian still printed `8/26/2026`
+ * for anyone whose browser was set to US English. It matters more now that dates are also *typed*: the
+ * date field accepts them in the locale's own order, so the order a date is shown in has to be the same
+ * one it is read back in, or the two disagree about which number is the month.
+ */
+function activeLocale() {
+    return i18n.resolvedLanguage || i18n.language || undefined
+}
+
 export function formatDate(value) {
     if (!value) return '-'
-    return new Date(value).toLocaleDateString()
+    return new Date(value).toLocaleDateString(activeLocale())
 }
 
 export function formatDateTime(value) {
     if (!value) return '-'
-    return new Date(value).toLocaleString()
+    return new Date(value).toLocaleString(activeLocale())
 }
 
 export function safeArray(value) {

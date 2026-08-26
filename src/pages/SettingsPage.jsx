@@ -22,6 +22,7 @@ import { PERMISSION_MODULES } from '../constants/modules'
 import ConnectionsTab from '../components/ConnectionsTab'
 import { SlidersHorizontal, Percent, FileText, Users, Plus, Pencil, Trash2, Star, UploadCloud, X, Mail, Send, Info, CreditCard, Building2, Handshake } from 'lucide-react'
 import Checkbox from '../components/Checkbox'
+import ModalActions from '../components/ModalActions'
 
 const TABS = [
     { key: 'general', icon: SlidersHorizontal },
@@ -43,6 +44,47 @@ const TABS = [
  * What is left is the account itself: who it is, who it works for, and what it pays.
  */
 const WAREHOUSE_ACCOUNT_TABS = new Set(['general', 'company', 'connections', 'plan'])
+
+/**
+ * The tab bar. Wraps onto as many rows as it needs from `md` up, and below that becomes a single
+ * swipeable row instead.
+ *
+ * Wrapping is what it used to do at every width, and on a phone the eight tabs became four ragged rows
+ * with the active underline stranded on the first one and the bar's own bottom border three rows below
+ * it — more chrome than the form underneath. One row keeps the border and the underline on the same
+ * line, at the cost of a swipe to reach the far end.
+ */
+function SettingsTabs({ tabs, current, onChange }) {
+    const { t } = useTranslation()
+    const activeRef = useRef(null)
+
+    // A tab reached by `?tab=` (or by picking one that had been swiped off-screen) has to be brought into
+    // view, or the strip stays scrolled where it was and nothing appears to have happened. `nearest`
+    // keeps the page itself still — only the strip scrolls.
+    useEffect(() => {
+        activeRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }, [current])
+
+    return (
+        <div className="scrollbar-none flex gap-2 overflow-x-auto border-b border-slate-200 md:flex-wrap md:overflow-x-visible dark:border-slate-800">
+            {tabs.map(({ key, icon: Icon }) => (
+                <button
+                    key={key}
+                    ref={key === current ? activeRef : null}
+                    onClick={() => onChange(key)}
+                    className={`-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-t-xl border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+                        key === current
+                            ? 'border-teal-600 text-teal-700 dark:text-teal-400'
+                            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                    }`}
+                >
+                    <Icon className="h-4 w-4" />
+                    {t(`settings.tabs.${key}`)}
+                </button>
+            ))}
+        </div>
+    )
+}
 
 // IANA timezone options for the General tab. Intl.supportedValuesOf gives the full canonical list without
 // a dependency; the short fallback keeps the field usable on an engine that lacks it. UTC is guaranteed
@@ -458,23 +500,7 @@ export default function SettingsPage() {
         <div className="space-y-6">
             <PageHeader title={t('settings.title')} description={t(isWarehouseAccount ? 'settings.warehouseDescription' : 'settings.description')} />
 
-            {/* Tabs */}
-            <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800">
-                {tabs.map(({ key, icon: Icon }) => (
-                    <button
-                        key={key}
-                        onClick={() => setTab(key)}
-                        className={`-mb-px inline-flex items-center gap-2 rounded-t-xl border-b-2 px-4 py-2.5 text-sm font-medium transition ${
-                            tab === key
-                                ? 'border-teal-600 text-teal-700 dark:text-teal-400'
-                                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                        }`}
-                    >
-                        <Icon className="h-4 w-4" />
-                        {t(`settings.tabs.${key}`)}
-                    </button>
-                ))}
-            </div>
+            <SettingsTabs tabs={tabs} current={tab} onChange={setTab} />
 
             {/* General */}
             {tab === 'general' && (
@@ -1185,14 +1211,14 @@ export default function SettingsPage() {
                             <span className="font-medium text-slate-700 dark:text-slate-200">{t('common.active')}</span>
                         </label>
                     )}
-                    <div className="flex justify-end gap-3">
+                    <ModalActions>
                         <button type="button" onClick={taxModal.close} className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700">
                             {t('common.cancel')}
                         </button>
                         <button type="submit" disabled={saving} className="rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-60">
                             {saving ? t('common.saving') : t('common.save')}
                         </button>
-                    </div>
+                    </ModalActions>
                 </form>
             </Modal>
 
