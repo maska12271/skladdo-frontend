@@ -150,8 +150,8 @@ async function request(path, options = {}) {
     return text
 }
 
-export function apiGet(path) {
-    return request(path)
+export function apiGet(path, options = {}) {
+    return request(path, options)
 }
 
 export function apiPost(path, body, options = {}) {

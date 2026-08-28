@@ -217,14 +217,27 @@ export default function UsersPage() {
         loadData()
     }, [])
 
+    /**
+     * Loads the accounts, and the outstanding invitations alongside them.
+     *
+     * The two are fetched independently on purpose. Invitations are a supplementary panel; the accounts
+     * are the page. Loading them together meant one `Promise.all` where a failing invitations call threw
+     * away the user list too - an admin would land on an empty table and an error toast because of a
+     * section they may not even have been looking at. A backend without the endpoint (an older deploy, a
+     * half-finished rollout) is enough to trigger it, which is exactly how CI found this. So the
+     * invitations failure is swallowed to an empty list: the section simply does not appear.
+     */
     const loadData = async () => {
         setListLoading(true)
         try {
-            const [users, inviteList] = await Promise.all([apiGet('/users'), apiGet('/user-invites')])
-            setRows(safeArray(users))
-            setInvites(safeArray(inviteList))
+            setRows(safeArray(await apiGet('/users')))
         } finally {
             setListLoading(false)
+        }
+        try {
+            setInvites(safeArray(await apiGet('/user-invites', { suppressErrorToast: true })))
+        } catch {
+            setInvites([])
         }
     }
 
