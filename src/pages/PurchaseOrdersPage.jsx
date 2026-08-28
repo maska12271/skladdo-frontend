@@ -48,6 +48,7 @@ const exportColumns = [
 
 const emptyForm = {
     manufacturerId: '',
+    contactId: '',
     warehouseId: '',
     orderNumber: '',
     status: 'NEW',
@@ -99,6 +100,8 @@ export default function PurchaseOrdersPage() {
     const bulkDeleteModal = useModal()
 
     const [manufacturers, setManufacturers] = useState([])
+    // The chosen supplier's named people, reloaded whenever the supplier changes.
+    const [manufacturerContacts, setManufacturerContacts] = useState([])
     const [products, setProducts] = useState([])
     const [warehouses, setWarehouses] = useState([])
     const [tenders, setTenders] = useState([])
@@ -151,6 +154,23 @@ export default function PurchaseOrdersPage() {
     useEffect(() => {
         setFormError('')
     }, [form])
+
+    // The chosen supplier's contacts. Keyed on the supplier alone so switching supplier reloads them;
+    // the already-selected contact is left for the server to clear, which it does when it no longer
+    // belongs to the new supplier (see PurchaseOrderService.resolveContactId).
+    useEffect(() => {
+        if (!form.manufacturerId) {
+            setManufacturerContacts([])
+            return undefined
+        }
+        let cancelled = false
+        apiGet(`/manufacturers/${form.manufacturerId}/contacts`)
+            .then((res) => !cancelled && setManufacturerContacts(safeArray(res)))
+            .catch(() => !cancelled && setManufacturerContacts([]))
+        return () => {
+            cancelled = true
+        }
+    }, [form.manufacturerId])
 
     // Reference lists for the create form and filters; fetched in full (the order list is paged server-side).
     const loadReferences = async () => {
@@ -210,6 +230,7 @@ export default function PurchaseOrdersPage() {
         setSuggestedOrderNumber(null)
         setForm({
             manufacturerId: item.manufacturer?.id || '',
+            contactId: item.contactId || '',
             warehouseId: item.warehouse?.id || '',
             orderNumber: item.orderNumber || '',
             status: item.status || 'NEW',
@@ -248,6 +269,15 @@ export default function PurchaseOrdersPage() {
     const handleChange = (e) => {
         const { name, value } = e.target
         setForm((prev) => ({ ...prev, [name]: value }))
+    }
+
+    /**
+     * Changing supplier drops whoever was chosen at the old one. A contact belongs to one manufacturer, so
+     * carrying the selection across would leave the form showing a person who does not work there - and
+     * the server would drop it on save anyway, silently, after the user had seen it accepted.
+     */
+    const handleManufacturerChange = (value) => {
+        setForm((prev) => ({ ...prev, manufacturerId: value, contactId: '' }))
     }
 
     /**
@@ -378,6 +408,7 @@ export default function PurchaseOrdersPage() {
 
         const payload = {
             manufacturerId: Number(form.manufacturerId),
+            contactId: form.contactId ? Number(form.contactId) : null,
             warehouseId: Number(form.warehouseId),
             orderNumber: keptSuggestion ? null : form.orderNumber || null,
             status: form.status,
@@ -606,16 +637,36 @@ export default function PurchaseOrdersPage() {
                             label={t('purchaseOrders.form.manufacturer')}
                             name="manufacturerId"
                             value={form.manufacturerId}
-                            onChange={handleChange}
+                            onChange={(e) => handleManufacturerChange(e.target.value)}
                             required
                             searchable
                             placeholder={t('purchaseOrders.form.selectManufacturer')}
                             options={manufacturers.map((item) => ({ value: String(item.id), label: item.name }))}
                             onQuickCreate={(name) => openQuickCreate('manufacturer', name, (item) => {
                                 setManufacturers((prev) => [...prev, item.raw])
-                                handleChange({ target: { name: 'manufacturerId', value: item.value } })
+                                handleManufacturerChange(item.value)
                             })}
                         />
+
+                        {/* Shown only once a supplier with named people is chosen: before that the
+                            question has no answers, and an empty dropdown reads as something broken. */}
+                        {manufacturerContacts.length > 0 && (
+                            <FormSelect
+                                id="purchase-order-contact"
+                                label={t('purchaseOrders.form.contact')}
+                                name="contactId"
+                                value={form.contactId}
+                                onChange={handleChange}
+                                placeholder={t('purchaseOrders.form.noContact')}
+                                options={[
+                                    { value: '', label: t('purchaseOrders.form.noContact') },
+                                    ...manufacturerContacts.map((c) => ({
+                                        value: String(c.id),
+                                        label: c.position ? `${c.name} (${c.position})` : c.name,
+                                    })),
+                                ]}
+                            />
+                        )}
 
                         <FormSelect
                             id="purchase-order-warehouse"

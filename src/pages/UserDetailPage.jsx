@@ -378,6 +378,9 @@ export default function UserDetailPage() {
                             <Fact label={t('userDetail.general.role')} value={t(`roles.${user.role}`)} />
                             <Fact label={t('userDetail.general.accountStatus')} value={user.archived ? t('userDetail.general.archived') : t('userDetail.general.active')} />
                             <Fact label={t('userDetail.general.company')} value={user.companyName || '—'} />
+                            {/* Only ever present when the person entered it themselves on their invitation
+                                - it is not a field anyone here can fill in on their behalf. */}
+                            <Fact label={t('userDetail.general.birthDate')} value={user.birthDate ? formatDate(user.birthDate) : '—'} />
                             {/* "Never" is the useful answer here, not a dash: an invited colleague who has
                                 not signed in yet is exactly what an administrator is looking for. */}
                             <Fact

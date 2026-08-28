@@ -10,6 +10,7 @@ import LoadingBlock from '../components/LoadingBlock'
 import TrendChart from '../components/TrendChart'
 import CopyButton from '../components/CopyButton'
 import CategoryChips from '../components/CategoryChips'
+import PartnerContacts from '../components/PartnerContacts'
 import ComposeEmailModal from '../components/ComposeEmailModal'
 import SentEmailDetailModal from '../components/SentEmailDetailModal'
 import { useAuth, usePermissions } from '../context/AuthContext'
@@ -162,6 +163,8 @@ export default function ManufacturerDetailPage() {
                     </div>
                 )}
             </div>
+
+            <PartnerContacts basePath={`/manufacturers/${manufacturer.id}`} canEdit={canEdit} />
 
             {/* Analytics */}
             <div className="flex flex-wrap items-end justify-between gap-3">

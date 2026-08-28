@@ -172,6 +172,16 @@ export default function DashboardPage() {
     }
 
     /**
+     * How a widget is named in the add menu. Two of them come as a pair - a bare count and the list
+     * behind it - and share a title on the dashboard, where the size of the card already says which is
+     * which. In a flat menu it does not, so there the size is spelled out.
+     */
+    const menuLabelOf = (key) => {
+        const size = widgetMeta(key)?.size
+        return size ? `${titleOf(key)} · ${t(`dashboard.widgetSize.${size}`)}` : titleOf(key)
+    }
+
+    /**
      * The "view all" link in a widget's header, for the widgets that show a cut-down list: it lands on
      * the matching list page with the filter that produced the widget already applied, so what the user
      * clicked is what they see — with every row and every column. Charts and top-N rankings show their
@@ -228,7 +238,7 @@ export default function DashboardPage() {
             case 'expiringLots':
                 return <ExpiringLots rows={stats.expiry?.rows || []} onNavigate={editing ? undefined : navigate} rowLimit={cardRows} />
             case 'tenders': {
-                const rows = (stats.tenders?.latest || []).slice(0, tenderRows)
+                const rows = (stats.tenders?.active || []).slice(0, tenderRows)
                 return (
                     <div className="flex h-full flex-col">
                         {/* Scrolls rather than clips. The row count above is an estimate of what fits,
@@ -245,7 +255,7 @@ export default function DashboardPage() {
                                 paginate={false}
                             />
                         </div>
-                        <ShowingCount shown={rows.length} total={stats.tenders?.totalCount} />
+                        <ShowingCount shown={rows.length} total={stats.tenders?.activeCount} />
                     </div>
                 )
             }
@@ -270,7 +280,7 @@ export default function DashboardPage() {
                 action={
                     editing ? (
                         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                            {hiddenKeys.length > 0 && <AddWidgetMenu hiddenKeys={hiddenKeys} onAdd={addWidget} labelOf={titleOf} />}
+                            {hiddenKeys.length > 0 && <AddWidgetMenu hiddenKeys={hiddenKeys} onAdd={addWidget} labelOf={menuLabelOf} />}
                             <button
                                 onClick={resetEdit}
                                 className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -387,30 +397,39 @@ const WIDGET_LINKS = {
     kpiRevenue: '/sales-orders',
     kpiSpend: '/purchase-orders',
     kpiCollected: '/sales-orders?paymentStatus=PAID',
-    kpiLowStock: '/products?status=low',
+    // `below,out` is the same pair the figure itself is counted from (under the minimum, or empty), so
+    // the list that opens holds exactly the rows behind the number - no more, no fewer.
+    kpiLowStock: '/products?status=below,out',
     kpiActiveSales: `/sales-orders?status=${ACTIVE_ORDER_STATUSES}`,
     kpiActivePurchases: `/purchase-orders?status=${ACTIVE_ORDER_STATUSES}`,
     kpiActiveTenders: `/tenders?status=${ACTIVE_TENDER_STATUSES}`,
     revenueChart: '/sales-orders',
-    stockHealth: '/products?status=low',
-    lowStock: '/products?status=low',
+    stockHealth: '/products?status=below,out',
+    lowStock: '/products?status=below,out',
     receivables: '/sales-orders?paymentStatus=OVERDUE',
     expiringLots: '/products',
-    tenders: '/tenders',
+    tenders: `/tenders?status=${ACTIVE_TENDER_STATUSES}`,
     topClients: '/clients',
     topProducts: '/products',
     topServices: '/services',
 }
 
-/** Widget title per KPI, reusing the translations the old summary-card block already shipped. */
+/**
+ * Widget title per KPI, reusing the translations the old summary-card block already shipped.
+ *
+ * The two KPIs that also have a list widget behind them borrow that widget's title rather than keeping a
+ * near-synonym of their own: "Low stock items" beside "Low stock products" read as two different figures
+ * when they are the same one, counted and listed. The add menu is where they are told apart - see
+ * {@code menuLabelOf}.
+ */
 const KPI_TITLE_KEYS = {
     kpiRevenue: 'dashboard.kpi.revenueThisMonth',
     kpiSpend: 'dashboard.kpi.spendThisMonth',
     kpiCollected: 'dashboard.kpi.collectedThisMonth',
-    kpiLowStock: 'dashboard.kpi.lowStockItems',
+    kpiLowStock: 'dashboard.titles.lowStock',
     kpiActiveSales: 'dashboard.kpi.activeSales',
     kpiActivePurchases: 'dashboard.kpi.activePurchases',
-    kpiActiveTenders: 'dashboard.kpi.activeTenders',
+    kpiActiveTenders: 'dashboard.titles.tenders',
 }
 
 /** Builds the props for each KPI widget. Only called for keys whose data is present. */

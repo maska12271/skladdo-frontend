@@ -63,6 +63,11 @@ export default function ComposeEmailModal({ isOpen, manufacturerIds = [], onClos
     const [sending, setSending] = useState(false)
     // The first selected manufacturer, loaded so the preview can show real substituted values.
     const [sampleManufacturer, setSampleManufacturer] = useState(null)
+    // Named people at that manufacturer, offered as recipients instead of the company's own address.
+    // Only ever loaded for a single-recipient send: a contact belongs to one manufacturer, so across a
+    // bulk selection there is no one list to choose from.
+    const [contacts, setContacts] = useState([])
+    const [contactId, setContactId] = useState('')
     // Local editable copy of the user's signature (persisted separately from a send).
     const [signature, setSignature] = useState('')
     const [editingSignature, setEditingSignature] = useState(false)
@@ -80,12 +85,20 @@ export default function ComposeEmailModal({ isOpen, manufacturerIds = [], onClos
         setEditingSignature(false)
         setSignature(user?.emailSignature || '')
         setSampleManufacturer(null)
+        setContacts([])
+        setContactId('')
         apiGet('/email-templates')
             .then((res) => setTemplates(safeArray(res).filter((tpl) => tpl.active !== false)))
             .catch(() => {})
         if (manufacturerIds.length > 0) {
             apiGet(`/manufacturers/${manufacturerIds[0]}`)
                 .then((m) => setSampleManufacturer(m))
+                .catch(() => {})
+        }
+        if (manufacturerIds.length === 1) {
+            apiGet(`/manufacturers/${manufacturerIds[0]}/contacts`)
+                // Only contacts with an address: the rest are people to know about, not people to write to.
+                .then((res) => setContacts(safeArray(res).filter((c) => c.email)))
                 .catch(() => {})
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,6 +172,7 @@ export default function ComposeEmailModal({ isOpen, manufacturerIds = [], onClos
                 templateId: templateId ? Number(templateId) : null,
                 subject,
                 body,
+                contactId: contactId ? Number(contactId) : null,
             })], { type: 'application/json' }))
             files.forEach((f) => fd.append('files', f))
             const result = await apiUpload('/manufacturers/emails/send', fd)
@@ -184,6 +198,34 @@ export default function ComposeEmailModal({ isOpen, manufacturerIds = [], onClos
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                     {t('emails.compose.recipientsHint', { count: manufacturerIds.length })}
                 </p>
+
+                {/* Offered only for a single recipient, and only when there is somebody to choose - a
+                    manufacturer with no named contacts should not be shown an empty dropdown asking a
+                    question it cannot answer. */}
+                {contacts.length > 0 && (
+                    <div className="space-y-2">
+                    <FormSelect
+                        id="compose-contact"
+                        label={t('emails.compose.contact')}
+                        name="contactId"
+                        value={contactId}
+                        onChange={(e) => setContactId(e.target.value)}
+                        options={[
+                            {
+                                value: '',
+                                label: sampleManufacturer?.email
+                                    ? t('emails.compose.contactCompany', { email: sampleManufacturer.email })
+                                    : t('emails.compose.contactCompanyNoEmail'),
+                            },
+                            ...contacts.map((c) => ({
+                                value: String(c.id),
+                                label: c.position ? `${c.name} (${c.position}) · ${c.email}` : `${c.name} · ${c.email}`,
+                            })),
+                        ]}
+                    />
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('emails.compose.contactHint')}</p>
+                    </div>
+                )}
 
                 <FormSelect
                     id="compose-template"

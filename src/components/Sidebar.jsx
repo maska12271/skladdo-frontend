@@ -57,7 +57,7 @@ const baseLinks = [
  * home administering itself, where it holds no permissions; the server still decides every request.
  */
 const PARTNER_LINKS = new Set([
-    "/dashboard", "/products", "/services", "/manufacturers", "/clients", "/sales-orders", "/purchase-orders", "/warehouses",
+    "/dashboard", "/products", "/manufacturers", "/clients", "/sales-orders", "/purchase-orders", "/warehouses",
 ])
 
 const COLLAPSE_COOKIE = "sidebar_collapsed"

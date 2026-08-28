@@ -15,10 +15,10 @@ import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import CopyButton from '../components/CopyButton'
 import { useModal } from '../hooks/useModal'
-import { safeArray } from '../utils/format'
+import { formatDateTime, safeArray } from '../utils/format'
 import { FormField, FormSelect } from '../components/FormField.jsx'
 import { PERMISSION_MODULES } from '../constants/modules'
-import { Pencil, Trash2, Archive, ArchiveRestore, ShieldCheck, User, KeyRound, Crown, Warehouse, CheckCircle2, Loader2 } from 'lucide-react'
+import { Pencil, Trash2, Archive, ArchiveRestore, ShieldCheck, User, KeyRound, Crown, Warehouse, CheckCircle2, Loader2, Link2, Send, Ban, UserPlus } from 'lucide-react'
 import Checkbox from '../components/Checkbox'
 import UserAvatar from '../components/UserAvatar'
 import AvatarPicker from '../components/AvatarPicker'
@@ -43,8 +43,18 @@ const emptyForm = {
     avatarColor: null,
 }
 
+// A fresh invitation: the access, and nothing about the person - they supply that themselves.
+const emptyInvite = {
+    role: 'USER',
+    canSeePrices: true,
+}
+
 // Restricted (permission-governed) roles that also carry the price-visibility toggle.
 const RESTRICTED_ROLES = ['USER', 'WAREHOUSE']
+
+// Invitations worth keeping in front of an administrator. A spent or lapsed one is history, and the
+// list would fill up with it - the account it produced is in the table above, where it belongs.
+const OPEN_INVITE_STATUSES = ['PENDING']
 
 const ROLE_LABELS = {
     OWNER: 'Owner',
@@ -77,6 +87,89 @@ const exportColumns = [
     { header: 'Status', value: (r) => (r.archived ? 'Archived' : 'Active') },
 ]
 
+/**
+ * The per-module access grid, driven entirely by the rows handed to it.
+ *
+ * Shared by the two places access is decided - the permission editor for an existing account, and the
+ * invitation that will create one - because they have to agree: a grant that reads one way when it is
+ * issued and another when it is edited is a grant nobody can be sure of.
+ */
+function PermissionMatrix({ rows, onChange }) {
+    const { t } = useTranslation()
+
+    // Toggle one flag, keeping the row coherent: any write permission implies view, and removing
+    // view removes the writes that depend on it.
+    const togglePermission = (module, action, checked) => {
+        onChange(rows.map((row) => {
+            if (row.module !== module) return row
+            const next = { ...row, [action]: checked }
+            if (action === 'canView' && !checked) {
+                next.canCreate = false
+                next.canEdit = false
+                next.canDelete = false
+            } else if (action !== 'canView' && checked) {
+                next.canView = true
+            }
+            return next
+        }))
+    }
+
+    // Emails is granted as a single capability ("can send emails"): ON enables viewing sent history
+    // and sending; OFF revokes everything. Template management is not separately grantable here.
+    const toggleEmailAccess = (module, checked) => {
+        onChange(rows.map((row) =>
+            row.module === module
+                ? { ...row, canView: checked, canCreate: checked, canEdit: false, canDelete: false }
+                : row,
+        ))
+    }
+
+    return (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-sm">
+                <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-left dark:border-slate-800 dark:bg-slate-900">
+                        <th className="px-4 py-3 font-semibold">{t('users.perm.area')}</th>
+                        {PERMISSION_ACTIONS.map((action) => (
+                            <th key={action.key} className="px-4 py-3 text-center font-semibold">{t(action.labelKey)}</th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((row) => {
+                        const meta = PERMISSION_MODULES.find((m) => m.module === row.module)
+                        const label = meta ? t(`nav.${meta.navKey}`) : row.module
+                        // Emails is a single on/off capability, not a CRUD row.
+                        if (row.module === 'MANUFACTURER_EMAILS') {
+                            return (
+                                <tr key={row.module} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
+                                    <td className="px-4 py-3 font-medium">{label}</td>
+                                    <td colSpan={PERMISSION_ACTIONS.length} className="px-4 py-3 text-center">
+                                        <label className="inline-flex items-center gap-2">
+                                            <Checkbox checked={!!row.canCreate} onChange={(e) => toggleEmailAccess(row.module, e.target.checked)} />
+                                            <span className="text-sm text-slate-600 dark:text-slate-300">{t('users.perm.emailAccess')}</span>
+                                        </label>
+                                    </td>
+                                </tr>
+                            )
+                        }
+                        return (
+                            <tr key={row.module} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
+                                <td className="px-4 py-3 font-medium">{label}</td>
+                                {PERMISSION_ACTIONS.map((action) => (
+                                    <td key={action.key} className="px-4 py-3 text-center">
+                                        <Checkbox checked={!!row[action.key]} onChange={(e) => togglePermission(row.module, action.key, e.target.checked)} />
+                                    </td>
+                                ))}
+                            </tr>
+                        )
+                    })}
+                </tbody>
+            </table>
+        </div>
+    )
+}
+
 export default function UsersPage() {
     const { t } = useTranslation()
     const { user: currentUser } = useAuth()
@@ -88,9 +181,20 @@ export default function UsersPage() {
     const bulkDeleteModal = useModal()
     const permModal = useModal()
     const setupLinkModal = useModal()
+    const inviteModal = useModal()
+    const revokeModal = useModal()
 
     // Holds the copyable one-time setup/reset link shown when an email couldn't be sent (no SMTP yet).
     const [setupLinkInfo, setSetupLinkInfo] = useState(null)
+
+    // Invitations: the outstanding links, the one being composed, and the one just minted.
+    const [invites, setInvites] = useState([])
+    const [inviteForm, setInviteForm] = useState(emptyInvite)
+    const [invitePermRows, setInvitePermRows] = useState(null) // null = "use the company default template"
+    const [createdInvite, setCreatedInvite] = useState(null)
+    const [inviteEmail, setInviteEmail] = useState('')
+    const [sendingInvite, setSendingInvite] = useState(false)
+    const [revokingInvite, setRevokingInvite] = useState(null)
 
     const [rows, setRows] = useState([])
     const [permUser, setPermUser] = useState(null)
@@ -99,7 +203,6 @@ export default function UsersPage() {
     const [form, setForm] = useState(emptyForm)
     const [editingId, setEditingId] = useState(null)
     const [deletingItem, setDeletingItem] = useState(null)
-    const [sendingInvite, setSendingInvite] = useState(false)
     const [selectedIds, setSelectedIds] = useState([])
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState([])
@@ -117,12 +220,19 @@ export default function UsersPage() {
     const loadData = async () => {
         setListLoading(true)
         try {
-            const response = await apiGet('/users')
-            setRows(safeArray(response))
+            const [users, inviteList] = await Promise.all([apiGet('/users'), apiGet('/user-invites')])
+            setRows(safeArray(users))
+            setInvites(safeArray(inviteList))
         } finally {
             setListLoading(false)
         }
     }
+
+    // Only the ones still waiting for someone. See OPEN_INVITE_STATUSES.
+    const openInvites = useMemo(
+        () => invites.filter((invite) => OPEN_INVITE_STATUSES.includes(invite.status)),
+        [invites],
+    )
 
     const filteredRows = useMemo(() => {
         return rows.filter((row) => {
@@ -141,11 +251,94 @@ export default function UsersPage() {
         })
     }, [rows, search, statusFilter, roleFilter])
 
-    const openCreate = () => {
+    /**
+     * Starts a new invitation. Opens on the access alone: everything about the person is theirs to enter,
+     * so there is nothing else here for an administrator to get wrong.
+     */
+    const openInvite = () => {
         setError('')
-        setEditingId(null)
-        setForm(emptyForm)
-        formModal.open()
+        setInviteForm(emptyInvite)
+        setInvitePermRows(null)
+        setCreatedInvite(null)
+        setInviteEmail('')
+        inviteModal.open()
+    }
+
+    /**
+     * Opens the permission editor inside the invitation, seeded from the company's own default template -
+     * which is what the new account would have got anyway, so the editor starts from the answer rather
+     * than from nothing and only records a deliberate departure from it.
+     */
+    const customizeInvitePermissions = async () => {
+        try {
+            const template = await apiGet('/settings/default-permissions')
+            setInvitePermRows(safeArray(template))
+        } catch (err) {
+            setError(err.message || t('users.couldNotLoadPermissions'))
+        }
+    }
+
+    const handleCreateInvite = async (e) => {
+        e.preventDefault()
+        setError('')
+        setLoading(true)
+        try {
+            const canSeePrices = RESTRICTED_ROLES.includes(inviteForm.role) ? inviteForm.canSeePrices : true
+            const created = await apiPost('/user-invites', {
+                role: inviteForm.role,
+                canSeePrices,
+                permissions: RESTRICTED_ROLES.includes(inviteForm.role) ? invitePermRows : null,
+            })
+            setCreatedInvite(created)
+            await loadData()
+        } catch (err) {
+            setError(err.message || t('users.couldNotSave'))
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    /**
+     * Emails an existing invitation. Delivery only - whoever opens it still enters their own address.
+     *
+     * The server reports whether a platform sender is even configured; when it is not, nothing left and
+     * saying "sent" would be a lie that leaves the admin waiting for an email nobody posted. The copyable
+     * link above is then the way through, so that is what the message points at.
+     */
+    const handleSendInvite = async (invite, email) => {
+        if (!email?.trim()) return
+        setSendingInvite(true)
+        try {
+            const res = await apiPost(`/user-invites/${invite.id}/send`, { email: email.trim() })
+            const updated = res?.invite
+            if (updated) setCreatedInvite((prev) => (prev && prev.id === updated.id ? updated : prev))
+            if (res?.emailSent) {
+                toast.success(t('users.invites.sent', { email: email.trim() }))
+            } else {
+                toast.error?.(t('users.invites.mailerOff'))
+            }
+            await loadData()
+        } catch (err) {
+            toast.error?.(err.message || t('users.couldNotSave'))
+        } finally {
+            setSendingInvite(false)
+        }
+    }
+
+    const handleRevokeInvite = async () => {
+        if (!revokingInvite) return
+        setLoading(true)
+        try {
+            await apiPut(`/user-invites/${revokingInvite.id}/revoke`, {})
+            toast.success(t('users.invites.revoked'))
+            revokeModal.close()
+            setRevokingInvite(null)
+            await loadData()
+        } catch (err) {
+            toast.error?.(err.message || t('users.couldNotSave'))
+        } finally {
+            setLoading(false)
+        }
     }
 
     const openEdit = (item) => {
@@ -173,6 +366,10 @@ export default function UsersPage() {
         setForm((prev) => ({ ...prev, [name]: value }))
     }
 
+    /**
+     * Edits an existing account. New ones no longer come through here at all - they arrive through an
+     * invitation, where the person enters their own details (see {@code openInvite}).
+     */
     const handleSubmit = async (e) => {
         e.preventDefault()
         setError('')
@@ -180,39 +377,19 @@ export default function UsersPage() {
         try {
             // The price-visibility flag only applies to restricted roles; managers always see prices.
             const canSeePrices = RESTRICTED_ROLES.includes(form.role) ? form.canSeePrices : true
-            if (editingId) {
-                await apiPut(`/users/${editingId}`, {
-                    fullName: form.fullName,
-                    role: form.role,
-                    canSeePrices,
-                    avatarKey: form.avatarKey,
-                    avatarIcon: form.avatarIcon,
-                    avatarColor: form.avatarColor,
-                })
-                toast.success(t('users.updated'))
-                formModal.close()
-                setEditingId(null)
-                setForm(emptyForm)
-                await loadData()
-            } else {
-                // Create returns the invite outcome: the account is created "awaiting password setup"
-                // and a setup link is emailed automatically. If email isn't configured we surface the
-                // copyable link so the admin can share it manually.
-                const created = await apiPost('/users', {
-                    email: form.email,
-                    fullName: form.fullName,
-                    role: form.role,
-                    canSeePrices,
-                    avatarKey: form.avatarKey,
-                    avatarIcon: form.avatarIcon,
-                    avatarColor: form.avatarColor,
-                })
-                formModal.close()
-                setEditingId(null)
-                setForm(emptyForm)
-                await loadData()
-                handleInviteOutcome(created, form.email, created?.user?.id)
-            }
+            await apiPut(`/users/${editingId}`, {
+                fullName: form.fullName,
+                role: form.role,
+                canSeePrices,
+                avatarKey: form.avatarKey,
+                avatarIcon: form.avatarIcon,
+                avatarColor: form.avatarColor,
+            })
+            toast.success(t('users.updated'))
+            formModal.close()
+            setEditingId(null)
+            setForm(emptyForm)
+            await loadData()
         } catch (err) {
             setError(err.message || t('users.couldNotSave'))
         } finally {
@@ -221,46 +398,18 @@ export default function UsersPage() {
     }
 
     /**
-     * Shared handling for a setup/reset-link outcome ({ emailSent, setupLink }).
-     *
-     * A freshly created account always opens the dialog: the account exists either way, and the only
-     * question left is how the person hears about it - which is the administrator's to answer rather than
-     * ours to assume. Re-sending an existing user's link is already a deliberate "send it again", so that
-     * path just confirms.
+     * Row action: send an existing user a password reset link. Never changes their current password, and
+     * the copyable link is the fallback for a company whose platform email is not configured.
      */
-    const handleInviteOutcome = (outcome, email, userId) => {
-        if (userId) {
-            setSetupLinkInfo({ email, link: outcome?.setupLink, userId, sent: Boolean(outcome?.emailSent) })
-            setupLinkModal.open()
-        } else if (outcome?.emailSent) {
-            toast.success(t('users.inviteSent', { email }))
-        } else if (outcome?.setupLink) {
-            setSetupLinkInfo({ email, link: outcome.setupLink })
-            setupLinkModal.open()
-        }
-    }
-
-    /** Sends the invitation from the dialog. The server mints a fresh link, so the shown one is replaced. */
-    const sendInviteFromDialog = async () => {
-        if (!setupLinkInfo?.userId) return
-        setSendingInvite(true)
-        try {
-            const res = await apiPost(`/users/${setupLinkInfo.userId}/setup-email`, {})
-            setSetupLinkInfo((prev) => ({ ...prev, link: res.setupLink || prev.link, sent: Boolean(res.emailSent) }))
-            if (res.emailSent) toast.success(t('users.inviteSent', { email: setupLinkInfo.email }))
-            else toast.error?.(t('users.inviteNotConfigured'))
-        } catch (err) {
-            toast.error?.(err.message || t('users.couldNotSave'))
-        } finally {
-            setSendingInvite(false)
-        }
-    }
-
-    // Row action: (re)send a user their setup/reset link. Never changes an existing password.
     const handleSendSetupEmail = async (row) => {
         try {
             const res = await apiPost(`/users/${row.id}/setup-email`, {})
-            handleInviteOutcome(res, row.email)
+            if (res?.emailSent) {
+                toast.success(t('users.inviteSent', { email: row.email }))
+            } else if (res?.setupLink) {
+                setSetupLinkInfo({ email: row.email, link: res.setupLink })
+                setupLinkModal.open()
+            }
         } catch (err) {
             toast.error?.(err.message || t('users.couldNotSave'))
         }
@@ -301,37 +450,6 @@ export default function UsersPage() {
         } finally {
             setPermLoading(false)
         }
-    }
-
-    // Toggle one flag, keeping the row coherent: any write permission implies view, and removing
-    // view removes the writes that depend on it.
-    const togglePermission = (module, action, checked) => {
-        setPermRows((prev) =>
-            prev.map((row) => {
-                if (row.module !== module) return row
-                const next = { ...row, [action]: checked }
-                if (action === 'canView' && !checked) {
-                    next.canCreate = false
-                    next.canEdit = false
-                    next.canDelete = false
-                } else if (action !== 'canView' && checked) {
-                    next.canView = true
-                }
-                return next
-            })
-        )
-    }
-
-    // Emails is granted as a single capability ("can send emails"): ON enables viewing sent history
-    // and sending; OFF revokes everything. Template management is not separately grantable here.
-    const toggleEmailAccess = (module, checked) => {
-        setPermRows((prev) =>
-            prev.map((row) =>
-                row.module === module
-                    ? { ...row, canView: checked, canCreate: checked, canEdit: false, canDelete: false }
-                    : row,
-            )
-        )
     }
 
     const handleSavePermissions = async () => {
@@ -474,8 +592,8 @@ export default function UsersPage() {
                     </div>
                 }
                 primaryAction={
-                        <button onClick={openCreate} className="min-h-11 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700 lg:min-h-0">
-                            {t('users.add')}
+                        <button onClick={openInvite} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700 lg:min-h-0">
+                            <UserPlus className="h-4 w-4" /> {t('users.add')}
                         </button>
                     }
             />
@@ -521,7 +639,7 @@ export default function UsersPage() {
                         title={t('users.emptyTitle')}
                         description={t('users.emptyDesc')}
                         action={
-                            <button onClick={openCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
+                            <button onClick={openInvite} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700">
                                 {t('users.add')}
                             </button>
                         }
@@ -559,7 +677,71 @@ export default function UsersPage() {
                 }
             />
 
-            <Modal isOpen={formModal.isOpen} title={editingId ? t('users.editTitle') : t('users.addTitle')} onClose={formModal.close} width="max-w-xl">
+            {/* Outstanding invitations. They sit below the accounts rather than among them because
+                nobody is behind one yet - there is no name, no address and nothing to click through to,
+                only a link waiting for someone. Hidden entirely when there are none. */}
+            {openInvites.length > 0 && (
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+                    <div className="mb-4">
+                        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                            {t('users.invites.title', { count: openInvites.length })}
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('users.invites.description')}</p>
+                    </div>
+                    <ul className="space-y-3">
+                        {openInvites.map((invite) => (
+                            <li
+                                key={invite.id}
+                                className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 dark:border-slate-800"
+                            >
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-950/40 dark:text-teal-300">
+                                    <Link2 className="h-[18px] w-[18px]" />
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                                        {t(`roles.${invite.role}`)}
+                                        {invite.sentToEmail && (
+                                            <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">
+                                                {t('users.invites.sentTo', { email: invite.sentToEmail })}
+                                            </span>
+                                        )}
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                        {t('users.invites.expires', { when: formatDateTime(invite.expiresAt) })}
+                                    </p>
+                                </div>
+                                <CopyButton value={invite.url || ''} />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        // Opens the dialog straight in its "here is the link" state - the
+                                        // invitation already exists, so there is nothing left to compose.
+                                        setCreatedInvite(invite)
+                                        setInviteEmail(invite.sentToEmail || '')
+                                        setError('')
+                                        inviteModal.open()
+                                    }}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                                >
+                                    <Send className="h-4 w-4" /> {t('users.invites.send')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setRevokingInvite(invite)
+                                        revokeModal.open()
+                                    }}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                                >
+                                    <Ban className="h-4 w-4" /> {t('users.invites.revoke')}
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
+            <Modal isOpen={formModal.isOpen} title={t('users.editTitle')} onClose={formModal.close} width="max-w-xl">
                 <form onSubmit={handleSubmit} className="grid gap-4">
                     {error && (
                         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
@@ -574,9 +756,8 @@ export default function UsersPage() {
                         type="email"
                         value={form.email}
                         onChange={handleChange}
-                        required={!editingId}
                         placeholder={t('users.form.emailPlaceholder')}
-                        disabled={!!editingId}
+                        disabled
                     />
 
                     <FormField
@@ -603,12 +784,6 @@ export default function UsersPage() {
                         ]}
                     />
 
-                    {!editingId && RESTRICTED_ROLES.includes(form.role) && (
-                        <p className="-mt-2 text-xs text-slate-500 dark:text-slate-400">
-                            {form.role === 'WAREHOUSE' ? t('users.form.newWarehouseHint') : t('users.form.newUserHint')}
-                        </p>
-                    )}
-
                     {RESTRICTED_ROLES.includes(form.role) && (
                         <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
                             <span>
@@ -628,13 +803,6 @@ export default function UsersPage() {
                         />
                     </div>
 
-                    {!editingId && (
-                        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-200">
-                            <p className="font-medium">{t('users.form.inviteTitle')}</p>
-                            <p className="mt-1 text-teal-700 dark:text-teal-300/90">{t('users.form.inviteExplanation')}</p>
-                        </div>
-                    )}
-
                     <ModalActions>
                         <button
                             type="button"
@@ -648,11 +816,181 @@ export default function UsersPage() {
                             disabled={loading}
                             className="rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-60"
                         >
-                            {loading ? t('common.saving') : editingId ? t('common.saveChanges') : t('users.createBtn')}
+                            {loading ? t('common.saving') : t('common.saveChanges')}
                         </button>
                     </ModalActions>
                 </form>
             </Modal>
+
+            {/* Two states in one dialog: composing the invitation, then the link it produced. Deliberately
+                not two modals - the link only makes sense as the outcome of the choices above it, and
+                closing one to open another loses that thread. */}
+            <Modal
+                isOpen={inviteModal.isOpen}
+                title={createdInvite ? t('users.invites.readyTitle') : t('users.invites.newTitle')}
+                onClose={inviteModal.close}
+                width="max-w-2xl"
+            >
+                {error && (
+                    <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                        {error}
+                    </div>
+                )}
+
+                {!createdInvite ? (
+                    <form onSubmit={handleCreateInvite} className="grid gap-4">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{t('users.invites.newIntro')}</p>
+
+                        <FormSelect
+                            id="invite-role"
+                            label={t('users.form.role')}
+                            name="role"
+                            value={inviteForm.role}
+                            onChange={(e) => {
+                                setInviteForm((prev) => ({ ...prev, role: e.target.value }))
+                                // A grant is written against a role; carrying one across to another role
+                                // would quietly hand out access nobody chose for it.
+                                setInvitePermRows(null)
+                            }}
+                            required
+                            placeholder={t('users.form.selectRole')}
+                            options={[
+                                { value: 'USER', label: t('roles.USER') },
+                                { value: 'WAREHOUSE', label: t('roles.WAREHOUSE') },
+                                { value: 'ADMINISTRATOR', label: t('roles.ADMINISTRATOR') },
+                            ]}
+                        />
+
+                        {RESTRICTED_ROLES.includes(inviteForm.role) && (
+                            <>
+                                <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
+                                    <span>
+                                        <span className="block font-medium text-slate-700 dark:text-slate-200">{t('users.form.canSeePrices')}</span>
+                                        <span className="text-xs text-slate-500 dark:text-slate-400">{t('users.form.canSeePricesHint')}</span>
+                                    </span>
+                                    <Checkbox
+                                        name="canSeePrices"
+                                        checked={!!inviteForm.canSeePrices}
+                                        onChange={(e) => setInviteForm((prev) => ({ ...prev, canSeePrices: e.target.checked }))}
+                                    />
+                                </label>
+
+                                {invitePermRows === null ? (
+                                    <div className="rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
+                                        <p className="font-medium text-slate-700 dark:text-slate-200">{t('users.invites.defaultAccess')}</p>
+                                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('users.invites.defaultAccessHint')}</p>
+                                        <button
+                                            type="button"
+                                            onClick={customizeInvitePermissions}
+                                            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                                        >
+                                            <ShieldCheck className="h-4 w-4" /> {t('users.invites.customize')}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('users.permissions')}</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setInvitePermRows(null)}
+                                                className="text-xs font-medium text-teal-700 hover:text-teal-800 dark:text-teal-400"
+                                            >
+                                                {t('users.invites.useDefaults')}
+                                            </button>
+                                        </div>
+                                        <PermissionMatrix rows={invitePermRows} onChange={setInvitePermRows} />
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        <ModalActions>
+                            <button
+                                type="button"
+                                onClick={inviteModal.close}
+                                className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700"
+                            >
+                                {t('common.cancel')}
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="rounded-xl bg-teal-600 px-4 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-60"
+                            >
+                                {loading ? t('common.saving') : t('users.invites.createBtn')}
+                            </button>
+                        </ModalActions>
+                    </form>
+                ) : (
+                    <div className="space-y-5">
+                        <div className="flex gap-3 rounded-xl border border-teal-200 bg-teal-50 p-3 dark:border-teal-900/60 dark:bg-teal-950/30">
+                            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+                            <p className="text-sm text-teal-900 dark:text-teal-100">{t('users.invites.readyBody')}</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('users.invites.copyTitle')}</p>
+                            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/60">
+                                <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">
+                                    {createdInvite.url}
+                                </span>
+                                <CopyButton value={createdInvite.url || ''} />
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {t('users.invites.copyHint', { when: formatDateTime(createdInvite.expiresAt) })}
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('users.invites.emailTitle')}</p>
+                            <div className="flex flex-wrap items-end gap-2">
+                                <FormField
+                                    id="invite-email"
+                                    label={t('common.email')}
+                                    name="inviteEmail"
+                                    type="email"
+                                    value={inviteEmail}
+                                    onChange={(e) => setInviteEmail(e.target.value)}
+                                    placeholder={t('users.form.emailPlaceholder')}
+                                    className="min-w-[16rem] flex-1"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleSendInvite(createdInvite, inviteEmail)}
+                                    disabled={sendingInvite || !inviteEmail.trim()}
+                                    className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    {sendingInvite ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                    {t('users.invites.send')}
+                                </button>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{t('users.invites.emailHint')}</p>
+                        </div>
+
+                        <div className="flex justify-end">
+                            <button
+                                type="button"
+                                onClick={inviteModal.close}
+                                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                            >
+                                {t('common.close')}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            <ConfirmModal
+                isOpen={revokeModal.isOpen}
+                title={t('users.invites.revokeTitle')}
+                message={t('users.invites.revokeConfirm')}
+                confirmLabel={t('users.invites.revoke')}
+                busyLabel={t('common.saving')}
+                onClose={revokeModal.close}
+                onConfirm={handleRevokeInvite}
+                loading={loading}
+            />
 
             <ConfirmModal
                 isOpen={deleteModal.isOpen}
@@ -692,48 +1030,7 @@ export default function UsersPage() {
                     {permLoading && permRows.length === 0 ? (
                         <p className="py-6 text-center text-sm text-slate-500">{t('users.perm.loading')}</p>
                     ) : (
-                        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-slate-200 bg-slate-50 text-left dark:border-slate-800 dark:bg-slate-900">
-                                        <th className="px-4 py-3 font-semibold">{t('users.perm.area')}</th>
-                                        {PERMISSION_ACTIONS.map((action) => (
-                                            <th key={action.key} className="px-4 py-3 text-center font-semibold">{t(action.labelKey)}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {permRows.map((row) => {
-                                        const meta = PERMISSION_MODULES.find((m) => m.module === row.module)
-                                        const label = meta ? t(`nav.${meta.navKey}`) : row.module
-                                        // Emails is a single on/off capability, not a CRUD row.
-                                        if (row.module === 'MANUFACTURER_EMAILS') {
-                                            return (
-                                                <tr key={row.module} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
-                                                    <td className="px-4 py-3 font-medium">{label}</td>
-                                                    <td colSpan={PERMISSION_ACTIONS.length} className="px-4 py-3 text-center">
-                                                        <label className="inline-flex items-center gap-2">
-                                                            <Checkbox checked={!!row.canCreate} onChange={(e) => toggleEmailAccess(row.module, e.target.checked)} />
-                                                            <span className="text-sm text-slate-600 dark:text-slate-300">{t('users.perm.emailAccess')}</span>
-                                                        </label>
-                                                    </td>
-                                                </tr>
-                                            )
-                                        }
-                                        return (
-                                            <tr key={row.module} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
-                                                <td className="px-4 py-3 font-medium">{label}</td>
-                                                {PERMISSION_ACTIONS.map((action) => (
-                                                    <td key={action.key} className="px-4 py-3 text-center">
-                                                        <Checkbox checked={!!row[action.key]} onChange={(e) => togglePermission(row.module, action.key, e.target.checked)} />
-                                                    </td>
-                                                ))}
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                        <PermissionMatrix rows={permRows} onChange={setPermRows} />
                     )}
 
                     <ModalActions>
@@ -763,38 +1060,17 @@ export default function UsersPage() {
                 width="max-w-lg"
             >
                 <div className="space-y-5">
-                    {/* The account already exists - said first, so the two options below read as a choice
-                        about delivery rather than as steps still standing between here and a working user. */}
-                    <div className="flex gap-3 rounded-xl border border-teal-200 bg-teal-50 p-3 dark:border-teal-900/60 dark:bg-teal-950/30">
-                        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
-                        <p className="text-sm text-teal-900 dark:text-teal-100">
-                            {setupLinkInfo?.userId
-                                ? t('users.setupLinkCreated', { email: setupLinkInfo?.email || '' })
-                                : t('users.setupLinkEmailFailed', { email: setupLinkInfo?.email || '' })}
+                    {/* Only ever reached when the email could not go out, so it opens by saying so - the
+                        copyable link below is then the way round it rather than a second option. */}
+                    <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+                        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                        <p className="text-sm text-amber-900 dark:text-amber-100">
+                            {t('users.setupLinkEmailFailed', { email: setupLinkInfo?.email || '' })}
                         </p>
                     </div>
 
-                    {setupLinkInfo?.userId && (
-                        <div className="space-y-2">
-                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('users.setupLinkSendTitle')}</p>
-                            <button
-                                type="button"
-                                onClick={sendInviteFromDialog}
-                                disabled={sendingInvite || setupLinkInfo?.sent}
-                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                                {sendingInvite && <Loader2 className="h-4 w-4 animate-spin" />}
-                                {setupLinkInfo?.sent
-                                    ? t('users.setupLinkSent', { email: setupLinkInfo?.email || '' })
-                                    : t('users.setupLinkSendCta', { email: setupLinkInfo?.email || '' })}
-                            </button>
-                        </div>
-                    )}
-
                     <div className="space-y-2">
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                            {setupLinkInfo?.userId ? t('users.setupLinkOrCopy') : t('users.setupLinkTitle')}
-                        </p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('users.setupLinkTitle')}</p>
                         <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/60">
                             <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">
                                 {setupLinkInfo?.link}

@@ -280,6 +280,9 @@ export default function OrderDetailPage({ type = 'sales' }) {
                         <Fact label={t('orderDetail.facts.orderDate')} value={formatDate(details.orderDate)} />
                         <Fact label={t('orderDetail.facts.closingDate')} value={formatDate(details.closingDate)} />
                         {!isSales && <Fact label={t('orderDetail.facts.expectedDelivery')} value={formatDate(details.expectedDeliveryDate)} />}
+                        {!isSales && details.contactName && (
+                            <Fact label={t('orderDetail.facts.contact')} value={details.contactName} />
+                        )}
                         <Fact label={t(isSales ? 'orderDetail.facts.shipsFrom' : 'orderDetail.facts.receivesInto')} value={details.warehouseName || '—'} />
                         <Fact label={t('orderDetail.facts.deliveryAddress')} value={details.deliveryAddress || '—'} copyValue={details.deliveryAddress} />
                     </dl>
