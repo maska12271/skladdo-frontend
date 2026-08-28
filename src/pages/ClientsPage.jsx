@@ -22,7 +22,7 @@ import {FormField, TextareaField} from "../components/FormField.jsx";
 import PhoneField from '../components/PhoneField'
 import CountrySelectField from "../components/CountrySelectField.jsx";
 import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx";
-import { Eye, Pencil, Trash2, Archive, ArchiveRestore, Users } from 'lucide-react'
+import { Eye, Pencil, Trash2, Archive, ArchiveRestore, Users, Plus } from 'lucide-react'
 import InfoHint from '../components/InfoHint'
 import ModalActions from '../components/ModalActions'
 
@@ -36,10 +36,13 @@ const CLIENT_FIELDS = [
     { key: 'phone', labelKey: 'common.phone', example: '+372 555 1234', value: (r) => r.phone },
     { key: 'country', labelKey: 'common.country', example: 'Estonia', value: (r) => r.country },
     { key: 'address', labelKey: 'common.address', value: (r) => r.address },
-    { key: 'contactPerson', labelKey: 'clients.contactPerson', example: 'Jane Doe', value: (r) => r.contactPerson },
     { key: 'notes', labelKey: 'common.notes', value: (r) => r.notes },
     { key: 'status', labelKey: 'common.status', aliasKeys: ['common.active'], example: 'Active', value: (r) => (r.archived ? 'Archived' : 'Active') },
 ]
+
+// One blank contact row. The create form starts with exactly one: most clients have a person, and an
+// empty list with an "add" button makes filling one in look optional in a way it usually is not.
+const emptyContactRow = { name: '', position: '', email: '' }
 
 const emptyForm = {
     name: '',
@@ -48,7 +51,6 @@ const emptyForm = {
     phone: '',
     country: '',
     address: '',
-    contactPerson: '',
     notes: '',
     active: true,
 }
@@ -70,7 +72,6 @@ export default function ClientsPage() {
                 phone: r.phone || '',
                 country: r.country || '',
                 address: r.address || '',
-                contactPerson: r.contactPerson || '',
                 notes: r.notes || '',
                 active: parseBool(r.status, true),
             },
@@ -83,6 +84,9 @@ export default function ClientsPage() {
 
     const [form, setForm] = useState(emptyForm)
     const [editingId, setEditingId] = useState(null)
+    // Contacts typed on the create form. Only used when creating: an existing client's contacts are
+    // managed on its own page, one at a time, which is the whole point of them being separate records.
+    const [contactRows, setContactRows] = useState([emptyContactRow])
     const [deletingItem, setDeletingItem] = useState(null)
     const [selectedIds, setSelectedIds] = useState([])
     const [loading, setLoading] = useState(false)
@@ -136,11 +140,13 @@ export default function ClientsPage() {
     const openCreate = () => {
         setEditingId(null)
         setForm(emptyForm)
+        setContactRows([emptyContactRow])
         formModal.open()
     }
 
     const openEdit = (item) => {
         setEditingId(item.id)
+        setContactRows([emptyContactRow])
         setForm({
             name: item.name || '',
             registrationCode: item.registrationCode || '',
@@ -148,7 +154,6 @@ export default function ClientsPage() {
             phone: item.phone || '',
             country: item.country || '',
             address: item.address || '',
-            contactPerson: item.contactPerson || '',
             notes: item.notes || '',
             active: !!item.active,
         })
@@ -165,6 +170,16 @@ export default function ClientsPage() {
         setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
     }
 
+    const changeContact = (index, field, value) => {
+        setContactRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)))
+    }
+
+    const addContactRow = () => setContactRows((prev) => [...prev, emptyContactRow])
+
+    const removeContactRow = (index) => {
+        setContactRows((prev) => prev.filter((_, i) => i !== index))
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         setLoading(true)
@@ -172,12 +187,21 @@ export default function ClientsPage() {
             if (editingId) {
                 await apiPut(`/clients/${editingId}`, form)
             } else {
-                await apiPost('/clients', form)
+                const created = await apiPost('/clients', form)
+                // Contacts are their own records, so they are their own requests - posted after the client
+                // exists because they hang off its id. A row with no name is one the user left blank rather
+                // than one they meant, and is skipped. A contact that fails to save does not undo the
+                // client: it is already created, and it can be added again from its page.
+                const named = contactRows.filter((row) => row.name.trim())
+                for (const row of named) {
+                    await apiPost(`/clients/${created.id}/contacts`, row)
+                }
             }
             toast.success(editingId ? t('clients.updated') : t('clients.created'))
             formModal.close()
             setEditingId(null)
             setForm(emptyForm)
+            setContactRows([emptyContactRow])
             await reload()
         } finally {
             setLoading(false)
@@ -226,7 +250,6 @@ export default function ClientsPage() {
         { key: 'email', label: t('common.email'), sortKey: 'email' },
         { key: 'phone', label: t('common.phone'), sortKey: 'phone' },
         { key: 'country', label: t('common.country'), sortKey: 'country' },
-        { key: 'contactPerson', label: t('clients.contactPerson') },
         {
             key: 'active',
             sortKey: 'archived',
@@ -420,16 +443,6 @@ export default function ClientsPage() {
                         className="md:col-span-2"
                     />
 
-                    <FormField
-                        id="client-contact-person"
-                        label={t('clients.contactPerson')}
-                        name="contactPerson"
-                        value={form.contactPerson}
-                        onChange={handleChange}
-                        placeholder={t('clients.contactPerson')}
-                        className="md:col-span-2"
-                    />
-
                     <TextareaField
                         id="client-notes"
                         label={t('common.notes')}
@@ -439,6 +452,68 @@ export default function ClientsPage() {
                         placeholder={t('common.notes')}
                         className="md:col-span-4"
                     />
+
+                    {/* Creation only. Editing a client sends you to its page, where each contact is its
+                        own row - see PartnerContacts. */}
+                    {!editingId && (
+                        <div className="space-y-3 md:col-span-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('contacts.title')}</p>
+                                <button
+                                    type="button"
+                                    onClick={addContactRow}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                                >
+                                    <Plus className="h-4 w-4" /> {t('contacts.add')}
+                                </button>
+                            </div>
+                            {contactRows.map((row, index) => (
+                                <div key={index} className="flex flex-wrap items-end gap-2 md:flex-nowrap">
+                                    <FormField
+                                        id={`client-contact-name-${index}`}
+                                        label={t('contacts.name')}
+                                        name={`contact-name-${index}`}
+                                        value={row.name}
+                                        onChange={(e) => changeContact(index, 'name', e.target.value)}
+                                        placeholder={t('contacts.namePlaceholder')}
+                                        className="min-w-[10rem] flex-1"
+                                    />
+                                    <FormField
+                                        id={`client-contact-position-${index}`}
+                                        label={t('contacts.position')}
+                                        name={`contact-position-${index}`}
+                                        value={row.position}
+                                        onChange={(e) => changeContact(index, 'position', e.target.value)}
+                                        placeholder={t('contacts.positionPlaceholder')}
+                                        className="min-w-[9rem] flex-1"
+                                    />
+                                    <FormField
+                                        id={`client-contact-email-${index}`}
+                                        label={t('common.email')}
+                                        name={`contact-email-${index}`}
+                                        type="email"
+                                        value={row.email}
+                                        onChange={(e) => changeContact(index, 'email', e.target.value)}
+                                        placeholder="name@company.com"
+                                        className="min-w-[12rem] flex-1"
+                                    />
+                                    {/* Only once there is more than one: with a single row, removing it
+                                        would leave the section empty and the button is just a way to
+                                        break the form. Clearing the fields is how you decline to fill it. */}
+                                    {contactRows.length > 1 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => removeContactRow(index)}
+                                            aria-label={t('common.delete')}
+                                            className="mb-0.5 rounded-lg border border-rose-200 p-2.5 text-rose-600 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
 
                     <ModalActions className="md:col-span-4">
                         <button

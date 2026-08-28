@@ -5,6 +5,7 @@ import { ChevronLeft, Pencil } from 'lucide-react'
 import { apiGet } from '../api/client'
 import StatCard from '../components/StatCard'
 import StatusBadge from '../components/StatusBadge'
+import PartnerContacts from '../components/PartnerContacts'
 import DataTable from '../components/DataTable'
 import LoadingBlock from '../components/LoadingBlock'
 import TrendChart from '../components/TrendChart'
@@ -83,7 +84,6 @@ export default function ClientDetailPage() {
                     <h1 className="text-2xl font-bold tracking-tight">{client.name}</h1>
                     <p className="text-sm text-slate-500 dark:text-slate-400">
                         {client.registrationCode ? `${t('clients.regCode')} ${client.registrationCode}` : t('clientDetail.noRegCode')}
-                        {client.contactPerson ? ` · ${client.contactPerson}` : ''}
                     </p>
                     <StatusBadge status={client.active ? 'ACTIVE' : 'INACTIVE'} />
                 </div>
@@ -103,7 +103,6 @@ export default function ClientDetailPage() {
                     <Fact label={t('clientDetail.facts.registrationCode')} value={client.registrationCode || '—'} copyValue={client.registrationCode} />
                     <Fact label={t('common.email')} value={client.email || '—'} copyValue={client.email} />
                     <Fact label={t('common.phone')} value={client.phone || '—'} copyValue={client.phone} />
-                    <Fact label={t('clientDetail.facts.contactPerson')} value={client.contactPerson || '—'} />
                     <Fact label={t('common.country')} value={client.country || '—'} />
                     <Fact label={t('common.address')} value={client.address || '—'} />
                 </dl>
@@ -114,6 +113,8 @@ export default function ClientDetailPage() {
                     </div>
                 )}
             </div>
+
+            <PartnerContacts basePath={`/clients/${client.id}`} canEdit={canEdit} />
 
             {/* Analytics */}
             <div className="flex flex-wrap items-end justify-between gap-3">

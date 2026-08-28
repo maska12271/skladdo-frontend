@@ -5,6 +5,9 @@ export { COLS }
 
 // Catalogue of dashboard widgets: label, default position (x,y) and size (w,h) in grid units, and
 // minimum size. Order here is only a fallback; the real arrangement comes from the x/y of each item.
+// `size` marks the two widgets that come as a pair - a bare count and the list behind it. They carry the
+// same title on the dashboard, because they are the same thing at two sizes, so it is only the add menu
+// that has to tell them apart.
 // Grid is COLS (24) wide and rows are 40px, so widths snap to 1/24 and heights to ~half a card row
 // — fine enough to size widgets precisely without leaving gaps.
 // Each headline figure is its own widget, so a user can drop the ones they don't care about and put the
@@ -29,14 +32,14 @@ export const DASHBOARD_WIDGETS = [
     { key: 'kpiSpend', label: 'Spend this month', x: 8, y: 0, w: 8, h: 3, minW: 5, minH: 3 },
     { key: 'kpiCollected', label: 'Collected this month', x: 16, y: 0, w: 8, h: 3, minW: 5, minH: 3 },
     // Band 2: the four plain counts, on half-height cards — a number and a label need no more.
-    { key: 'kpiLowStock', label: 'Low stock items', x: 0, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
+    { key: 'kpiLowStock', label: 'Low stock products', size: 'small', x: 0, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
     { key: 'kpiActiveSales', label: 'Active sales orders', x: 6, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
     { key: 'kpiActivePurchases', label: 'Active purchase orders', x: 12, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
-    { key: 'kpiActiveTenders', label: 'Active tenders', x: 18, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
+    { key: 'kpiActiveTenders', label: 'Active tenders', size: 'small', x: 18, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
 
     // Left column: chart first, then the wide tables.
     { key: 'revenueChart', label: 'Revenue vs spend', x: 0, y: 6, w: 16, h: 6, minW: 8, minH: 5, chart: true },
-    { key: 'lowStock', label: 'Low stock products', x: 0, y: 14, w: 16, h: 8, minW: 8, minH: 8 },
+    { key: 'lowStock', label: 'Low stock products', size: 'large', x: 0, y: 14, w: 16, h: 8, minW: 8, minH: 8 },
     // Taller than the other tables: the totals and the aging donut sit above its list.
     { key: 'receivables', label: 'Outstanding invoices', x: 0, y: 21, w: 16, h: 9, minW: 8, minH: 7 },
     { key: 'expiringLots', label: 'Expiring lots', x: 0, y: 30, w: 16, h: 8, minW: 8, minH: 6 },
@@ -44,7 +47,7 @@ export const DASHBOARD_WIDGETS = [
     // Right rail: glanceable widgets, none of them wide enough to need many columns. Sized so the rail
     // meets the left column at y=14 and y=21 and finishes level with it, instead of trailing off.
     { key: 'activity', label: 'Recent activity', x: 16, y: 6, w: 8, h: 8, minW: 6, minH: 8 },
-    { key: 'tenders', label: 'Latest tenders', x: 16, y: 14, w: 8, h: 8, minW: 6, minH: 8 },
+    { key: 'tenders', label: 'Active tenders', size: 'large', x: 16, y: 14, w: 8, h: 8, minW: 6, minH: 8 },
     { key: 'stockHealth', label: 'Stock health', x: 16, y: 21, w: 8, h: 4, minW: 5, minH: 4 },
     { key: 'topClients', label: 'Top clients', x: 16, y: 26, w: 8, h: 6, minW: 6, minH: 4 },
     { key: 'topProducts', label: 'Top products', x: 16, y: 32, w: 8, h: 6, minW: 6, minH: 4 },

@@ -13,6 +13,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
+const JoinPage = lazy(() => import('./pages/JoinPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const ProductsPage = lazy(() => import('./pages/ProductsPage'))
 const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'))
@@ -140,6 +141,15 @@ export default function App() {
                 element={
                     <Suspense fallback={<div className="flex min-h-screen items-center justify-center p-6"><LoadingBlock /></div>}>
                         <ResetPasswordPage />
+                    </Suspense>
+                }
+            />
+            {/* Where an invitation link lands. Public: the person following it has no account yet. */}
+            <Route
+                path="/join"
+                element={
+                    <Suspense fallback={<div className="flex min-h-screen items-center justify-center p-6"><LoadingBlock /></div>}>
+                        <JoinPage />
                     </Suspense>
                 }
             />

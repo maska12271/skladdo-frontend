@@ -129,7 +129,7 @@ export default function ProductsPage() {
         const status = filters.status || []
         const activeSel = status.filter((v) => v === 'active' || v === 'inactive')
         if (activeSel.length === 1) params.set('active', activeSel[0] === 'active' ? 'true' : 'false')
-        const stockSel = status.filter((v) => v === 'ok' || v === 'low' || v === 'out')
+        const stockSel = status.filter((v) => v === 'ok' || v === 'below' || v === 'out')
         if (stockSel.length) params.set('stockStatus', stockSel.join(','))
         return params
     }
@@ -577,7 +577,7 @@ export default function ProductsPage() {
                             { value: 'active', label: t('common.active') },
                             { value: 'inactive', label: t('common.inactive') },
                             { value: 'ok', label: t('products.filters.inStock') },
-                            { value: 'low', label: t('products.filters.lowStock') },
+                            { value: 'below', label: t('products.filters.belowMinimum') },
                             { value: 'out', label: t('products.filters.outOfStock') },
                         ],
                     },

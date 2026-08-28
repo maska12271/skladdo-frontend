@@ -122,7 +122,7 @@ export default function WarehouseDashboard({ stats }) {
 
             {lowStock.length > 0 && (
                 <section className="space-y-3">
-                    <SectionHeader title={t('dashboard.titles.lowStock', { count: lowStockCount })} to="/products?status=low" />
+                    <SectionHeader title={t('dashboard.titles.lowStock', { count: lowStockCount })} to="/products?status=below,out" />
                     <DataTable
                         columns={lowStockColumns}
                         rows={lowStock}
