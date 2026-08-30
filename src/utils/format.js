@@ -31,14 +31,87 @@ function activeLocale() {
     return i18n.resolvedLanguage || i18n.language || undefined
 }
 
+/**
+ * The company's chosen date/time patterns, or null for "follow the language".
+ *
+ * Module state rather than a hook, deliberately. `formatDate` is called from 100-odd places across two
+ * dozen files, none of which are otherwise interested in settings; turning it into a hook would mean
+ * rewriting every one of those call sites to make a display preference reach them. Set once from
+ * {@link SettingsProvider} when the company's settings arrive, which happens on authentication — before
+ * any page has data to render a date for.
+ */
+let companyDateFormat = null
+let companyTimeFormat = null
+
+/** Applies the company's format preference. Called by SettingsProvider; pass nulls to fall back to locale. */
+export function setDateTimeFormats(dateFormat, timeFormat) {
+    companyDateFormat = DATE_PATTERNS[dateFormat] ? dateFormat : null
+    companyTimeFormat = TIME_PATTERNS[timeFormat] ? timeFormat : null
+}
+
+const pad = (n) => String(n).padStart(2, '0')
+
+// Written out rather than mapped through Intl: these are exact patterns the company picked, and Intl
+// would re-order them to suit the locale, which is the very thing the setting exists to override.
+const DATE_PATTERNS = {
+    'dd.MM.yyyy': (d) => `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`,
+    'dd/MM/yyyy': (d) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`,
+    'MM/dd/yyyy': (d) => `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()}`,
+    'yyyy-MM-dd': (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+}
+
+const TIME_PATTERNS = {
+    'HH:mm': (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    'hh:mm a': (d) => {
+        const h = d.getHours()
+        const h12 = h % 12 === 0 ? 12 : h % 12
+        return `${h12}:${pad(d.getMinutes())} ${h < 12 ? 'AM' : 'PM'}`
+    },
+}
+
+/**
+ * Renders a date/time in an explicit pattern, ignoring whatever the company has chosen.
+ *
+ * For the format pickers on the settings page, which have to show what each option *would* look like
+ * while the company is still on a different one. Exported rather than reimplemented there so a sample can
+ * never disagree with what the app will actually print.
+ */
+export function formatDateIn(pattern, date) {
+    return DATE_PATTERNS[pattern] ? DATE_PATTERNS[pattern](date) : pattern
+}
+
+export function formatTimeIn(pattern, date) {
+    return TIME_PATTERNS[pattern] ? TIME_PATTERNS[pattern](date) : pattern
+}
+
+/** Guards against an unparseable value reaching a formatter, which would render "NaN.NaN.NaN". */
+const toDate = (value) => {
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? null : date
+}
+
 export function formatDate(value) {
     if (!value) return '-'
-    return new Date(value).toLocaleDateString(activeLocale())
+    const date = toDate(value)
+    if (!date) return '-'
+    const pattern = DATE_PATTERNS[companyDateFormat]
+    return pattern ? pattern(date) : date.toLocaleDateString(activeLocale())
 }
 
 export function formatDateTime(value) {
     if (!value) return '-'
-    return new Date(value).toLocaleString(activeLocale())
+    const date = toDate(value)
+    if (!date) return '-'
+    const datePart = DATE_PATTERNS[companyDateFormat]
+    const timePart = TIME_PATTERNS[companyTimeFormat]
+    // Either half can be on its own: a company may pin the date order and leave the clock to the
+    // language, or the other way round, so each half falls back independently.
+    if (!datePart && !timePart) return date.toLocaleString(activeLocale())
+    const left = datePart ? datePart(date) : date.toLocaleDateString(activeLocale())
+    const right = timePart
+        ? timePart(date)
+        : date.toLocaleTimeString(activeLocale(), { hour: '2-digit', minute: '2-digit' })
+    return `${left} ${right}`
 }
 
 export function safeArray(value) {

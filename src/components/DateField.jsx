@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { createPortal } from 'react-dom'
+import { useSettings } from '../context/SettingsContext'
+import { holidayKeyFor } from '../constants/holidays'
 
 /**
  * The app's own date control, replacing `<input type="date">`.
@@ -62,6 +64,21 @@ function firstDayOfWeek(locale) {
     }
 }
 
+/**
+ * The weekday the grid starts on, in `Date.getDay()` terms (0 = Sunday).
+ *
+ * The company setting wins where it is set; otherwise the locale decides, which is what this did before
+ * the setting existed — so an untouched company sees no change. The setting is stored ISO-style
+ * (1 = Monday … 7 = Sunday), hence folding Sunday from 7 down to 0.
+ */
+function resolveFirstDay(companyFirstDay, locale) {
+    const iso = Number(companyFirstDay)
+    if (Number.isInteger(iso) && iso >= 1 && iso <= 7) {
+        return iso === 7 ? 0 : iso
+    }
+    return firstDayOfWeek(locale)
+}
+
 function formatForInput(date, { order, separator }) {
     if (!date) return ''
     const pad = (n) => String(n).padStart(2, '0')
@@ -112,6 +129,9 @@ export default function DateField({
     const { t, i18n } = useTranslation()
     const locale = i18n.resolvedLanguage || i18n.language || 'en'
     const pattern = useMemo(() => localePattern(locale), [locale])
+    // Optional chaining because the field also renders outside the authenticated app, where there is no
+    // settings provider above it — there the locale decides, as it always did.
+    const firstDay = resolveFirstDay(useSettings()?.firstDayOfWeek, locale)
 
     const selected = fromIso(value)
     const minDate = fromIso(min)
@@ -270,6 +290,7 @@ export default function DateField({
                     >
                         <CalendarPanel
                             locale={locale}
+                            firstDay={firstDay}
                             visible={visible}
                             setVisible={setVisible}
                             pickingMonth={pickingMonth}
@@ -293,7 +314,7 @@ export default function DateField({
 
 /** The panel's two views: a month of days, and — behind the header — a year of months. */
 function CalendarPanel({
-    locale, visible, setVisible, pickingMonth, setPickingMonth,
+    locale, firstDay, visible, setVisible, pickingMonth, setPickingMonth,
     selected, outOfRange, onPick, onClear, clearable,
 }) {
     const { t } = useTranslation()
@@ -306,10 +327,9 @@ function CalendarPanel({
 
     const weekdayNames = useMemo(() => {
         const fmt = new Intl.DateTimeFormat(locale, { weekday: 'short' })
-        const first = firstDayOfWeek(locale)
         // 2026-11-01 is a Sunday, so adding the weekday index lands on that weekday.
-        return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2026, 10, 1 + ((first + i) % 7))))
-    }, [locale])
+        return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2026, 10, 1 + ((firstDay + i) % 7))))
+    }, [locale, firstDay])
 
     const title = useMemo(
         () => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(visible),
@@ -319,10 +339,10 @@ function CalendarPanel({
     // Six rows always, so the panel does not change height as you page through months.
     const days = useMemo(() => {
         const first = new Date(visible.getFullYear(), visible.getMonth(), 1)
-        const offset = (first.getDay() - firstDayOfWeek(locale) + 7) % 7
+        const offset = (first.getDay() - firstDay + 7) % 7
         const start = new Date(first.getFullYear(), first.getMonth(), 1 - offset)
         return Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i))
-    }, [visible, locale])
+    }, [visible, firstDay])
 
     const step = (delta) => setVisible((current) => (pickingMonth
         ? new Date(current.getFullYear() + delta, current.getMonth(), 1)
@@ -372,15 +392,21 @@ function CalendarPanel({
                 </div>
             ) : (
                 <>
-                    <div className="grid grid-cols-7 text-center text-[11px] font-medium uppercase text-slate-400">
+                    <div data-testid="datefield-weekdays" className="grid grid-cols-7 text-center text-[11px] font-medium uppercase text-slate-400">
                         {weekdayNames.map((label) => <span key={label} className="py-1">{label}</span>)}
                     </div>
-                    <div className="grid grid-cols-7 gap-0.5">
+                    <div data-testid="datefield-days" className="grid grid-cols-7 gap-0.5">
                         {days.map((day) => {
                             const isSelected = selected && day.getTime() === selected.getTime()
                             const isToday = day.getTime() === today.getTime()
                             const otherMonth = day.getMonth() !== visible.getMonth()
                             const blocked = outOfRange(day)
+                            // A public holiday is still a perfectly pickable date — deliveries and
+                            // deadlines land on them — so this only colours the day and names it on
+                            // hover. Selection and "today" still win the styling: which day you picked
+                            // matters more than which day is a holiday.
+                            const holidayKey = holidayKeyFor(toIso(day))
+                            const holidayName = holidayKey ? t(`holidays.${holidayKey}`) : undefined
                             return (
                                 <button
                                     key={day.getTime()}
@@ -388,14 +414,18 @@ function CalendarPanel({
                                     disabled={blocked}
                                     onClick={() => onPick(day)}
                                     aria-current={isToday ? 'date' : undefined}
+                                    title={holidayName}
+                                    aria-label={holidayName ? `${day.getDate()} — ${holidayName}` : undefined}
                                     className={`h-9 rounded-lg text-sm tabular-nums transition disabled:cursor-not-allowed disabled:opacity-30 ${
                                         isSelected
                                             ? 'bg-teal-600 font-semibold text-white'
                                             : isToday
                                                 ? 'font-semibold text-teal-700 ring-1 ring-inset ring-teal-500 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-500/10'
-                                                : otherMonth
-                                                    ? 'text-slate-400 hover:bg-slate-100 dark:text-slate-600 dark:hover:bg-slate-800'
-                                                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
+                                                : holidayKey
+                                                    ? `font-medium hover:bg-rose-50 dark:hover:bg-rose-500/10 ${otherMonth ? 'text-rose-300 dark:text-rose-500/60' : 'text-rose-600 dark:text-rose-400'}`
+                                                    : otherMonth
+                                                        ? 'text-slate-400 hover:bg-slate-100 dark:text-slate-600 dark:hover:bg-slate-800'
+                                                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
                                     }`}
                                 >
                                     {day.getDate()}

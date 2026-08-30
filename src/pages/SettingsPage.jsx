@@ -14,6 +14,7 @@ import { FormField, FormSelect, PasswordAwareInput } from '../components/FormFie
 import PhoneField from '../components/PhoneField'
 import UnitSelect from '../components/UnitSelect.jsx'
 import { SUPPORTED_LANGUAGES } from '../i18n'
+import { formatDateIn, formatTimeIn } from '../utils/format'
 import AddressAutocompleteField from '../components/AddressAutocompleteField.jsx'
 import EmailTemplatesManager from '../components/EmailTemplatesManager'
 import PlanBillingTab from '../components/PlanBillingTab'
@@ -66,13 +67,24 @@ function SettingsTabs({ tabs, current, onChange }) {
     }, [current])
 
     return (
-        <div className="scrollbar-none flex gap-2 overflow-x-auto border-b border-slate-200 md:flex-wrap md:overflow-x-visible dark:border-slate-800">
+        // The rule under the strip is a sibling of the scrollport, not a border on it. The active tab has
+        // to cover that rule with its own 2px underline, which used to be done with `-mb-px` on the
+        // buttons — but a negative margin inside a scrollport is 1px of vertical overflow, and `overflow-x:
+        // auto` forces `overflow-y` to `auto` as well, so swiping the tabs sideways on a phone also caught a
+        // stray 1px vertical scroll. Both layers are positioned so the tabs, later in the DOM, still paint
+        // over the rule.
+        <div className="relative">
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 border-b border-slate-200 dark:border-slate-800"
+            />
+            <div className="scrollbar-none relative flex gap-2 overflow-x-auto md:flex-wrap md:overflow-x-visible">
             {tabs.map(({ key, icon: Icon }) => (
                 <button
                     key={key}
                     ref={key === current ? activeRef : null}
                     onClick={() => onChange(key)}
-                    className={`-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-t-xl border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+                    className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-t-xl border-b-2 px-4 py-2.5 text-sm font-medium transition ${
                         key === current
                             ? 'border-teal-600 text-teal-700 dark:text-teal-400'
                             : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
@@ -82,6 +94,7 @@ function SettingsTabs({ tabs, current, onChange }) {
                     {t(`settings.tabs.${key}`)}
                 </button>
             ))}
+            </div>
         </div>
     )
 }
@@ -89,6 +102,19 @@ function SettingsTabs({ tabs, current, onChange }) {
 // IANA timezone options for the General tab. Intl.supportedValuesOf gives the full canonical list without
 // a dependency; the short fallback keeps the field usable on an engine that lacks it. UTC is guaranteed
 // present because it is the backend's default when a company has not chosen one.
+// Date/time patterns offered on the General tab. Must stay in step with both the backend's
+// CompanySettings.SUPPORTED_*_FORMATS whitelist and the renderers in utils/format.js — a pattern missing
+// from either end silently falls back to the language default.
+const DATE_FORMATS = ['dd.MM.yyyy', 'dd/MM/yyyy', 'MM/dd/yyyy', 'yyyy-MM-dd']
+const TIME_FORMATS = ['HH:mm', 'hh:mm a']
+
+// A fixed, unambiguous instant for the previews: a 25th-of-the-month afternoon reads differently under
+// every pattern above, so no two options can look alike.
+const SAMPLE = new Date(2026, 11, 25, 14, 30)
+
+const formatSample = (pattern) => formatDateIn(pattern, SAMPLE)
+const timeSample = (pattern) => formatTimeIn(pattern, SAMPLE)
+
 const TIMEZONES = (() => {
     let zones
     try {
@@ -221,6 +247,12 @@ export default function SettingsPage() {
         currency: (settings.currency || 'EUR').toUpperCase(),
         pricesIncludeTax: !!settings.pricesIncludeTax,
         timezone: settings.timezone || 'UTC',
+        // Blank means "follow the viewer's locale", which the API stores as null.
+        firstDayOfWeek: settings.firstDayOfWeek === '' || settings.firstDayOfWeek == null
+            ? null
+            : Number(settings.firstDayOfWeek),
+        dateFormat: settings.dateFormat || null,
+        timeFormat: settings.timeFormat || null,
         invoiceNumberPrefix: settings.invoiceNumberPrefix || '',
         tenderNumberPrefix: settings.tenderNumberPrefix || null,
         invoicePaymentTermDays: Number(settings.invoicePaymentTermDays) || 0,
@@ -543,6 +575,48 @@ export default function SettingsPage() {
                             />
                             <p className="text-xs text-slate-500 dark:text-slate-400">{t('settings.general.timezoneHint')}</p>
                         </div>
+                        <div className="space-y-1">
+                            {/* Empty string, not 0, for "follow the browser's locale": the ISO day numbers
+                                start at 1, so no real choice collides with it. */}
+                            <FormSelect
+                                id="firstDayOfWeek"
+                                label={t('settings.general.firstDayOfWeek')}
+                                name="firstDayOfWeek"
+                                value={settings.firstDayOfWeek == null ? '' : String(settings.firstDayOfWeek)}
+                                onChange={handleSettingsChange}
+                                options={[
+                                    { value: '', label: t('settings.general.firstDayAutomatic') },
+                                    { value: '1', label: t('settings.general.monday') },
+                                    { value: '6', label: t('settings.general.saturday') },
+                                    { value: '7', label: t('settings.general.sunday') },
+                                ]}
+                            />
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{t('settings.general.firstDayOfWeekHint')}</p>
+                        </div>
+                        {/* Sample dates rather than bare patterns: "dd.MM.yyyy" is precise but nobody reads
+                            it as fast as they read the date it produces. */}
+                        <FormSelect
+                            id="dateFormat"
+                            label={t('settings.general.dateFormat')}
+                            name="dateFormat"
+                            value={settings.dateFormat || ''}
+                            onChange={handleSettingsChange}
+                            options={[
+                                { value: '', label: t('settings.general.formatAutomatic') },
+                                ...DATE_FORMATS.map((f) => ({ value: f, label: `${formatSample(f)}  ·  ${f}` })),
+                            ]}
+                        />
+                        <FormSelect
+                            id="timeFormat"
+                            label={t('settings.general.timeFormat')}
+                            name="timeFormat"
+                            value={settings.timeFormat || ''}
+                            onChange={handleSettingsChange}
+                            options={[
+                                { value: '', label: t('settings.general.formatAutomatic') },
+                                ...TIME_FORMATS.map((f) => ({ value: f, label: `${timeSample(f)}  ·  ${f}` })),
+                            ]}
+                        />
                     </div>
 
                     {!isWarehouseAccount && (

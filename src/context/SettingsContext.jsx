@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { apiGet } from '../api/client'
 import { useAuth } from './AuthContext'
+import { setDateTimeFormats } from '../utils/format'
 
 const SettingsContext = createContext(null)
 
@@ -13,6 +14,13 @@ const DEFAULTS = {
     invoicePaymentTermDays: 14,
     latePaymentPenaltyPercent: 0,
     penaltyPeriod: 'DAILY',
+    // ISO day the week starts on (1 = Monday ... 7 = Sunday); null means follow the viewer's locale.
+    firstDayOfWeek: null,
+    // Date/time patterns; null means follow the viewer's language.
+    dateFormat: null,
+    timeFormat: null,
+    // Unit a new product or line starts on.
+    defaultProductUnit: 'pcs',
 }
 
 /**
@@ -41,7 +49,17 @@ export function SettingsProvider({ children }) {
                     invoicePaymentTermDays: fresh.invoicePaymentTermDays ?? 14,
                     latePaymentPenaltyPercent: Number(fresh.latePaymentPenaltyPercent) || 0,
                     penaltyPeriod: fresh.penaltyPeriod || 'DAILY',
+                    // `?? null` rather than `|| null`: the API sends a number, and coercing a falsy-but-
+                    // valid value would be wrong here if the range ever starts at 0.
+                    firstDayOfWeek: fresh.firstDayOfWeek ?? null,
+                    dateFormat: fresh.dateFormat ?? null,
+                    timeFormat: fresh.timeFormat ?? null,
+                    defaultProductUnit: fresh.defaultProductUnit || 'pcs',
                 })
+                // Pushed into the formatting module rather than read from this context: the ~100 call
+                // sites for formatDate/formatDateTime are plain functions in tables and detail rows, and
+                // this is what lets them all honour the setting without being rewritten as hooks.
+                setDateTimeFormats(fresh.dateFormat ?? null, fresh.timeFormat ?? null)
             }
         } catch {
             /* Fall back to defaults; a transient failure shouldn't block the app. */
@@ -52,6 +70,8 @@ export function SettingsProvider({ children }) {
         if (!isAuthenticated) {
             setSettings(DEFAULTS)
             setCurrencies([])
+            // Cleared on sign-out so the next company in this tab does not inherit the last one's formats.
+            setDateTimeFormats(null, null)
             return
         }
         refresh()
@@ -61,7 +81,7 @@ export function SettingsProvider({ children }) {
     }, [isAuthenticated, refresh])
 
     const value = useMemo(() => {
-        const { currency, pricesIncludeTax, defaultTaxPercent, defaultWarehouseId, defaultPrepaymentPercent, invoicePaymentTermDays, latePaymentPenaltyPercent, penaltyPeriod } = settings
+        const { currency, pricesIncludeTax, defaultTaxPercent, defaultWarehouseId, defaultPrepaymentPercent, invoicePaymentTermDays, latePaymentPenaltyPercent, penaltyPeriod, firstDayOfWeek, dateFormat, timeFormat, defaultProductUnit } = settings
 
         // The tax percentage that applies to a value: an explicit rate, else the company default.
         const effectiveTaxPercent = (taxPercent) =>
@@ -102,6 +122,10 @@ export function SettingsProvider({ children }) {
             invoicePaymentTermDays,
             latePaymentPenaltyPercent,
             penaltyPeriod,
+            firstDayOfWeek,
+            dateFormat,
+            timeFormat,
+            defaultProductUnit,
             effectiveTaxPercent,
             formatCurrency,
             formatPrice,
