@@ -5,7 +5,7 @@ import Modal from './Modal'
 import { usePermissions } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { safeArray } from '../utils/format'
-import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Check, Pencil, Plus, Trash2 } from 'lucide-react'
 
 /**
  * In-place CRUD for a category taxonomy, shown in a modal so it can be launched from the page that
@@ -101,29 +101,34 @@ export default function CategoryManagerModal({ isOpen, onClose, endpoint, module
     return (
         <Modal isOpen={isOpen} title={t(`${i18nKey}.manageTitle`)} onClose={onClose} width="max-w-2xl">
             <div className="space-y-4">
+                {/* Stacked rather than a single row of inputs: the description is a sentence, and sharing
+                    one line with the name left both too narrow to read what you had typed. */}
                 {canCreate && (
-                    <form onSubmit={handleCreate} className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3 dark:border-slate-800 sm:flex-row sm:items-center">
+                    <form onSubmit={handleCreate} className="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
                         <input
                             value={newForm.name}
                             onChange={(e) => setNewForm((prev) => ({ ...prev, name: e.target.value }))}
                             placeholder={t('common.name')}
-                            className={inputClass + ' sm:flex-1'}
+                            className={inputClass}
                             aria-label={t('common.name')}
                         />
-                        <input
+                        <textarea
                             value={newForm.description}
                             onChange={(e) => setNewForm((prev) => ({ ...prev, description: e.target.value }))}
                             placeholder={t('common.description')}
-                            className={inputClass + ' sm:flex-1'}
+                            rows={2}
+                            className={inputClass + ' resize-y'}
                             aria-label={t('common.description')}
                         />
-                        <button
-                            type="submit"
-                            disabled={loading || !newForm.name.trim()}
-                            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-60"
-                        >
-                            <Plus className="h-4 w-4" /> {t('common.add')}
-                        </button>
+                        <div className="flex justify-end">
+                            <button
+                                type="submit"
+                                disabled={loading || !newForm.name.trim()}
+                                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-60"
+                            >
+                                <Plus className="h-4 w-4" /> {t('common.add')}
+                            </button>
+                        </div>
                     </form>
                 )}
 
@@ -132,92 +137,105 @@ export default function CategoryManagerModal({ isOpen, onClose, endpoint, module
                         <li className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">{t('common.none')}</li>
                     )}
                     {rows.map((item) => (
-                        <li key={item.id} className="flex items-center gap-3 py-2.5">
+                        <li key={item.id} className="py-2.5">
                             {editingId === item.id ? (
-                                <>
+                                // The editor takes the full width of the row rather than squeezing two
+                                // fields and two buttons onto one line, so the description has room to be
+                                // read and edited as the sentence it is.
+                                <div className="space-y-2">
                                     <input
                                         value={editForm.name}
                                         onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                                        className={inputClass + ' flex-1'}
+                                        className={inputClass}
+                                        placeholder={t('common.name')}
                                         aria-label={t('common.name')}
                                     />
-                                    <input
+                                    <textarea
                                         value={editForm.description}
                                         onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
                                         placeholder={t('common.description')}
-                                        className={inputClass + ' flex-1'}
+                                        rows={2}
+                                        className={inputClass + ' resize-y'}
                                         aria-label={t('common.description')}
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() => handleUpdate(item)}
-                                        disabled={loading || !editForm.name.trim()}
-                                        className="rounded-lg p-2 text-teal-600 hover:bg-teal-50 disabled:opacity-50 dark:hover:bg-teal-900/20"
-                                        aria-label={t('common.saveChanges')}
-                                    >
-                                        <Check className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setEditingId(null)}
-                                        className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                                        aria-label={t('common.cancel')}
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                </>
+                                    <div className="flex justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingId(null)}
+                                            className="rounded-xl border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700"
+                                        >
+                                            {t('common.cancel')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleUpdate(item)}
+                                            disabled={loading || !editForm.name.trim()}
+                                            className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-60"
+                                        >
+                                            <Check className="h-4 w-4" /> {t('common.save')}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : confirmingId === item.id ? (
+                                // Deleting is allowed even when the category is in use, so the warning has
+                                // to say what that costs - the records are kept, they just come out of this
+                                // category - and it needs a line of its own to say it in.
+                                <div className="space-y-2 rounded-xl bg-rose-50 p-3 dark:bg-rose-950/30">
+                                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                                        {t(`${i18nKey}.deleteConfirm`, { name: item.name })}
+                                    </p>
+                                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                                        {t(`${i18nKey}.deleteWarning`)}
+                                    </p>
+                                    <div className="flex justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmingId(null)}
+                                            className="rounded-xl border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700"
+                                        >
+                                            {t('common.cancel')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDelete(item)}
+                                            disabled={loading}
+                                            className="rounded-xl bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-60"
+                                        >
+                                            {t('common.delete')}
+                                        </button>
+                                    </div>
+                                </div>
                             ) : (
-                                <>
+                                <div className="flex items-center gap-3">
                                     <div className="min-w-0 flex-1">
                                         <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{item.name}</p>
                                         {item.description && (
                                             <p className="truncate text-xs text-slate-500 dark:text-slate-400">{item.description}</p>
                                         )}
                                     </div>
-                                    {confirmingId === item.id ? (
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-slate-500 dark:text-slate-400">{t('common.delete')}?</span>
+                                    <div className="flex items-center gap-1">
+                                        {canEdit && (
                                             <button
                                                 type="button"
-                                                onClick={() => handleDelete(item)}
-                                                disabled={loading}
-                                                className="rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-60"
+                                                onClick={() => startEdit(item)}
+                                                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                                aria-label={t('common.edit')}
                                             >
-                                                {t('common.delete')}
+                                                <Pencil className="h-4 w-4" />
                                             </button>
+                                        )}
+                                        {canDelete && (
                                             <button
                                                 type="button"
-                                                onClick={() => setConfirmingId(null)}
-                                                className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs dark:border-slate-700"
+                                                onClick={() => setConfirmingId(item.id)}
+                                                className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                                                aria-label={t('common.delete')}
                                             >
-                                                {t('common.cancel')}
+                                                <Trash2 className="h-4 w-4" />
                                             </button>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-1">
-                                            {canEdit && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => startEdit(item)}
-                                                    className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-                                                    aria-label={t('common.edit')}
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                </button>
-                                            )}
-                                            {canDelete && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setConfirmingId(item.id)}
-                                                    className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20"
-                                                    aria-label={t('common.delete')}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
-                                            )}
-                                        </div>
-                                    )}
-                                </>
+                                        )}
+                                    </div>
+                                </div>
                             )}
                         </li>
                     ))}

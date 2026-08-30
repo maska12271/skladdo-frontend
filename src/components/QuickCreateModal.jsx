@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiGet, apiPost } from '../api/client'
 import { FormField, FormSelect } from './FormField'
+import UnitSelect from './UnitSelect.jsx'
 import PhoneField from './PhoneField'
 import CountrySelectField from './CountrySelectField'
 import { useFrequentCountries } from '../hooks/useFrequentCountries'
@@ -77,7 +78,7 @@ const CONFIGS = {
 export default function QuickCreateModal({ type, initialName = '', isOpen, onClose, onCreated }) {
     const { t } = useTranslation()
     const toast = useToast()
-    const { currencySymbol } = useSettings()
+    const { currencySymbol, defaultProductUnit } = useSettings()
     const config = CONFIGS[type]
     const [form, setForm] = useState({ name: '' })
     const [categories, setCategories] = useState([])
@@ -90,7 +91,9 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
 
     useEffect(() => {
         if (!isOpen) return
-        setForm({ name: initialName })
+        // Only the product form has a unit; seeding it for the others would put a stray field in the
+        // payload. The company default is what the product would have been measured in anyway.
+        setForm(type === 'product' ? { name: initialName, unit: defaultProductUnit || '' } : { name: initialName })
         if (type === 'product') {
             Promise.all([
                 apiGet('/categories?page=0&size=500&sortBy=name&sortDir=asc'),
@@ -106,7 +109,7 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
                 .then((cats) => setCategories(safeArray(cats)))
                 .catch(() => setCategories([]))
         }
-    }, [isOpen, initialName, type])
+    }, [isOpen, initialName, type, defaultProductUnit])
 
     // Intercept Escape in capture phase so parent modal doesn't also close
     useEffect(() => {
@@ -200,7 +203,7 @@ export default function QuickCreateModal({ type, initialName = '', isOpen, onClo
                         <>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <FormField id="qc-sku" label={t('common.sku')} name="sku" value={form.sku || ''} onChange={handleChange} placeholder={t('common.optional')} />
-                                <FormField id="qc-unit" label={t('common.unit')} name="unit" value={form.unit || ''} onChange={handleChange} placeholder={t('quickCreate.unitPlaceholder')} />
+                                <UnitSelect id="qc-unit" label={t('common.unit')} name="unit" value={form.unit || ''} onChange={handleChange} allowEmpty />
                             </div>
                             <FormField id="qc-price" label={`${t('common.price')} (${currencySymbol()})`} name="price" type="number" step="0.01" value={form.price || ''} onChange={handleChange} required placeholder="0.00" />
                             <FormSelect

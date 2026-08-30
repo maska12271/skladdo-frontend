@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../api/client'
@@ -179,7 +179,11 @@ export default function SalesOrdersPage() {
     // productId -> on-hand quantity in the currently selected warehouse (for availability hints).
     const [stockLevels, setStockLevels] = useState({})
     // Form-level validation message shown in the modal when submit is blocked.
-    const [formError, setFormError] = useState('')
+    // `{ message, focusId }` for the first problem found, or null. A fresh object per failed submit, so the
+    // scroll effect below re-runs even when the same message comes back twice.
+    const [formError, setFormError] = useState(null)
+    // Fallback scroll target for a validation message that names no single field (an order with no lines).
+    const formErrorRef = useRef(null)
     // When editing an order that already shipped, its own units were already drawn from the warehouse,
     // so they must be added back to the "available" pool to validate its quantities fairly.
     const [editBaseline, setEditBaseline] = useState(null)
@@ -190,8 +194,22 @@ export default function SalesOrdersPage() {
 
     // Clear the validation banner as soon as the user edits the form again.
     useEffect(() => {
-        setFormError('')
+        setFormError(null)
     }, [form])
+
+    // Bring the control at fault into view once the banner is in the DOM. A layout effect rather than a
+    // callback in the submit handler: the banner adds height to a form that is several screens tall on a
+    // phone, and scrolling before React has committed it lands in the wrong place — the browser then
+    // re-anchors the scrollport and undoes the move. Running before paint also means no visible jump.
+    useLayoutEffect(() => {
+        if (!formError) return
+        const field = formError.focusId ? document.getElementById(formError.focusId) : null
+        const target = field ?? formErrorRef.current
+        target?.scrollIntoView({ block: 'center' })
+        // Focus lands on the control itself, so a keyboard or screen-reader user carries on from the
+        // problem rather than from wherever they were.
+        field?.focus?.({ preventScroll: true })
+    }, [formError])
 
     // Pick a sensible warehouse for a new order: the company default if it still exists, else the only
     // warehouse when there is just one, else leave it for the user to choose.
@@ -288,9 +306,9 @@ export default function SalesOrdersPage() {
 
     const openCreate = async () => {
         setEditingId(null)
-        setFormError('')
+        setFormError(null)
         setEditBaseline(null)
-        setForm({ ...emptyForm, orderDate: todayStr(), warehouseId: pickDefaultWarehouse(), currency: baseCurrency || 'EUR', items: [{ ...emptyItem }] })
+        setForm({ ...emptyForm, orderDate: todayStr(), warehouseId: pickDefaultWarehouse(), currency: baseCurrency || 'EUR', items: [{ ...emptyItem, taxRatePercent: defaultTaxValue }] })
         formModal.open()
         // Prefill a system-suggested order number the user can override.
         try {
@@ -313,7 +331,7 @@ export default function SalesOrdersPage() {
     const openEdit = (item) => {
         setEditingId(item.id)
         setSuggestedOrderNumber(null)
-        setFormError('')
+        setFormError(null)
         // Stock-affecting orders (shipped/closed) already consumed their units; remember per-product
         // totals so the availability check credits them back when re-validating this order.
         const wasStockAffecting = ['SHIPPED', 'CLOSED'].includes(item.status)
@@ -383,11 +401,15 @@ export default function SalesOrdersPage() {
 
     // Picking a product or a service prefills its unit price and tax rate (its own rate, else the
     // default), and clears whichever of the two ids the line is no longer for.
-    const handleItemRefChange = (index, encoded) => {
+    // `justCreated` carries the record straight from a quick-created service. Without it the lookup below
+    // would miss: `setServices` has not re-rendered yet when the callback runs, so the array in this
+    // closure is still the pre-create one and `ref` came back undefined — leaving the new line at the
+    // empty item's 0 price and the fallback tax rate.
+    const handleItemRefChange = (index, encoded, justCreated = null) => {
         const { isService, id } = decodeRef(encoded)
-        const ref = isService
+        const ref = justCreated ?? (isService
             ? services.find((s) => String(s.id) === id)
-            : products.find((p) => String(p.id) === id)
+            : products.find((p) => String(p.id) === id))
         setForm((prev) => ({
             ...prev,
             items: prev.items.map((item, i) =>
@@ -407,8 +429,11 @@ export default function SalesOrdersPage() {
         }))
     }
 
+    // New lines open on the company's default rate rather than "No tax". Picking a product still
+    // overrides it with that product's own rate, so this only decides what an untouched line reads as —
+    // and "No tax" was the one answer that was almost never right.
     const addItem = () => {
-        setForm((prev) => ({ ...prev, items: [...prev.items, { ...emptyItem }] }))
+        setForm((prev) => ({ ...prev, items: [...prev.items, { ...emptyItem, taxRatePercent: defaultTaxValue }] }))
     }
 
     const removeItem = (index) => {
@@ -426,15 +451,32 @@ export default function SalesOrdersPage() {
         return raw + credit
     }
 
-    // Returns a message when the form can't be submitted yet, or null when it is valid.
+    // Returns `{ message, focusId }` for the first problem found, or null when the form is valid.
+    // `focusId` names the control at fault so the caller can bring it into view: the banner renders at the
+    // very top of a form that is several screens tall on a phone, so a submit from down among the line
+    // items used to look like nothing had happened at all.
     const validate = () => {
-        if (!form.clientId) return t('salesOrders.validation.clientRequired')
-        if (!form.warehouseId) return t('salesOrders.validation.warehouseRequired')
-        if (!form.items.length) return t('salesOrders.validation.itemRequired')
+        if (!form.clientId) {
+            return { message: t('salesOrders.validation.clientRequired'), focusId: 'sales-order-client' }
+        }
+        if (!form.warehouseId) {
+            return { message: t('salesOrders.validation.warehouseRequired'), focusId: 'sales-order-warehouse' }
+        }
+        if (!form.items.length) return { message: t('salesOrders.validation.itemRequired'), focusId: null }
         for (let i = 0; i < form.items.length; i++) {
             const it = form.items[i]
-            if (!it.productId && !it.serviceId) return t('salesOrders.validation.productRequired', { line: i + 1 })
-            if (!(Number(it.quantity) > 0)) return t('salesOrders.validation.quantityRequired', { line: i + 1 })
+            if (!it.productId && !it.serviceId) {
+                return {
+                    message: t('salesOrders.validation.productRequired', { line: i + 1 }),
+                    focusId: `sales-order-item-product-${i}`,
+                }
+            }
+            if (!(Number(it.quantity) > 0)) {
+                return {
+                    message: t('salesOrders.validation.quantityRequired', { line: i + 1 }),
+                    focusId: `sales-order-item-quantity-${i}`,
+                }
+            }
         }
         // Block overselling: no line may exceed what the chosen warehouse holds. Service lines are
         // skipped — there is no stock to oversell.
@@ -443,7 +485,10 @@ export default function SalesOrdersPage() {
             if (!it.productId) continue
             const available = availableFor(it.productId)
             if (Number(it.quantity) > available) {
-                return t('salesOrders.validation.overStock', { line: i + 1, available })
+                return {
+                    message: t('salesOrders.validation.overStock', { line: i + 1, available }),
+                    focusId: `sales-order-item-quantity-${i}`,
+                }
             }
         }
         return null
@@ -457,7 +502,7 @@ export default function SalesOrdersPage() {
             setFormError(validationError)
             return
         }
-        setFormError('')
+        setFormError(null)
         setLoading(true)
 
         // If the user kept the system suggestion, send a blank number so the backend allocates (and
@@ -713,8 +758,12 @@ export default function SalesOrdersPage() {
             >
                 <form onSubmit={handleSubmit} className="space-y-5" noValidate>
                     {formError && (
-                        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
-                            {formError}
+                        <div
+                            ref={formErrorRef}
+                            role="alert"
+                            className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                        >
+                            {formError.message}
                         </div>
                     )}
                     <div className="grid gap-4 md:grid-cols-2">
@@ -902,23 +951,20 @@ export default function SalesOrdersPage() {
                                                         search: service.code,
                                                     })),
                                                 ]}
-                                                // Both kinds, named: one merged picker means a bare
-                                                // "create" could not say which of the two it would make.
+                                                // Services only. A product invented here would be created
+                                                // with no stock, and the overselling guard below then
+                                                // refuses the very line it was made for — so the offer led
+                                                // to a dead end. Products are stocked before they are sold:
+                                                // they get created on the products page, or on the purchase
+                                                // order that brings them in. A service has no stock to run
+                                                // out of, so it stays.
                                                 quickCreateActions={[
-                                                    {
-                                                        key: 'product',
-                                                        label: t('quickCreate.product'),
-                                                        onSelect: (name) => openQuickCreate('product', name, (created) => {
-                                                            setProducts((prev) => [...prev, created.raw])
-                                                            handleItemRefChange(index, `p-${created.value}`)
-                                                        }),
-                                                    },
                                                     {
                                                         key: 'service',
                                                         label: t('quickCreate.service'),
                                                         onSelect: (name) => openQuickCreate('service', name, (created) => {
                                                             setServices((prev) => [...prev, created.raw])
-                                                            handleItemRefChange(index, `s-${created.value}`)
+                                                            handleItemRefChange(index, `s-${created.value}`, created.raw)
                                                         }),
                                                     },
                                                 ]}

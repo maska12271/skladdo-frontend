@@ -91,7 +91,7 @@ export default function ProductsPage() {
     const { canCreate: canCreateCategory, canEdit: canEditCategory, canDelete: canDeleteCategory } = usePermissions('CATEGORIES')
     const canManageCategories = canCreateCategory || canEditCategory || canDeleteCategory
     const { canSeePrices } = useAuth()
-    const { formatPrice, pricesIncludeTax, defaultTaxPercent, currency: baseCurrency, currencies, currencySymbol } = useSettings()
+    const { formatPrice, pricesIncludeTax, defaultTaxPercent, currency: baseCurrency, currencies, currencySymbol, defaultProductUnit } = useSettings()
     const toast = useToast()
     const { quickCreate, openQuickCreate, closeQuickCreate, handleQuickCreated } = useQuickCreate()
     const formModal = useModal()
@@ -278,7 +278,13 @@ export default function ProductsPage() {
 
     const openCreate = () => {
         setEditingId(null)
-        setForm(emptyForm)
+        // Start on the company's default rate rather than blank. Blank still means "follow the default"
+        // and is still offered, but a new product is taxed at that rate either way — showing it spares
+        // the user working out what "default" resolves to before they can decide to change it.
+        const fallback = taxRates.find((r) => r.isDefault)
+        // The unit comes from the same place: the company already declares what a new product is measured
+        // in, so making the user pick it again on every product is asking a question already answered.
+        setForm({ ...emptyForm, taxRateId: fallback ? String(fallback.id) : '', unit: defaultProductUnit || '' })
         formModal.open()
     }
 

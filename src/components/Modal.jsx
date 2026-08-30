@@ -126,7 +126,7 @@ export default function Modal({ isOpen, title, children, onClose, width = DEFAUL
                 collapsing toolbars, so a 92vh sheet can still run off the bottom of what you can see —
                 taking the buttons, which are pinned to the bottom of the body, with it. */}
             <div
-                className={`dialog-enter shadow-pop flex max-h-[92dvh] w-full flex-col rounded-t-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 sm:max-h-[85dvh] sm:rounded-3xl ${widthFromSm}`}
+                className={`dialog-enter shadow-pop flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 sm:max-h-[85dvh] sm:rounded-3xl ${widthFromSm}`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="modal-title"

@@ -20,7 +20,9 @@ import Checkbox from '../components/Checkbox'
 import ModalActions from '../components/ModalActions'
 
 const emptyPart = { partNumber: '', title: '', description: '', estimatedValue: '', samplesRequired: false, requirements: [] }
-const emptyRequirementRow = () => ({ description: '', serviceId: '', quantity: '', unit: '', sampleQuantity: '' })
+// `unit` is seeded from the company's default rather than left blank: a requirement row is a quantity of
+// something, and that something is measured in the same unit as everything else the company sells.
+const emptyRequirementRow = (unit = '') => ({ description: '', serviceId: '', quantity: '', unit, sampleQuantity: '' })
 const emptyParticipant = { manufacturerName: '', offeredPrice: '', notes: '', participating: true }
 
 // Total pieces across a part's requirement items (used to derive per-piece figures). Rows without a
@@ -39,7 +41,7 @@ export default function TenderDetailPage() {
     const navigate = useNavigate()
     const toast = useToast()
     const { canEdit } = usePermissions('TENDERS')
-    const { currency: baseCurrency, currencySymbol } = useSettings()
+    const { currency: baseCurrency, currencySymbol, defaultProductUnit } = useSettings()
 
     const [tender, setTender] = useState(null)
     const [parts, setParts] = useState([])
@@ -104,7 +106,7 @@ export default function TenderDetailPage() {
 
     const openAddPart = () => {
         setEditingPartId(null)
-        setPartForm({ ...emptyPart, requirements: [emptyRequirementRow()] })
+        setPartForm({ ...emptyPart, requirements: [emptyRequirementRow(defaultProductUnit)] })
         partModal.open()
     }
 
@@ -133,7 +135,7 @@ export default function TenderDetailPage() {
             return { ...prev, requirements }
         })
     }
-    const addReqRow = () => setPartForm((prev) => ({ ...prev, requirements: [...prev.requirements, emptyRequirementRow()] }))
+    const addReqRow = () => setPartForm((prev) => ({ ...prev, requirements: [...prev.requirements, emptyRequirementRow(defaultProductUnit)] }))
     const removeReqRow = (index) => setPartForm((prev) => ({ ...prev, requirements: prev.requirements.filter((_, i) => i !== index) }))
 
     const savePart = async (e) => {

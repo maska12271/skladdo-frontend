@@ -202,7 +202,9 @@ export default function ServicesPage() {
 
     const openCreate = () => {
         setEditingId(null)
-        setForm(emptyForm)
+        // Start on the company's default rate rather than blank — same reasoning as the product form.
+        const fallback = taxRates.find((r) => r.isDefault)
+        setForm({ ...emptyForm, taxRateId: fallback ? String(fallback.id) : '' })
         formModal.open()
     }
 

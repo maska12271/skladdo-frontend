@@ -311,8 +311,11 @@ export default function PurchaseOrdersPage() {
 
     // Picking a product prefills its unit price (the catalogue price) as a starting point — same as
     // sales orders. The user can still adjust it to the actual purchase cost.
-    const handleProductChange = (index, productId) => {
-        const product = products.find((p) => String(p.id) === String(productId))
+    // `justCreated` carries the record straight from a quick-create. Without it the lookup below would
+    // miss: `setProducts` has not re-rendered yet when the callback runs, so the array in this closure is
+    // still the pre-create one and the new line kept the empty item's 0 price.
+    const handleProductChange = (index, productId, justCreated = null) => {
+        const product = justCreated ?? products.find((p) => String(p.id) === String(productId))
         setForm((prev) => ({
             ...prev,
             items: prev.items.map((item, i) =>
@@ -868,7 +871,7 @@ export default function PurchaseOrdersPage() {
                                     options={products.map((product) => ({ value: String(product.id), label: product.name }))}
                                     onQuickCreate={(name) => openQuickCreate('product', name, (created) => {
                                         setProducts((prev) => [...prev, created.raw])
-                                        handleProductChange(index, created.value)
+                                        handleProductChange(index, created.value, created.raw)
                                     })}
                                 />
 
