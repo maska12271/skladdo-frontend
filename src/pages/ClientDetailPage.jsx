@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, Pencil } from 'lucide-react'
+import { ChevronLeft, Pencil, Mail } from 'lucide-react'
 import { apiGet } from '../api/client'
 import StatCard from '../components/StatCard'
 import StatusBadge from '../components/StatusBadge'
@@ -10,8 +10,11 @@ import DataTable from '../components/DataTable'
 import LoadingBlock from '../components/LoadingBlock'
 import TrendChart from '../components/TrendChart'
 import CopyButton from '../components/CopyButton'
-import { usePermissions } from '../context/AuthContext'
-import { formatMoney, formatDate } from '../utils/format'
+import ComposeEmailModal from '../components/ComposeEmailModal'
+import SentEmailDetailModal from '../components/SentEmailDetailModal'
+import { useModal } from '../hooks/useModal'
+import { useAuth, usePermissions } from '../context/AuthContext'
+import { formatMoney, formatDate, formatDateTime, safeArray } from '../utils/format'
 import { PERIOD_KEYS, periodRange } from '../utils/period'
 import { aggregateOrderLines } from '../utils/orderStats'
 
@@ -20,6 +23,14 @@ export default function ClientDetailPage() {
     const { id } = useParams()
     const navigate = useNavigate()
     const { canEdit } = usePermissions('CLIENTS')
+    // Emailing needs both halves - the company's add-on and this user's permission. Same pair as the
+    // manufacturer page.
+    const { hasAddon } = useAuth()
+    const emailsSold = hasAddon('MANUFACTURER_EMAILS')
+    const { canCreate: sendPerm, canView: viewPerm } = usePermissions('MANUFACTURER_EMAILS')
+    const canSendEmail = sendPerm && emailsSold
+    const canViewEmails = viewPerm && emailsSold
+    const composeModal = useModal()
 
     // Clients are buyers: their activity is the sales orders we fulfil for them.
     const CHART_METRICS = {
@@ -32,6 +43,8 @@ export default function ClientDetailPage() {
     const [period, setPeriod] = useState('all')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(false)
+    const [emailRows, setEmailRows] = useState([])
+    const [emailDetailId, setEmailDetailId] = useState(null)
 
     useEffect(() => {
         let cancelled = false
@@ -49,6 +62,18 @@ export default function ClientDetailPage() {
             cancelled = true
         }
     }, [id])
+
+    // Sent-email history for this client (only when the caller can view emails).
+    const loadEmails = () => {
+        if (!canViewEmails) return
+        apiGet(`/sent-emails?clientId=${id}&size=100&sortBy=sentAt&sortDir=desc`)
+            .then((res) => setEmailRows(safeArray(res)))
+            .catch(() => {})
+    }
+    useEffect(() => {
+        loadEmails()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id, canViewEmails])
 
     // Period filtering (client-side, from the order lines the endpoint already returned).
     const range = periodRange(period)
@@ -87,14 +112,24 @@ export default function ClientDetailPage() {
                     </p>
                     <StatusBadge status={client.active ? 'ACTIVE' : 'INACTIVE'} />
                 </div>
-                {canEdit && (
-                    <button
-                        onClick={() => navigate(`/clients?edit=${client.id}`)}
-                        className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700"
-                    >
-                        <Pencil className="h-4 w-4" /> {t('clientDetail.edit')}
-                    </button>
-                )}
+                <div className="flex flex-wrap gap-2 md:justify-end">
+                    {canSendEmail && (
+                        <button
+                            onClick={composeModal.open}
+                            className="inline-flex items-center gap-2 rounded-xl border border-teal-600 px-4 py-2.5 text-sm font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/40"
+                        >
+                            <Mail className="h-4 w-4" /> {t('emails.sendEmail')}
+                        </button>
+                    )}
+                    {canEdit && (
+                        <button
+                            onClick={() => navigate(`/clients?edit=${client.id}`)}
+                            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-700"
+                        >
+                            <Pencil className="h-4 w-4" /> {t('clientDetail.edit')}
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Facts */}
@@ -153,9 +188,44 @@ export default function ClientDetailPage() {
                     initialPageSize={10}
                 />
             </section>
+
+            {canViewEmails && emailRows.length > 0 && (
+                <section className="space-y-3">
+                    <h2 className="text-lg font-semibold">{t('emails.partnerSection', { count: emailRows.length })}</h2>
+                    <DataTable
+                        tableId="client-emails"
+                        columns={emailColumns(t)}
+                        rows={emailRows}
+                        getRowId={(r) => r.id}
+                        onRowClick={(r) => setEmailDetailId(r.id)}
+                        initialPageSize={10}
+                    />
+                </section>
+            )}
+
+            <ComposeEmailModal
+                isOpen={composeModal.isOpen}
+                recipientType="CLIENT"
+                recipientIds={[Number(id)]}
+                onClose={composeModal.close}
+                onSent={loadEmails}
+            />
+            <SentEmailDetailModal
+                emailId={emailDetailId}
+                isOpen={emailDetailId != null}
+                onClose={() => setEmailDetailId(null)}
+            />
         </div>
     )
 }
+
+const emailColumns = (t) => [
+    { key: 'subject', label: t('emails.cols.subject'), render: (r) => <span className="line-clamp-1">{r.subject}</span> },
+    { key: 'sentAt', label: t('emails.cols.sentAt'), render: (r) => formatDateTime(r.sentAt) },
+    { key: 'status', label: t('common.status'), render: (r) => <StatusBadge status={r.status} /> },
+    { key: 'viewed', label: t('emails.cols.viewed'), render: (r) => (r.viewed ? t('common.yes') : t('common.no')) },
+    { key: 'replied', label: t('emails.cols.replied'), render: (r) => (r.replied ? t('common.yes') : t('common.no')) },
+]
 
 const orderColumns = (t) => [
     { key: 'orderNumber', label: t('clientDetail.cols.orderNumber'), render: (r) => r.orderNumber || `#${r.orderId}` },

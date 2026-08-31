@@ -61,9 +61,9 @@ export default function EmailBatchDetailPage() {
 
     const columns = [
         {
-            key: 'manufacturerName',
-            label: t('emails.cols.manufacturer'),
-            render: (r) => r.manufacturerName || r.recipientEmail || '—',
+            key: 'recipientName',
+            label: t('emails.cols.partner'),
+            render: (r) => r.recipientName || r.recipientEmail || '—',
         },
         { key: 'recipientEmail', label: t('emails.detail.recipient'), render: (r) => r.recipientEmail || '—' },
         { key: 'status', label: t('common.status'), render: (r) => <StatusBadge status={r.status} /> },

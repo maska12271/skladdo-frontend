@@ -35,7 +35,7 @@ export default function SentEmailDetailModal({ emailId, isOpen, onClose }) {
             ) : (
                 <div className="space-y-5">
                     <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
-                        <Fact label={t('emails.cols.manufacturer')} value={email.manufacturerName || '—'} />
+                        <Fact label={t('emails.cols.partner')} value={email.recipientName || '—'} />
                         <Fact label={t('emails.detail.recipient')} value={email.recipientEmail || '—'} />
                         <Fact label={t('common.status')} value={<StatusBadge status={email.status} />} />
                         <Fact label={t('emails.cols.sentAt')} value={formatDateTime(email.sentAt)} />

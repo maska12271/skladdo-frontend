@@ -15,16 +15,17 @@ import Modal from '../components/Modal'
 import ConfirmModal from '../components/ConfirmModal'
 import { useModal } from '../hooks/useModal'
 import { useFrequentCountries } from '../hooks/useFrequentCountries'
-import { usePermissions } from '../context/AuthContext'
+import { useAuth, usePermissions } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { safeArray, parseBool } from '../utils/format'
 import {FormField, TextareaField} from "../components/FormField.jsx";
 import PhoneField from '../components/PhoneField'
 import CountrySelectField from "../components/CountrySelectField.jsx";
 import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx";
-import { Eye, Pencil, Trash2, Archive, ArchiveRestore, Users, Plus } from 'lucide-react'
+import { Eye, Pencil, Trash2, Archive, ArchiveRestore, Users, Plus, Mail } from 'lucide-react'
 import InfoHint from '../components/InfoHint'
 import ModalActions from '../components/ModalActions'
+import ComposeEmailModal from '../components/ComposeEmailModal'
 
 // One schema drives both export (headers localised to the current language) and import (headers
 // matched against each field's label in every app language). `id` is export-only.
@@ -58,6 +59,11 @@ const emptyForm = {
 export default function ClientsPage() {
     const { t } = useTranslation()
     const { canCreate, canEdit, canDelete } = usePermissions('CLIENTS')
+    // Emailing needs both halves: the company pays for the add-on, and this user may send. Same pair as
+    // the manufacturers list.
+    const { hasAddon } = useAuth()
+    const { canCreate: canSendEmailPerm } = usePermissions('MANUFACTURER_EMAILS')
+    const canSendEmail = canSendEmailPerm && hasAddon('MANUFACTURER_EMAILS')
     const toast = useToast()
     const navigate = useNavigate()
     const frequentCountries = useFrequentCountries('clients')
@@ -81,6 +87,7 @@ export default function ClientsPage() {
     const formModal = useModal()
     const deleteModal = useModal()
     const bulkDeleteModal = useModal()
+    const composeModal = useModal()
 
     const [form, setForm] = useState(emptyForm)
     const [editingId, setEditingId] = useState(null)
@@ -345,7 +352,7 @@ export default function ClientsPage() {
                         ) : null}
                     />
                 }
-                selectable={canDelete}
+                selectable={canDelete || canSendEmail}
                 selectedIds={selectedIds}
                 onSelectionChange={setSelectedIds}
                 onRowClick={(row) => navigate(`/clients/${row.id}`)}
@@ -358,15 +365,33 @@ export default function ClientsPage() {
                 onSortChange={setSort}
                 hideCardSort
                 bulkActions={
-                    canDelete ? (
-                        <button
-                            onClick={bulkDeleteModal.open}
-                            className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700"
-                        >
-                            <Trash2 className="h-4 w-4" /> {t('common.deleteSelected')}
-                        </button>
-                    ) : null
+                    <>
+                        {canSendEmail && (
+                            <button
+                                onClick={composeModal.open}
+                                className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
+                            >
+                                <Mail className="h-4 w-4" /> {t('emails.emailSelected')}
+                            </button>
+                        )}
+                        {canDelete && (
+                            <button
+                                onClick={bulkDeleteModal.open}
+                                className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700"
+                            >
+                                <Trash2 className="h-4 w-4" /> {t('common.deleteSelected')}
+                            </button>
+                        )}
+                    </>
                 }
+            />
+
+            <ComposeEmailModal
+                isOpen={composeModal.isOpen}
+                recipientType="CLIENT"
+                recipientIds={selectedIds}
+                onClose={composeModal.close}
+                onSent={() => setSelectedIds([])}
             />
 
             <Modal isOpen={formModal.isOpen} title={editingId ? t('clients.editTitle') : t('clients.addTitle')} onClose={formModal.close}>

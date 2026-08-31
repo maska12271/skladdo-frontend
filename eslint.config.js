@@ -19,4 +19,10 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // Build-time config runs in Node, not the browser: it reads package.json and shells out to git to
+    // stamp the version, so it needs `process` and friends that the app itself must never touch.
+    files: ['vite.config.js', 'vitest.setup.js', 'eslint.config.js', 'playwright.config.js'],
+    languageOptions: { globals: globals.node },
+  },
 ])

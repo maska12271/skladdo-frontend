@@ -208,7 +208,7 @@ export default function ManufacturerDetailPage() {
             {/* Sent emails */}
             {canViewEmails && (
                 <section className="space-y-3">
-                    <h2 className="text-lg font-semibold">{t('emails.manufacturerSection', { count: emailRows.length })}</h2>
+                    <h2 className="text-lg font-semibold">{t('emails.partnerSection', { count: emailRows.length })}</h2>
                     <DataTable
                         tableId="manufacturer-emails"
                         columns={emailColumns(t)}
@@ -222,7 +222,8 @@ export default function ManufacturerDetailPage() {
 
             <ComposeEmailModal
                 isOpen={composeModal.isOpen}
-                manufacturerIds={[Number(id)]}
+                recipientType="MANUFACTURER"
+                recipientIds={[Number(id)]}
                 onClose={composeModal.close}
                 onSent={loadEmails}
             />

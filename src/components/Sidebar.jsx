@@ -12,8 +12,8 @@ import {
     UserCog,
     Settings,
     LogOut,
-    PanelLeftClose,
-    PanelLeftOpen,
+    ChevronLeft,
+    ChevronRight,
     Warehouse,
     Wrench,
     Mail,
@@ -62,14 +62,30 @@ const PARTNER_LINKS = new Set([
 
 const COLLAPSE_COOKIE = "sidebar_collapsed"
 
-// Tooltip shown to the right of an item when the sidebar is collapsed.
+/**
+ * Tooltip shown to the right of an item when the sidebar is collapsed.
+ *
+ * Always rendered and faded, rather than toggled between `hidden` and `block` — a display switch cannot
+ * be transitioned, so it used to appear and vanish with a snap. `aria-hidden` because every item it
+ * belongs to already carries its own accessible name; without that the label would be announced twice.
+ */
 function Tooltip({ label }) {
     return (
-        <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block dark:bg-slate-700">
+        <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-x-1 -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-[opacity,transform] duration-200 ease-out group-hover:translate-x-0 group-hover:opacity-100 motion-reduce:transition-none dark:bg-slate-700"
+        >
             {label}
         </span>
     )
 }
+
+/**
+ * The one curve and duration everything in the sidebar moves on, so the width, the padding and the
+ * labels arrive together instead of drifting apart. Decelerating hard at the end is what makes a resize
+ * read as settling rather than stopping.
+ */
+const EASE = "duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none"
 
 /**
  * The app's navigation, in two shapes for one set of links.
@@ -203,8 +219,10 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
         ? platformLinks.map((link) => ({ ...link, platform: false }))
         : [...companyLinks, ...platformLinks]
 
+    // Collapsed the tooltips have to escape the column, so it cannot clip; expanded it scrolls, and
+    // `overflow-x-hidden` keeps a horizontal scrollbar from flashing while the width tweens.
     const nav = (
-        <nav className={`flex-1 space-y-0.5 ${collapsed ? "overflow-visible" : "overflow-y-auto"}`}>
+        <nav className={`flex-1 space-y-0.5 ${collapsed ? "overflow-visible" : "overflow-y-auto overflow-x-hidden"}`}>
             {links.map((link, index) => {
                 const Icon = link.icon
                 const startsOwnCompany = link.ownCompany && !links[index - 1]?.ownCompany
@@ -244,11 +262,19 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                             if (link.ownCompany) openOwnCompany(event, link.to)
                             else openClientPage(event, link.to)
                         }}
+                        // Carried explicitly rather than left to the label text, which is zero-width
+                        // while collapsed and may not reach assistive tech from there.
+                        aria-label={link.label ?? t(`nav.${link.labelKey}`)}
                         className={({ isActive }) =>
-                            `group relative flex items-center rounded-lg text-sm font-medium transition ${
-                                // py-3 gives the drawer's links a 44px row; `lg` puts the permanent
-                                // sidebar back to its original density. This is the E0 deferral.
-                                collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-3 lg:py-2"
+                            // The row's height is the same in both states: only horizontal space
+                            // changes when the sidebar collapses. It used to swap py-2 for py-2.5,
+                            // which is not a transitioned property, so every row jumped a few pixels
+                            // the instant the toggle was pressed and the width then slid separately.
+                            // h-11 is the drawer's 44px touch row; `lg` returns the permanent sidebar
+                            // to its original density.
+                            `group relative flex h-11 items-center rounded-lg text-sm font-medium lg:h-10
+                             transition-[background-color,color,box-shadow] duration-200 ease-out motion-reduce:transition-none ${
+                                collapsed ? "justify-center px-0" : "gap-3 px-3"
                             } ${
                                 isActive
                                     ? "bg-teal-600 text-white shadow-sm"
@@ -256,9 +282,14 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                             }`
                         }
                     >
-                        <Icon className="h-[18px] w-[18px] shrink-0" />
-                        {/* Platform links carry a literal label; everything else is translated. */}
-                        {!collapsed && <span>{link.label ?? t(`nav.${link.labelKey}`)}</span>}
+                        <Icon className="h-[18px] w-[18px] shrink-0 transition-transform duration-200 ease-out group-hover:scale-110 motion-reduce:transition-none" />
+                        {/* Platform links carry a literal label; everything else is translated.
+                            Kept mounted and squeezed to nothing rather than unmounted: unmounting made
+                            the text vanish at once while the panel was still sliding, so the two read as
+                            separate events instead of one movement. */}
+                        <span className={`truncate transition-opacity ${EASE} ${collapsed ? "w-0 opacity-0" : "opacity-100"}`}>
+                            {link.label ?? t(`nav.${link.labelKey}`)}
+                        </span>
                         {collapsed && <Tooltip label={link.label ?? t(`nav.${link.labelKey}`)} />}
                     </NavLink>
                     </div>
@@ -289,7 +320,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                         to="/account"
                         aria-label={t('nav.account')}
                         className={({ isActive }) =>
-                            `group relative flex rounded-full ${isActive ? 'ring-2 ring-teal-500' : ''}`
+                            `group relative flex rounded-full transition-[box-shadow,transform] duration-200 ease-out hover:scale-105 motion-reduce:transition-none ${isActive ? 'ring-2 ring-teal-500' : ''}`
                         }
                     >
                         <UserAvatar user={user} size="md" />
@@ -298,7 +329,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                     <button
                         onClick={logout}
                         aria-label={t('nav.signOut')}
-                        className="group relative flex items-center justify-center rounded-lg p-2.5 text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                        className="group relative flex items-center justify-center rounded-lg p-2.5 text-slate-700 hover:bg-slate-100 transition-colors duration-200 ease-out motion-reduce:transition-none dark:text-slate-200 dark:hover:bg-slate-800"
                     >
                         <LogOut className="h-5 w-5 shrink-0" />
                         <Tooltip label={t('nav.signOut')} />
@@ -312,7 +343,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                     <NavLink
                         to="/account"
                         className={({ isActive }) =>
-                            `flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 transition lg:mb-2 ${
+                            `flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors duration-200 ease-out motion-reduce:transition-none lg:mb-2 ${
                                 isActive ? "bg-slate-100 dark:bg-slate-800" : "hover:bg-slate-100 dark:hover:bg-slate-800"
                             }`
                         }
@@ -331,7 +362,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                     <button
                         onClick={logout}
                         aria-label={t('nav.signOut')}
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 lg:h-auto lg:w-full lg:justify-start lg:gap-3 lg:px-3 lg:py-2 dark:text-slate-200 dark:hover:bg-slate-800"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 transition-colors duration-200 ease-out motion-reduce:transition-none lg:h-10 lg:w-full lg:justify-start lg:gap-3 lg:px-3 dark:text-slate-200 dark:hover:bg-slate-800"
                     >
                         <LogOut className="h-[18px] w-[18px] shrink-0" />
                         <span className="hidden text-sm font-medium lg:inline">{t('nav.signOut')}</span>
@@ -358,7 +389,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                     aria-modal="true"
                     aria-label={t('nav.menu')}
                     inert={!open}
-                    className={`fixed inset-y-0 left-0 z-50 flex w-80 max-w-[85vw] flex-col border-r border-slate-200 bg-white p-4 shadow-xl transition-transform duration-200 dark:border-slate-800 dark:bg-slate-900 ${
+                    className={`fixed inset-y-0 left-0 z-50 flex w-80 max-w-[85vw] flex-col border-r border-slate-200 bg-white p-4 shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none dark:border-slate-800 dark:bg-slate-900 ${
                         open ? "translate-x-0" : "-translate-x-full"
                     }`}
                 >
@@ -374,7 +405,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                         <button
                             onClick={onClose}
                             aria-label={t('nav.closeMenu')}
-                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-200 ease-out motion-reduce:transition-none dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                         >
                             <X className="h-5 w-5" />
                         </button>
@@ -400,7 +431,7 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
                             type="button"
                             onClick={toggleTheme}
                             aria-label={t('nav.theme')}
-                            className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                            className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors duration-200 ease-out motion-reduce:transition-none dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                         >
                             {theme === 'dark' ? <Moon className="h-4 w-4 shrink-0" /> : <Sun className="h-4 w-4 shrink-0" />}
                             <span className="truncate">{theme === 'dark' ? t('nav.themeDark') : t('nav.themeLight')}</span>
@@ -415,33 +446,45 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
     }
 
     return (
+        // `relative` anchors the collapse handle below; the padding is transitioned alongside the width
+        // so the whole panel moves as one thing rather than snapping its inset and then sliding.
         <aside
-            className={`sticky top-0 z-40 flex h-screen shrink-0 flex-col self-start border-r border-slate-200 bg-white transition-[width] duration-200 dark:border-slate-800 dark:bg-slate-900 ${
+            className={`sticky top-0 z-40 flex h-screen shrink-0 flex-col self-start border-r border-slate-200 bg-white transition-[width,padding] ${EASE} dark:border-slate-800 dark:bg-slate-900 relative ${
                 collapsed ? "w-20 p-3" : "w-64 p-4"
             }`}
         >
-            <div className={`mb-4 flex ${collapsed ? "flex-col items-center gap-3" : "items-center justify-between"}`}>
-                {collapsed ? (
-                    <NavLink to="/dashboard" aria-label={t('nav.dashboard')} className="rounded-lg">
-                        <img src="/skladdo-logo.svg" alt={t('nav.appName')} className="h-8 w-auto" />
-                    </NavLink>
-                ) : (
-                    <NavLink to="/dashboard" className="flex items-center gap-2.5 rounded-lg">
-                        <img src="/skladdo-logo.svg" alt="" aria-hidden="true" className="h-8 w-auto shrink-0" />
-                        {/* Not a heading: every page already has its own h1, and a second one in the
-                            chrome makes the brand compete with the page title in the heading outline. */}
-                        <span className="text-xl font-bold tracking-tight text-teal-700 dark:text-teal-400">
-                            {t('nav.appName')}
-                        </span>
-                    </NavLink>
-                )}
-                <button
-                    onClick={toggle}
-                    aria-label={collapsed ? t('nav.expand') : t('nav.collapse')}
-                    className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            {/* On the border rather than in the header. In the header it had to sit beside the logo when
+                open and beneath it when collapsed, and a flex row becoming a flex column is not something
+                that can be tweened - it jumped, and took the height of everything below it with it. Out
+                here the header is one shape in both states and the only thing that moves is the width. */}
+            <button
+                onClick={toggle}
+                aria-label={collapsed ? t('nav.expand') : t('nav.collapse')}
+                className="absolute -right-3 top-6 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-[background-color,color,transform] duration-200 ease-out hover:scale-110 hover:text-teal-600 motion-reduce:transition-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-teal-400"
+            >
+                {/* A bare chevron pointing the way the panel will move — the panel-with-a-bar glyphs
+                    that were here need decoding, and at 14px there is no room to decode anything. */}
+                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </button>
+
+            {/* One fixed-height row in both states, so collapsing never shifts the links below it. */}
+            <div className={`mb-4 flex h-9 items-center ${collapsed ? "justify-center" : ""}`}>
+                <NavLink
+                    to="/dashboard"
+                    aria-label={t('nav.dashboard')}
+                    className="flex min-w-0 items-center gap-2.5 rounded-lg"
                 >
-                    {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-                </button>
+                    <img src="/skladdo-logo.svg" alt="" aria-hidden="true" className="h-8 w-auto shrink-0" />
+                    {/* Not a heading: every page already has its own h1, and a second one in the
+                        chrome makes the brand compete with the page title in the heading outline.
+                        Squeezed to nothing rather than unmounted, for the same reason as the nav
+                        labels - so it leaves with the panel instead of before it. */}
+                    <span className={`truncate text-xl font-bold tracking-tight text-teal-700 transition-opacity ${EASE} dark:text-teal-400 ${
+                        collapsed ? "w-0 opacity-0" : "opacity-100"
+                    }`}>
+                        {t('nav.appName')}
+                    </span>
+                </NavLink>
             </div>
 
             {nav}

@@ -603,7 +603,8 @@ export default function ManufacturersPage() {
 
             <ComposeEmailModal
                 isOpen={composeModal.isOpen}
-                manufacturerIds={selectedIds}
+                recipientType="MANUFACTURER"
+                recipientIds={selectedIds}
                 onClose={composeModal.close}
                 onSent={() => setSelectedIds([])}
             />
