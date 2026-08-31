@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { Mail, Eye, MailCheck, Users } from 'lucide-react'
+import { Mail, Eye, MailCheck, Users, Clock } from 'lucide-react'
 import { apiGet } from '../api/client'
 import { useServerTable } from '../hooks/useServerTable'
 import { useAuth } from '../context/AuthContext'
@@ -11,6 +11,7 @@ import EmptyState from '../components/EmptyState'
 import DataTable from '../components/DataTable'
 import StatusBadge from '../components/StatusBadge'
 import SentEmailDetailModal from '../components/SentEmailDetailModal'
+import ScheduledEmailsTab from '../components/ScheduledEmailsTab'
 import { formatDateTime, safeArray } from '../utils/format'
 
 export default function SentEmailsPage() {
@@ -18,6 +19,9 @@ export default function SentEmailsPage() {
     const { isAdmin } = useAuth()
     const navigate = useNavigate()
 
+    // Sent history vs. what is still queued. Two tabs rather than one list: they answer different
+    // questions ("did it land?" against "is it still coming?") and only one of them is actionable.
+    const [tab, setTab] = useState('sent')
     // A single-recipient send opens the per-email modal directly; a bulk send (recipientCount > 1) opens
     // the batch detail page instead.
     const [detailId, setDetailId] = useState(null)
@@ -63,9 +67,20 @@ export default function SentEmailsPage() {
         {
             key: 'recipient',
             label: t('emails.cols.recipient'),
-            render: (r) => (r.recipientCount > 1
-                ? <span className="inline-flex items-center gap-1.5 font-medium"><Users className="h-4 w-4 text-slate-400" />{t('emails.batch.recipients', { count: r.recipientCount })}</span>
-                : (r.manufacturerName || r.recipientEmail || '—')),
+            render: (r) => (
+                <span className="inline-flex items-center gap-1.5">
+                    {r.recipientCount > 1
+                        ? <><Users className="h-4 w-4 text-slate-400" /><span className="font-medium">{t('emails.batch.recipients', { count: r.recipientCount })}</span></>
+                        : <span>{r.recipientName || r.recipientEmail || '—'}</span>}
+                    {/* Which address book it went to. Worth a word now that both are reachable - without
+                        it the list reads as one undifferentiated pile. */}
+                    {r.recipientType && (
+                        <span className="text-xs text-slate-400">
+                            · {t(`emails.recipientType.${r.recipientType.toLowerCase()}`)}
+                        </span>
+                    )}
+                </span>
+            ),
         },
         { key: 'subject', label: t('emails.cols.subject'), sortKey: 'subject', render: (r) => <span className="line-clamp-1">{r.subject}</span> },
         ...(isAdmin ? [{ key: 'sentById', label: t('emails.cols.sender'), render: (r) => userNames[r.sentById] || '—' }] : []),
@@ -95,6 +110,12 @@ export default function SentEmailsPage() {
         <div className="space-y-6">
             <PageHeader title={t('emails.title')} description={t('emails.description')} />
 
+            <EmailTabs current={tab} onChange={setTab} />
+
+            {tab === 'scheduled' ? (
+                <ScheduledEmailsTab userNames={userNames} isAdmin={isAdmin} />
+            ) : (
+            <>
             <SearchFilters search={search} onSearchChange={setSearch} filters={[]} />
 
             <DataTable
@@ -129,6 +150,44 @@ export default function SentEmailsPage() {
                 isOpen={detailId != null}
                 onClose={() => setDetailId(null)}
             />
+            </>
+            )}
+        </div>
+    )
+}
+
+const TABS = [
+    { key: 'sent', icon: Mail },
+    { key: 'scheduled', icon: Clock },
+]
+
+/** Sent vs. queued. Same shape as the settings page's tab strip, minus the overflow handling two tabs
+ *  cannot need. */
+function EmailTabs({ current, onChange }) {
+    const { t } = useTranslation()
+    return (
+        <div className="relative">
+            <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 border-b border-slate-200 dark:border-slate-800"
+            />
+            <div className="relative flex gap-2">
+                {TABS.map(({ key, icon: Icon }) => (
+                    <button
+                        key={key}
+                        onClick={() => onChange(key)}
+                        aria-current={key === current ? 'page' : undefined}
+                        className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-t-xl border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+                            key === current
+                                ? 'border-teal-600 text-teal-700 dark:text-teal-400'
+                                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                    >
+                        <Icon className="h-4 w-4" />
+                        {t(`emails.tabs.${key}`)}
+                    </button>
+                ))}
+            </div>
         </div>
     )
 }

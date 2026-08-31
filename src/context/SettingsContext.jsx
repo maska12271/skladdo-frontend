@@ -21,6 +21,9 @@ const DEFAULTS = {
     timeFormat: null,
     // Unit a new product or line starts on.
     defaultProductUnit: 'pcs',
+    // IANA zone the company operates in; the backend always resolves one, so this is only null before
+    // the first load lands.
+    timezone: null,
 }
 
 /**
@@ -55,6 +58,7 @@ export function SettingsProvider({ children }) {
                     dateFormat: fresh.dateFormat ?? null,
                     timeFormat: fresh.timeFormat ?? null,
                     defaultProductUnit: fresh.defaultProductUnit || 'pcs',
+                    timezone: fresh.timezone || null,
                 })
                 // Pushed into the formatting module rather than read from this context: the ~100 call
                 // sites for formatDate/formatDateTime are plain functions in tables and detail rows, and
@@ -81,7 +85,7 @@ export function SettingsProvider({ children }) {
     }, [isAuthenticated, refresh])
 
     const value = useMemo(() => {
-        const { currency, pricesIncludeTax, defaultTaxPercent, defaultWarehouseId, defaultPrepaymentPercent, invoicePaymentTermDays, latePaymentPenaltyPercent, penaltyPeriod, firstDayOfWeek, dateFormat, timeFormat, defaultProductUnit } = settings
+        const { currency, pricesIncludeTax, defaultTaxPercent, defaultWarehouseId, defaultPrepaymentPercent, invoicePaymentTermDays, latePaymentPenaltyPercent, penaltyPeriod, firstDayOfWeek, dateFormat, timeFormat, defaultProductUnit, timezone } = settings
 
         // The tax percentage that applies to a value: an explicit rate, else the company default.
         const effectiveTaxPercent = (taxPercent) =>
@@ -126,6 +130,7 @@ export function SettingsProvider({ children }) {
             dateFormat,
             timeFormat,
             defaultProductUnit,
+            timezone,
             effectiveTaxPercent,
             formatCurrency,
             formatPrice,

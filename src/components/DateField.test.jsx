@@ -12,7 +12,7 @@ import DateField from './DateField'
 
 // The company setting is mocked at the hook rather than supplied through a real provider: the provider
 // fetches settings over the API on mount, which this has no interest in standing up.
-const settings = vi.hoisted(() => ({ current: { firstDayOfWeek: null } }))
+const settings = vi.hoisted(() => ({ current: { firstDayOfWeek: null, dateFormat: null } }))
 vi.mock('../context/SettingsContext', () => ({
     useSettings: () => settings.current,
 }))
@@ -21,7 +21,7 @@ afterEach(cleanup)
 
 /** Renders the field with a company `firstDayOfWeek` and opens its calendar on the given month. */
 function openCalendar({ firstDayOfWeek = null, value = '2026-12-15' } = {}) {
-    settings.current = { firstDayOfWeek }
+    settings.current = { firstDayOfWeek, dateFormat: null }
     render(<DateField id="d" name="d" value={value} onChange={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: /calendar/i }))
 }
@@ -68,5 +68,38 @@ describe('DateField calendar', () => {
         openCalendar({ firstDayOfWeek: 1, value: '2026-12-15' })
         const grid = screen.getByTestId('datefield-days')
         expect(within(grid).getByRole('button', { name: '15' })).toBeInTheDocument()
+    })
+})
+
+// The field writes and reads dates in whatever order the company pinned, so that typing one matches every
+// place the app prints one. Getting this wrong is quiet: an American company would see 09/01 and mean
+// 1 September while the field read it as 9 January.
+describe('DateField company date format', () => {
+    /** Renders on `dateFormat` and returns the input. */
+    function field({ dateFormat, value = '2026-09-01', onChange = () => {} }) {
+        cleanup()
+        settings.current = { firstDayOfWeek: null, dateFormat }
+        render(<DateField id="d" name="d" value={value} onChange={onChange} />)
+        return screen.getByRole('textbox')
+    }
+
+    it('writes the value in the company order', () => {
+        expect(field({ dateFormat: 'dd.MM.yyyy' })).toHaveValue('01.09.2026')
+        expect(field({ dateFormat: 'MM/dd/yyyy' })).toHaveValue('09/01/2026')
+        expect(field({ dateFormat: 'yyyy-MM-dd' })).toHaveValue('2026-09-01')
+    })
+
+    it('reads typed input back in the same order', () => {
+        let emitted = null
+        const input = field({ dateFormat: 'MM/dd/yyyy', value: '', onChange: (e) => { emitted = e.target.value } })
+        fireEvent.change(input, { target: { value: '09/01/2026' } })
+        fireEvent.blur(input)
+        // Month first, because that is the order this company writes in — not 9 January.
+        expect(emitted).toBe('2026-09-01')
+    })
+
+    it('falls back to the language when the company has no preference', () => {
+        // Unchanged behaviour for every company that never touched the setting.
+        expect(field({ dateFormat: null })).toHaveValue('09/01/2026')
     })
 })

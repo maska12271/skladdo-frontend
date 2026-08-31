@@ -144,5 +144,16 @@ jobs:
             set -e
             cd ~/skladdo
             git -C frontend pull origin master
-            docker run --rm -v "$(pwd)/frontend:/app" -w /app -e VITE_API_BASE_URL=/api node:20-alpine sh -c "npm ci && npm run build"
+            # The version shown in the app is derived here rather than inside the build container:
+            # node:20-alpine has no git, so vite could not count commits or read the SHA for itself.
+            # Every merge to master adds a commit, so every deploy comes out with a new patch number
+            # without anyone editing package.json.
+            APP_BUILD_NUMBER=$(git -C frontend rev-list --count HEAD)
+            APP_COMMIT=$(git -C frontend rev-parse --short HEAD)
+            echo "Building frontend $APP_BUILD_NUMBER ($APP_COMMIT)"
+            docker run --rm -v "$(pwd)/frontend:/app" -w /app \
+              -e VITE_API_BASE_URL=/api \
+              -e APP_BUILD_NUMBER="$APP_BUILD_NUMBER" \
+              -e APP_COMMIT="$APP_COMMIT" \
+              node:20-alpine sh -c "npm ci && npm run build"
             docker compose -f deploy/docker-compose.prod.yml restart caddy

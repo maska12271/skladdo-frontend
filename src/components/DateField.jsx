@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { useSettings } from '../context/SettingsContext'
+import { useAnchoredPanel } from '../hooks/useAnchoredPanel'
 import { holidayKeyFor } from '../constants/holidays'
 
 /**
@@ -37,9 +38,24 @@ function toIso(date) {
 const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
 
 /**
+ * The company's chosen date formats, as the order and separator this field works in.
+ *
+ * Must stay in step with `DATE_PATTERNS` in `utils/format.js` (and the backend's
+ * `CompanySettings.SUPPORTED_DATE_FORMATS`): a company that pins how dates are *written* everywhere
+ * expects to type them the same way, and a field disagreeing with the table beside it is the kind of
+ * thing nobody reports but everybody notices.
+ */
+const COMPANY_PATTERNS = {
+    'dd.MM.yyyy': { order: ['day', 'month', 'year'], separator: '.' },
+    'dd/MM/yyyy': { order: ['day', 'month', 'year'], separator: '/' },
+    'MM/dd/yyyy': { order: ['month', 'day', 'year'], separator: '/' },
+    'yyyy-MM-dd': { order: ['year', 'month', 'day'], separator: '-' },
+}
+
+/**
  * Which order the locale writes day, month and year in, and what it puts between them — read off `Intl`
- * rather than kept as a per-language table, so a fourth language needs no entry here. Drives both the
- * text the field shows and the text it accepts.
+ * rather than kept as a per-language table, so a fourth language needs no entry here. Used when the
+ * company has expressed no preference, which is what this did before the setting existed.
  */
 function localePattern(locale) {
     const parts = new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -128,17 +144,20 @@ export default function DateField({
 }) {
     const { t, i18n } = useTranslation()
     const locale = i18n.resolvedLanguage || i18n.language || 'en'
-    const pattern = useMemo(() => localePattern(locale), [locale])
-    // Optional chaining because the field also renders outside the authenticated app, where there is no
-    // settings provider above it — there the locale decides, as it always did.
-    const firstDay = resolveFirstDay(useSettings()?.firstDayOfWeek, locale)
+    // `?? {}` because the field also renders outside the authenticated app (login, registration), where
+    // there is no settings provider above it — there the locale decides, as it always did.
+    const { firstDayOfWeek, dateFormat } = useSettings() ?? {}
+    const pattern = useMemo(
+        () => COMPANY_PATTERNS[dateFormat] ?? localePattern(locale),
+        [dateFormat, locale],
+    )
+    const firstDay = resolveFirstDay(firstDayOfWeek, locale)
 
     const selected = fromIso(value)
     const minDate = fromIso(min)
     const maxDate = fromIso(max)
 
-    const [open, setOpen] = useState(false)
-    const [coords, setCoords] = useState(null)
+    const { open, setOpen, wrapRef, panelRef, measure, panelStyle } = useAnchoredPanel()
     const [pickingMonth, setPickingMonth] = useState(false)
     // Which month the calendar is showing, which is not the same as what is selected: paging through
     // months must not change the value, and an empty field still has to open somewhere.
@@ -146,9 +165,6 @@ export default function DateField({
     // What is in the box while it is being typed in. `null` means "show the value", so an edit elsewhere
     // (a form reset, a linked field) reaches the field instead of being masked by a stale draft.
     const [draft, setDraft] = useState(null)
-
-    const wrapRef = useRef(null)
-    const panelRef = useRef(null)
 
     const emit = (iso) => onChange?.({ target: { name, value: iso } })
 
@@ -160,57 +176,10 @@ export default function DateField({
         setOpen(true)
     }
 
-    // Positioned against the viewport in a portal, like CustomSelect's panel: inside a modal body the
-    // calendar is taller than the space below the field, and an absolutely positioned one was either
-    // clipped by the scrolling body or pushed off the bottom of a phone.
-    const updateCoords = () => {
-        const el = wrapRef.current
-        if (!el) return
-        const rect = el.getBoundingClientRect()
-        const gap = 4
-        const margin = 8
-        const height = panelRef.current?.offsetHeight ?? 330
-        const width = Math.min(310, window.innerWidth - margin * 2)
-
-        const spaceBelow = window.innerHeight - rect.bottom - margin
-        const openUp = spaceBelow < height && rect.top - margin > spaceBelow
-
-        let left = rect.left
-        left = Math.min(left, window.innerWidth - margin - width)
-        left = Math.max(left, margin)
-
-        setCoords(openUp
-            ? { left, bottom: window.innerHeight - rect.top + gap, width }
-            : { left, top: rect.bottom + gap, width })
-    }
-
     // Re-measured when the panel changes height (the month grid is shorter than the day grid).
     useLayoutEffect(() => {
-        if (open) updateCoords()
-    }, [open, pickingMonth, visible])
-
-    useEffect(() => {
-        if (!open) return undefined
-        const reposition = () => updateCoords()
-        const onKeyDown = (event) => {
-            if (event.key === 'Escape') setOpen(false)
-        }
-        const onPointerDown = (event) => {
-            if (wrapRef.current?.contains(event.target)) return
-            if (panelRef.current?.contains(event.target)) return
-            setOpen(false)
-        }
-        window.addEventListener('scroll', reposition, true)
-        window.addEventListener('resize', reposition)
-        document.addEventListener('keydown', onKeyDown)
-        document.addEventListener('mousedown', onPointerDown)
-        return () => {
-            window.removeEventListener('scroll', reposition, true)
-            window.removeEventListener('resize', reposition)
-            document.removeEventListener('keydown', onKeyDown)
-            document.removeEventListener('mousedown', onPointerDown)
-        }
-    }, [open])
+        if (open) measure()
+    }, [open, pickingMonth, visible, measure])
 
     const outOfRange = (date) => (minDate && date < minDate) || (maxDate && date > maxDate)
 
@@ -280,12 +249,7 @@ export default function DateField({
                         ref={panelRef}
                         role="dialog"
                         aria-label={t('datePicker.open')}
-                        style={{
-                            position: 'fixed',
-                            left: coords?.left ?? -9999,
-                            width: coords?.width ?? 310,
-                            ...(coords && 'bottom' in coords ? { bottom: coords.bottom } : { top: coords?.top ?? 0 }),
-                        }}
+                        style={panelStyle}
                         className="z-[200] rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-900"
                     >
                         <CalendarPanel

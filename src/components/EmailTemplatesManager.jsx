@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Sparkles, ChevronDown } from 'lucide-react'
 import { apiDelete, apiGet, apiPost, apiPut } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { useModal } from '../hooks/useModal'
@@ -8,7 +8,9 @@ import Modal from './Modal'
 import ConfirmModal from './ConfirmModal'
 import { FormField } from './FormField.jsx'
 import RichTextEditor from './RichTextEditor'
+import EmailTokensHelp from './EmailTokensHelp'
 import { safeArray } from '../utils/format'
+import { emailExamples } from '../config/emailExamples'
 import Checkbox from './Checkbox'
 import ModalActions from './ModalActions'
 
@@ -18,9 +20,13 @@ const emptyForm = { name: '', subject: '', body: '', active: true }
  * Manages the company's reusable email templates (list + create/edit/delete), rendered inside the
  * settings Email tab. Self-contained: fetches its own list and refreshes after each change. Mirrors the
  * tax-rate management pattern already on the settings page.
+ *
+ * <p>Also offers a handful of worked examples, because the alternative first impression is an empty list
+ * next to an editor with an undocumented token syntax. Picking one only prefills the create form - it is
+ * never saved on the company's behalf, so what ends up in the library is always something someone read.</p>
  */
 export default function EmailTemplatesManager() {
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
     const toast = useToast()
 
     const [templates, setTemplates] = useState([])
@@ -50,6 +56,14 @@ export default function EmailTemplatesManager() {
     const openEdit = (tpl) => {
         setEditingId(tpl.id)
         setForm({ name: tpl.name || '', subject: tpl.subject || '', body: tpl.body || '', active: tpl.active !== false })
+        formModal.open()
+    }
+
+    // An example opens the same create form, prefilled. Nothing is written until the user saves, so the
+    // wording can be adapted first - which is the point of showing it rather than seeding the library.
+    const openExample = (example) => {
+        setEditingId(null)
+        setForm({ name: example.name, subject: example.subject, body: example.body, active: true })
         formModal.open()
     }
 
@@ -107,6 +121,18 @@ export default function EmailTemplatesManager() {
                     <Plus className="h-4 w-4" /> {t('emailTemplates.add')}
                 </button>
             </div>
+
+            <ExamplesStrip
+                // Keyed on whether the library is empty, so crossing that line remounts the strip and it
+                // picks up the new default. An effect syncing the prop into state would do the same thing
+                // with a wasted render, which is what the react-hooks rules are about.
+                key={templates.length === 0 ? 'empty-library' : 'has-templates'}
+                examples={emailExamples(i18n.language)}
+                // Open on an empty library: the first thing a new company sees should be four templates
+                // it can start from, not a line saying it has none. Collapsed once it has its own.
+                defaultOpen={templates.length === 0}
+                onPick={openExample}
+            />
 
             {templates.length === 0 ? (
                 <p className="py-8 text-center text-sm text-slate-500">{t('emailTemplates.empty')}</p>
@@ -166,7 +192,7 @@ export default function EmailTemplatesManager() {
                             minHeight="12rem"
                         />
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('emailTemplates.tokensHint')}</p>
+                    <EmailTokensHelp defaultOpen={!editingId} />
                     {editingId && (
                         <label className="inline-flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800">
                             <Checkbox name="active" checked={!!form.active} onChange={handleChange} />
@@ -190,6 +216,56 @@ export default function EmailTemplatesManager() {
                 onConfirm={handleDelete}
                 loading={saving}
             />
+        </div>
+    )
+}
+
+/**
+ * The starter templates, as cards. Collapsible so it stays out of the way of a company that already has
+ * its own library, and open by default for one that does not.
+ */
+function ExamplesStrip({ examples, defaultOpen, onPick }) {
+    const { t } = useTranslation()
+    // Only the initial value - the caller remounts this on the transition that should change it.
+    const [open, setOpen] = useState(defaultOpen)
+
+    return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                aria-expanded={open}
+                className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+            >
+                <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                    <Sparkles className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                    {t('emailTemplates.examples.heading')}
+                </span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${open ? 'rotate-180' : ''}`} />
+            </button>
+
+            {open && (
+                <div className="space-y-3 border-t border-slate-200 px-4 py-3 dark:border-slate-800">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('emailTemplates.examples.intro')}</p>
+                    <ul className="grid gap-2 sm:grid-cols-2">
+                        {examples.map((example) => (
+                            <li key={example.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => onPick(example)}
+                                    className="flex h-full w-full flex-col gap-1 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-teal-500 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-teal-600"
+                                >
+                                    <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{example.name}</span>
+                                    <span className="line-clamp-1 text-xs text-slate-500 dark:text-slate-400">{example.subject}</span>
+                                    <span className="mt-1 text-xs font-medium text-teal-600 dark:text-teal-400">
+                                        {t('emailTemplates.examples.use')}
+                                    </span>
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
         </div>
     )
 }
