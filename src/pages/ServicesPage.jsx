@@ -49,6 +49,7 @@ const emptyForm = {
     currency: '',
     taxRateId: '',
     active: true,
+    recurrenceMonths: '',
 }
 
 export default function ServicesPage() {
@@ -219,6 +220,7 @@ export default function ServicesPage() {
             currency: item.currency || '',
             taxRateId: item.taxRate?.id ? String(item.taxRate.id) : '',
             active: !!item.active,
+            recurrenceMonths: item.recurrenceMonths ?? '',
         })
         formModal.open()
     }
@@ -247,6 +249,7 @@ export default function ServicesPage() {
             currency: form.currency || baseCurrency || null,
             taxRate: form.taxRateId ? { id: Number(form.taxRateId) } : null,
             active: form.active,
+            recurrenceMonths: form.recurrenceMonths ? Number(form.recurrenceMonths) : null,
         }
 
         try {
@@ -521,6 +524,21 @@ export default function ServicesPage() {
                         className="md:col-span-4"
                         options={taxRateOptions}
                     />
+
+                    <div className="md:col-span-4 space-y-1.5">
+                        <FormField
+                            id="service-recurrence-months"
+                            label={t('services.form.recurrenceMonths')}
+                            type="number"
+                            min="1"
+                            step="1"
+                            name="recurrenceMonths"
+                            value={form.recurrenceMonths}
+                            onChange={handleChange}
+                            placeholder={t('services.form.recurrenceMonthsPlaceholder')}
+                        />
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t('services.form.recurrenceMonthsHint')}</p>
+                    </div>
 
                     <TextareaField
                         id="service-description"

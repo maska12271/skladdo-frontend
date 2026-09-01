@@ -57,7 +57,12 @@ const BASE_PATH = { CLIENT: '/clients', MANUFACTURER: '/manufacturers' }
  * list or the other, and a contact belongs to one partner, so a mixed batch has no answer to "which
  * contact".</p>
  */
-export default function ComposeEmailModal({ isOpen, recipientType = 'MANUFACTURER', recipientIds = [], onClose, onSent }) {
+export default function ComposeEmailModal({
+    isOpen, recipientType = 'MANUFACTURER', recipientIds = [], onClose, onSent,
+    // Optional prefill, e.g. for the "schedule a reminder for this recurring service" prompt: opens
+    // the same compose-and-schedule flow already used everywhere else instead of a bespoke one.
+    title, initialSubject, initialBody, initialScheduledDate, initialScheduledTime, initialServiceId,
+}) {
     const { t } = useTranslation()
     const toast = useToast()
     const { user, updateUser } = useAuth()
@@ -95,17 +100,17 @@ export default function ComposeEmailModal({ isOpen, recipientType = 'MANUFACTURE
     useEffect(() => {
         if (!isOpen) return
         setTemplateId('')
-        setSubject('')
-        setBody('')
+        setSubject(initialSubject || '')
+        setBody(initialBody || '')
         setFiles([])
         setEditingSignature(false)
         setSignature(user?.emailSignature || '')
         setSamplePartner(null)
         setContacts([])
         setContactId('')
-        setLater(false)
-        setScheduledDate('')
-        setScheduledTime('')
+        setLater(!!initialScheduledDate)
+        setScheduledDate(initialScheduledDate || '')
+        setScheduledTime(initialScheduledDate ? (initialScheduledTime || '09:00') : '')
         apiGet('/email-templates')
             .then((res) => setTemplates(safeArray(res).filter((tpl) => tpl.active !== false)))
             .catch(() => {})
@@ -206,6 +211,7 @@ export default function ComposeEmailModal({ isOpen, recipientType = 'MANUFACTURE
                 body,
                 contactId: contactId ? Number(contactId) : null,
                 scheduledAt: later ? localPartsToInstant(scheduledDate, scheduledTime, timezone) : null,
+                serviceId: initialServiceId ?? null,
             })], { type: 'application/json' }))
             files.forEach((f) => fd.append('files', f))
             const result = await apiUpload('/emails/send', fd)
@@ -226,7 +232,7 @@ export default function ComposeEmailModal({ isOpen, recipientType = 'MANUFACTURE
     return (
         <Modal
             isOpen={isOpen}
-            title={t('emails.compose.title', { count: recipientIds.length })}
+            title={title || t('emails.compose.title', { count: recipientIds.length })}
             onClose={onClose}
         >
             <form onSubmit={handleSubmit} className="grid gap-4">

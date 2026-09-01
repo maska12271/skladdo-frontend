@@ -23,7 +23,7 @@ import { instantToLocalParts, localPartsToInstant } from '../utils/companyTime'
  * the Sent tab instead - so the list is short by construction and needs no paging or search. The one
  * exception is a send that could not be made at all, which is kept with its reason so somebody sees it.</p>
  */
-export default function ScheduledEmailsTab({ userNames = {}, isAdmin }) {
+export default function ScheduledEmailsTab({ userNames = {}, isAdmin, clientId }) {
     const { t } = useTranslation()
     const toast = useToast()
     const { timezone } = useSettings()
@@ -41,10 +41,10 @@ export default function ScheduledEmailsTab({ userNames = {}, isAdmin }) {
     // Deliberately does not raise `loading` itself: it starts true for the first fetch, and the reloads
     // after a reschedule or a cancel are already covered by `busy` on the modal that triggered them.
     // Keeping it out also keeps the mount effect free of a synchronous setState.
-    const load = useCallback(() => apiGet('/scheduled-emails')
+    const load = useCallback(() => apiGet(clientId ? `/scheduled-emails?clientId=${clientId}` : '/scheduled-emails')
         .then((res) => setRows(safeArray(res)))
         .catch(() => {})
-        .finally(() => setLoading(false)), [])
+        .finally(() => setLoading(false)), [clientId])
 
     useEffect(() => {
         load()

@@ -1719,6 +1719,9 @@ export default {
         },
         form: {
             selectCategory: 'Select category (optional)',
+            recurrenceMonths: 'Repeats every (months)',
+            recurrenceMonthsPlaceholder: 'e.g. 6',
+            recurrenceMonthsHint: 'Leave blank for a one-time service. Selling a repeating service offers to schedule a reminder email to the client.',
         },
         import: {
             nameRequired: 'Name is required',
@@ -1998,6 +2001,7 @@ export default {
             qtyBought: 'Qty bought',
             revenue: 'Revenue',
         },
+        scheduledReminders: 'Scheduled reminders',
     },
     salesOrders: {
         title: 'Sales Orders',
@@ -2018,6 +2022,9 @@ export default {
         deleted: 'Sales order deleted',
         bulkDeleted_one: '{{count}} sales order deleted',
         bulkDeleted_other: '{{count}} sales orders deleted',
+        reminderPrompt: {
+            title: 'Schedule a reminder for {{service}}?',
+        },
         cols: {
             orderNo: 'Order no.',
             client: 'Client',

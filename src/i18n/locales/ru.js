@@ -1732,6 +1732,9 @@ export default {
         },
         form: {
             selectCategory: 'Выберите категорию (необязательно)',
+            recurrenceMonths: 'Повторяется каждые (месяцев)',
+            recurrenceMonthsPlaceholder: 'напр. 6',
+            recurrenceMonthsHint: 'Оставьте пустым для разовой услуги. При продаже повторяющейся услуги будет предложено запланировать письмо-напоминание клиенту.',
         },
         import: {
             nameRequired: 'Название обязательно',
@@ -2019,6 +2022,7 @@ export default {
             qtyBought: 'Куплено кол-во',
             revenue: 'Доход',
         },
+        scheduledReminders: 'Запланированные напоминания',
     },
     salesOrders: {
         title: 'Заказы на продажу',
@@ -2041,6 +2045,9 @@ export default {
         bulkDeleted_one: '{{count}} заказ на продажу удалён',
         bulkDeleted_few: '{{count}} заказа на продажу удалено',
         bulkDeleted_many: '{{count}} заказов на продажу удалено',
+        reminderPrompt: {
+            title: 'Запланировать напоминание об услуге «{{service}}»?',
+        },
         cols: {
             orderNo: '№ заказа',
             client: 'Клиент',
