@@ -1711,6 +1711,9 @@ export default {
         },
         form: {
             selectCategory: 'Vali kategooria (valikuline)',
+            recurrenceMonths: 'Kordub iga (kuud)',
+            recurrenceMonthsPlaceholder: 'nt 6',
+            recurrenceMonthsHint: 'Jäta tühjaks ühekordse teenuse puhul. Korduva teenuse müümisel pakutakse kliendile meeldetuletuse saatmist.',
         },
         import: {
             nameRequired: 'Nimi on kohustuslik',
@@ -1990,6 +1993,7 @@ export default {
             qtyBought: 'Ostetud kogus',
             revenue: 'Tulu',
         },
+        scheduledReminders: 'Plaanitud meeldetuletused',
     },
     salesOrders: {
         title: 'Müügitellimused',
@@ -2010,6 +2014,9 @@ export default {
         deleted: 'Müügitellimus kustutatud',
         bulkDeleted_one: '{{count}} müügitellimus kustutatud',
         bulkDeleted_other: '{{count}} müügitellimust kustutatud',
+        reminderPrompt: {
+            title: 'Kas planeerida meeldetuletus teenuse "{{service}}" kohta?',
+        },
         cols: {
             orderNo: 'Tellimuse nr',
             client: 'Klient',

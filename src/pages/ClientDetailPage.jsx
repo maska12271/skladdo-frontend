@@ -12,6 +12,7 @@ import TrendChart from '../components/TrendChart'
 import CopyButton from '../components/CopyButton'
 import ComposeEmailModal from '../components/ComposeEmailModal'
 import SentEmailDetailModal from '../components/SentEmailDetailModal'
+import ScheduledEmailsTab from '../components/ScheduledEmailsTab'
 import { useModal } from '../hooks/useModal'
 import { useAuth, usePermissions } from '../context/AuthContext'
 import { formatMoney, formatDate, formatDateTime, safeArray } from '../utils/format'
@@ -200,6 +201,16 @@ export default function ClientDetailPage() {
                         onRowClick={(r) => setEmailDetailId(r.id)}
                         initialPageSize={10}
                     />
+                </section>
+            )}
+
+            {/* Reminders queued from selling a recurring service (e.g. "next oil change"), alongside any
+                other email scheduled to this client. Reuses the same tab the main Emails page shows, so
+                reschedule/cancel work identically here. */}
+            {canViewEmails && (
+                <section className="space-y-3">
+                    <h2 className="text-lg font-semibold">{t('clientDetail.scheduledReminders')}</h2>
+                    <ScheduledEmailsTab clientId={id} />
                 </section>
             )}
 

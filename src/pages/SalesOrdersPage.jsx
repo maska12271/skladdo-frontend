@@ -25,6 +25,8 @@ import {FormField, FormSelect, TextareaField} from "../components/FormField.jsx"
 import AddressAutocompleteField from "../components/AddressAutocompleteField.jsx";
 import CurrencyRateField from "../components/CurrencyRateField.jsx";
 import MoneyWithBase from "../components/MoneyWithBase.jsx";
+import ComposeEmailModal from '../components/ComposeEmailModal'
+import { serviceReminderTemplate } from '../config/serviceReminderTemplate'
 import { Pencil, Trash2, ShoppingCart } from 'lucide-react'
 import ModalActions from '../components/ModalActions'
 
@@ -46,6 +48,23 @@ const exportColumns = [
 ]
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
+
+/**
+ * `dateStr` (or today, when absent) plus `months`, as the ISO date DateField expects. Clamps to the
+ * target month's last day rather than overflowing into the month after - `setMonth` on the 31st would
+ * otherwise turn "31 Aug + 6 months" into 3 March (Feb has no 31st), landing the reminder a week later
+ * than the interval actually says.
+ */
+function addMonthsIso(dateStr, months) {
+    const d = dateStr ? new Date(`${dateStr}T00:00:00`) : new Date()
+    const day = d.getDate()
+    d.setDate(1)
+    d.setMonth(d.getMonth() + months)
+    const lastDayOfTargetMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+    d.setDate(Math.min(day, lastDayOfTargetMonth))
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
 
 // Amount-due figures on the payment column carry the invoice's own currency snapshot.
 function paymentMoney(value, currency) {
@@ -98,15 +117,19 @@ const emptyForm = {
 }
 
 export default function SalesOrdersPage() {
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
     const { canCreate, canEdit, canDelete } = usePermissions('SALES_ORDERS')
     const invoicePerms = usePermissions('INVOICES')
     // The permission alone is not enough: a company that has not bought the Tenders add-on has the
     // module closed on the server, so asking for the options 403s and raises a "Forbidden" toast on
     // every visit to this page. The nav hides the Tenders page for exactly the same reason.
     const tenderPerms = usePermissions('TENDERS')
+    const emailPerms = usePermissions('MANUFACTURER_EMAILS')
     const { canSeePrices, hasAddon } = useAuth()
     const canUseTenders = tenderPerms.canView && hasAddon('TENDERS')
+    // Same pair the client/manufacturer pages gate emailing on: the add-on bought, and this user allowed
+    // to send. Guards the post-create "schedule a reminder?" prompt below.
+    const canOfferReminders = emailPerms.canCreate && hasAddon('MANUFACTURER_EMAILS')
     const { defaultWarehouseId, currency: baseCurrency, currencies, currencySymbol } = useSettings()
     const navigate = useNavigate()
     const toast = useToast()
@@ -187,6 +210,13 @@ export default function SalesOrdersPage() {
     // When editing an order that already shipped, its own units were already drawn from the warehouse,
     // so they must be added back to the "available" pool to validate its quantities fairly.
     const [editBaseline, setEditBaseline] = useState(null)
+    // Recurring-service reminders offered right after a create: one entry per recurring-service line
+    // sold, shown one at a time via ComposeEmailModal. Closing (or sending) the modal advances the
+    // queue - Cancel on it is simply "no thanks for this one".
+    const [reminderQueue, setReminderQueue] = useState([])
+    const [reminderClientId, setReminderClientId] = useState(null)
+    const activeReminder = reminderQueue[0] || null
+    const advanceReminders = () => setReminderQueue((q) => q.slice(1))
 
     useEffect(() => {
         loadReferences()
@@ -534,16 +564,33 @@ export default function SalesOrdersPage() {
         }
 
         try {
+            let created = null
             if (editingId) {
                 await apiPut(`/sales-orders/${editingId}`, payload)
             } else {
-                await apiPost('/sales-orders', payload)
+                created = await apiPost('/sales-orders', payload)
             }
             toast.success(editingId ? t('salesOrders.updated') : t('salesOrders.created'))
             formModal.close()
             setEditingId(null)
             setForm(emptyForm)
             await reload()
+
+            // Offer a reminder for each recurring service just sold - only on a fresh order, only when
+            // this company/user can actually send one, and only when there is an address to send it to.
+            if (created && canOfferReminders && created.client?.email) {
+                const queue = safeArray(created.items)
+                    .filter((it) => it.service?.recurrenceMonths)
+                    .map((it) => ({
+                        serviceId: it.service.id,
+                        serviceName: it.service.name,
+                        suggestedDate: addMonthsIso(created.orderDate, it.service.recurrenceMonths),
+                    }))
+                if (queue.length) {
+                    setReminderClientId(created.client.id)
+                    setReminderQueue(queue)
+                }
+            }
         } finally {
             setLoading(false)
         }
@@ -1110,6 +1157,24 @@ export default function SalesOrdersPage() {
                 onClose={closeQuickCreate}
                 onCreated={handleQuickCreated}
             />
+
+            {/* One at a time, keyed on the remaining queue length so each advance remounts the modal
+                (and its own reset effect) with the next entry's prefill instead of reusing stale state. */}
+            {activeReminder && (
+                <ComposeEmailModal
+                    key={reminderQueue.length}
+                    isOpen
+                    recipientType="CLIENT"
+                    recipientIds={[reminderClientId]}
+                    title={t('salesOrders.reminderPrompt.title', { service: activeReminder.serviceName })}
+                    initialSubject={serviceReminderTemplate(i18n.language, activeReminder.serviceName).subject}
+                    initialBody={serviceReminderTemplate(i18n.language, activeReminder.serviceName).body}
+                    initialScheduledDate={activeReminder.suggestedDate}
+                    initialServiceId={activeReminder.serviceId}
+                    onClose={advanceReminders}
+                    onSent={advanceReminders}
+                />
+            )}
         </div>
     )
 }
