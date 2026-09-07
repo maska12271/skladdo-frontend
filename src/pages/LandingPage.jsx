@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { PLANS, UNLIMITED } from '../config/plans'
+import LegalLinks from '../components/LegalLinks'
 
 // The feature sections, each paired with a real product screenshot (public/landing/*.png).
 const FEATURES = [
@@ -627,6 +628,8 @@ function Pricing({ t }) {
                 ))}
             </div>
             <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">{t('landing.addonsNote')}</p>
+            {/* At the point money is being discussed, rather than only in the footer three screens down. */}
+            <LegalLinks className="mt-3" />
 
             <div className="mt-10 flex flex-col items-center justify-between gap-5 rounded-2xl border border-teal-200 bg-teal-50/60 p-7 dark:border-teal-900 dark:bg-teal-950/20 sm:flex-row sm:text-left">
                 <div className="flex items-start gap-4">
@@ -716,9 +719,12 @@ function Footer({ t }) {
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                     © {new Date().getFullYear()} {t('nav.appName')} · {t('landing.footer.rights')}
                 </p>
-                <div className="flex items-center gap-5 text-sm font-medium text-slate-600 dark:text-slate-300">
+                <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm font-medium text-slate-600 dark:text-slate-300">
                     <Link to="/login" className="hover:text-teal-700 dark:hover:text-teal-400">{t('landing.nav.signIn')}</Link>
                     <Link to="/register" className="hover:text-teal-700 dark:hover:text-teal-400">{t('landing.nav.getStarted')}</Link>
+                    <Link to="/terms" className="hover:text-teal-700 dark:hover:text-teal-400">{t('terms.title')}</Link>
+                    <Link to="/privacy" className="hover:text-teal-700 dark:hover:text-teal-400">{t('privacy.title')}</Link>
+                    <Link to="/cookies" className="hover:text-teal-700 dark:hover:text-teal-400">{t('cookies.title')}</Link>
                 </div>
             </div>
         </footer>
