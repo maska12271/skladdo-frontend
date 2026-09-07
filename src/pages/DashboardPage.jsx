@@ -28,6 +28,7 @@ import DashboardGrid from '../components/DashboardGrid'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import WarehouseDashboard from '../components/WarehouseDashboard'
 import { useDashboardLayout, resolveLayout, widgetMeta } from '../hooks/useDashboardLayout'
+import { useRankMetrics, RANK_VALUE } from '../hooks/useRankMetrics'
 import { compact, bottom } from '../utils/gridLayout'
 import { formatMoney } from '../utils/format'
 
@@ -42,9 +43,10 @@ function pctChange(now, prev) {
 
 export default function DashboardPage() {
     const { t } = useTranslation()
-    const { user } = useAuth()
+    const { user, canSeePrices, canSeeFinancials } = useAuth()
     const navigate = useNavigate()
     const { stored, save, reset } = useDashboardLayout(user?.id)
+    const { metricOf, setMetric } = useRankMetrics(user?.id, canSeeFinancials)
 
     const [stats, setStats] = useState(null)
     const [loading, setLoading] = useState(true)
@@ -76,16 +78,22 @@ export default function DashboardPage() {
         if (!stats) return keys
         const hasSales = !!stats.sales
         const hasPurchases = !!stats.purchases
+        // The money widgets key off the figures themselves rather than off the permission flags, because
+        // the server has already applied those: an account that may not see the company's turnover is sent
+        // an order block with its counts and no totals. Reading the payload keeps one source of truth, so a
+        // widget can never appear here to render a figure the response deliberately withheld.
+        const hasRevenue = stats.sales?.thisMonth != null
+        const hasSpend = stats.purchases?.thisMonth != null
         // Each headline figure is its own widget, so each appears only when its data does.
-        if (hasSales) keys.add('kpiRevenue')
-        if (hasPurchases) keys.add('kpiSpend')
+        if (hasRevenue) keys.add('kpiRevenue')
+        if (hasSpend) keys.add('kpiSpend')
         if (stats.collected) keys.add('kpiCollected')
         if (stats.products) keys.add('kpiLowStock')
         if (hasSales) keys.add('kpiActiveSales')
         if (hasPurchases) keys.add('kpiActivePurchases')
         if (stats.tenders) keys.add('kpiActiveTenders')
         if (stats.products) keys.add('stockHealth')
-        if (hasSales || hasPurchases) keys.add('revenueChart')
+        if (hasRevenue || hasSpend) keys.add('revenueChart')
         if (hasSales || hasPurchases || stats.tenders) keys.add('activity')
         if (stats.products) keys.add('lowStock')
         if (stats.receivables) keys.add('receivables')
@@ -159,12 +167,13 @@ export default function DashboardPage() {
                 return t('dashboard.titles.tenders')
             case 'stockHealth':
                 return t('dashboard.titles.stockHealth')
+            // The ranking widgets say what they are ranked by, because the same five names in a
+            // different order is otherwise a silent change: "Top products" by turnover and by units are
+            // two different lists wearing one title.
             case 'topClients':
-                return t('dashboard.titles.topClients')
             case 'topProducts':
-                return t('dashboard.titles.topProducts')
             case 'topServices':
-                return t('dashboard.titles.topServices')
+                return `${t(`dashboard.titles.${key}`)} · ${t(`dashboard.rank.by.${RANK_LABELS[key][metricOf(key)]}`)}`
             default:
                 // KPI widgets fall through to their catalogue label.
                 return t(`dashboard.widgets.${key}`, { defaultValue: widgetMeta(key)?.label || key })
@@ -197,6 +206,31 @@ export default function DashboardPage() {
             >
                 {t('dashboard.viewAll')} <ArrowRight className="h-3.5 w-3.5" />
             </Link>
+        )
+    }
+
+    /**
+     * One of the three top-N widgets, in whichever ordering this user last chose.
+     *
+     * The selector is only offered when the money table exists to switch to - an account that may not see
+     * the company's figures is shown the volume table and nothing to press - and it is hidden while the
+     * dashboard is being edited, where every control belongs to the layout rather than to the widget.
+     */
+    const renderRank = (key) => {
+        const block = stats[key] || {}
+        const metric = metricOf(key)
+        const rows = (metric === RANK_VALUE ? block.byValue : block.byVolume) || []
+        const unit = t(`dashboard.rank.${RANK_LABELS[key].volume}`)
+        return (
+            <RankList
+                rows={rows}
+                metric={metric}
+                unit={unit}
+                emptyText={t('dashboard.rank.noSales')}
+                onMetricChange={!editing && block.byValue ? (next) => setMetric(key, next) : undefined}
+                valueLabel={t(`dashboard.rank.by.${RANK_LABELS[key].value}`)}
+                volumeLabel={t(`dashboard.rank.by.${RANK_LABELS[key].volume}`)}
+            />
         )
     }
 
@@ -248,7 +282,7 @@ export default function DashboardPage() {
                             <DataTable
                                 bare
                                 alwaysCards
-                                columns={tenderColumns(t)}
+                                columns={tenderColumns(t, canSeePrices)}
                                 rows={rows}
                                 getRowId={(r) => r.id}
                                 onRowClick={editing ? undefined : (r) => navigate(`/tenders/${r.id}`)}
@@ -262,11 +296,9 @@ export default function DashboardPage() {
             case 'stockHealth':
                 return <StockHealth products={stats.products} />
             case 'topClients':
-                return <RankList rows={stats.topClients || []} emptyText={t('dashboard.rank.noSales')} />
             case 'topProducts':
-                return <RankList rows={stats.topProducts || []} emptyText={t('dashboard.rank.noSales')} unit={t('dashboard.rank.units')} />
             case 'topServices':
-                return <RankList rows={stats.topServices || []} emptyText={t('dashboard.rank.noSales')} unit={t('dashboard.rank.units')} />
+                return renderRank(key)
             default:
                 return null
         }
@@ -556,8 +588,24 @@ const lowStockColumns = (t) => [
 
 // The customer column is left to the tenders list page: this widget sits in the narrow rail, where a
 // fourth column would squeeze the title down to nothing.
-const tenderColumns = (t) => [
+//
+// The value column goes entirely for an account that may not see prices, rather than staying as a column
+// of blanks: the server sends no estimate for them, and an empty column is worse than no column - it takes
+// a third of a narrow widget to say nothing.
+const tenderColumns = (t, showValue) => [
     { key: 'title', label: t('dashboard.cols.title') },
     { key: 'status', label: t('dashboard.cols.status'), render: (row) => <StatusBadge status={row.status} /> },
-    { key: 'estimatedValue', label: t('dashboard.cols.value'), render: (row) => formatMoney(row.estimatedValue) },
+    ...(showValue
+        ? [{ key: 'estimatedValue', label: t('dashboard.cols.value'), render: (row) => formatMoney(row.estimatedValue) }]
+        : []),
 ]
+
+/**
+ * What each ranking widget calls its two orderings. The value half is money in every case; the volume half
+ * differs, because what a client racks up is orders while what a product racks up is units.
+ */
+const RANK_LABELS = {
+    topClients: { value: 'revenue', volume: 'orders' },
+    topProducts: { value: 'revenue', volume: 'units' },
+    topServices: { value: 'revenue', volume: 'units' },
+}

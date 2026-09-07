@@ -185,6 +185,23 @@ export function AuthProvider({ children }) {
         return startSession(response)
     }, [startSession])
 
+    /**
+     * Signs in with the ID token Google's button produced. Everything past this point is identical to a
+     * password login — the server hands back the same token and profile — which is why it funnels into the
+     * same `startSession` rather than having a session shape of its own.
+     */
+    const loginWithGoogle = useCallback(async (idToken) => {
+        const response = await apiPost('/public/auth/google/login', { idToken }, { suppressErrorToast: true, skipAuthRedirect: true })
+        return startSession(response)
+    }, [startSession])
+
+    // Signup whose owner proves who they are with Google instead of choosing a password. `payload` still
+    // carries everything Google cannot answer: company name, account type, plan, add-ons.
+    const registerWithGoogle = useCallback(async (idToken, payload) => {
+        const response = await apiPost('/public/auth/google/register', { idToken, ...payload }, { suppressErrorToast: true, skipAuthRedirect: true })
+        return startSession(response)
+    }, [startSession])
+
     const isAdmin = MANAGER_ROLES.includes(user?.role)
 
     // Standing in the account's *own* company, which `role` hides during a partner session. Governs the
@@ -194,6 +211,12 @@ export function AuthProvider({ children }) {
     // Whether the current account may see monetary values. Managers always can; everyone else is
     // governed by their account flag (default true when unset, e.g. sessions stored before the flag).
     const canSeePrices = isAdmin || user?.canSeePrices !== false
+
+    // Whether the account may see the *company's* money — turnover, spend, cash collected, receivables —
+    // as opposed to the amounts on the records it works with, which `canSeePrices` governs. Managers
+    // always may; everyone else has to be granted it, so an unset flag means no (the opposite default to
+    // the one above, and deliberately: a figure nobody chose to share is not shared).
+    const canSeeFinancials = canSeePrices && (isAdmin || user?.canSeeCompanyFinancials === true)
 
     /**
      * Whether the current user may perform `action` ('canView' | 'canCreate' | 'canEdit' |
@@ -253,11 +276,14 @@ export function AuthProvider({ children }) {
         isAdmin,
         isHomeAdmin,
         canSeePrices,
+        canSeeFinancials,
         permissions: user?.permissions || {},
         can,
         hasAddon,
         login,
         register,
+        loginWithGoogle,
+        registerWithGoogle,
         logout,
         updateUser,
         refreshUser,
@@ -270,7 +296,8 @@ export function AuthProvider({ children }) {
         isPlatformCompany,
         lastClientId,
         switchingRef,
-    }), [token, user, isAdmin, isHomeAdmin, canSeePrices, can, hasAddon, login, register, logout, updateUser, refreshUser,
+    }), [token, user, isAdmin, isHomeAdmin, canSeePrices, canSeeFinancials, can, hasAddon, login, register, loginWithGoogle,
+        registerWithGoogle, logout, updateUser, refreshUser,
         companies, switchCompany, refreshCompanies, isPartnerSession, isWarehouseAccount, isPlatformAdmin,
         isPlatformCompany, lastClientId])
 

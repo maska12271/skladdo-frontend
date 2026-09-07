@@ -36,6 +36,9 @@ const emptyForm = {
     fullName: '',
     role: 'USER',
     canSeePrices: true,
+    // Off by default, unlike prices above: what an order comes to is part of doing the work, while what the
+    // company took this month is not something a new account is handed without someone deciding to.
+    canSeeCompanyFinancials: false,
     // Optional: an administrator can give a new colleague a picture or an icon so they do not start as
     // another grey circle. The user can change it themselves afterwards under My Account.
     avatarKey: null,
@@ -47,9 +50,10 @@ const emptyForm = {
 const emptyInvite = {
     role: 'USER',
     canSeePrices: true,
+    canSeeCompanyFinancials: false,
 }
 
-// Restricted (permission-governed) roles that also carry the price-visibility toggle.
+// Restricted (permission-governed) roles that also carry the two money-visibility toggles.
 const RESTRICTED_ROLES = ['USER', 'WAREHOUSE']
 
 // Invitations worth keeping in front of an administrator. A spent or lapsed one is history, and the
@@ -296,10 +300,13 @@ export default function UsersPage() {
         setError('')
         setLoading(true)
         try {
-            const canSeePrices = RESTRICTED_ROLES.includes(inviteForm.role) ? inviteForm.canSeePrices : true
+            const restricted = RESTRICTED_ROLES.includes(inviteForm.role)
+            const canSeePrices = restricted ? inviteForm.canSeePrices : true
+            const canSeeCompanyFinancials = restricted ? inviteForm.canSeeCompanyFinancials : true
             const created = await apiPost('/user-invites', {
                 role: inviteForm.role,
                 canSeePrices,
+                canSeeCompanyFinancials,
                 permissions: RESTRICTED_ROLES.includes(inviteForm.role) ? invitePermRows : null,
             })
             setCreatedInvite(created)
@@ -362,6 +369,7 @@ export default function UsersPage() {
             fullName: item.fullName || '',
             role: item.role === 'OWNER' ? 'ADMINISTRATOR' : item.role || 'USER',
             canSeePrices: item.canSeePrices !== false,
+            canSeeCompanyFinancials: item.canSeeCompanyFinancials === true,
             avatarKey: item.avatarKey || null,
             avatarIcon: item.avatarIcon || null,
             avatarColor: item.avatarColor || null,
@@ -388,12 +396,15 @@ export default function UsersPage() {
         setError('')
         setLoading(true)
         try {
-            // The price-visibility flag only applies to restricted roles; managers always see prices.
-            const canSeePrices = RESTRICTED_ROLES.includes(form.role) ? form.canSeePrices : true
+            // Both money flags only apply to the restricted roles; a manager always sees everything.
+            const restrictedRole = RESTRICTED_ROLES.includes(form.role)
+            const canSeePrices = restrictedRole ? form.canSeePrices : true
+            const canSeeCompanyFinancials = restrictedRole ? form.canSeeCompanyFinancials : true
             await apiPut(`/users/${editingId}`, {
                 fullName: form.fullName,
                 role: form.role,
                 canSeePrices,
+                canSeeCompanyFinancials,
                 avatarKey: form.avatarKey,
                 avatarIcon: form.avatarIcon,
                 avatarColor: form.avatarColor,
@@ -807,6 +818,23 @@ export default function UsersPage() {
                         </label>
                     )}
 
+                    {RESTRICTED_ROLES.includes(form.role) && (
+                        <label className={`flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800 ${form.canSeePrices ? '' : 'opacity-50'}`}>
+                            <span>
+                                <span className="block font-medium text-slate-700 dark:text-slate-200">{t('users.form.canSeeCompanyFinancials')}</span>
+                                <span className="text-xs text-slate-500 dark:text-slate-400">{t('users.form.canSeeCompanyFinancialsHint')}</span>
+                            </span>
+                            {/* Meaningless without prices, so it follows that switch off rather than sitting
+                                there ticked while the server ignores it. */}
+                            <Checkbox
+                                name="canSeeCompanyFinancials"
+                                disabled={!form.canSeePrices}
+                                checked={!!form.canSeePrices && !!form.canSeeCompanyFinancials}
+                                onChange={(e) => setForm((prev) => ({ ...prev, canSeeCompanyFinancials: e.target.checked }))}
+                            />
+                        </label>
+                    )}
+
                     <div className="rounded-xl border border-slate-200 px-4 py-3 dark:border-slate-800">
                         <p className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-200">{t('users.form.avatar')}</p>
                         <AvatarPicker
@@ -885,6 +913,19 @@ export default function UsersPage() {
                                         name="canSeePrices"
                                         checked={!!inviteForm.canSeePrices}
                                         onChange={(e) => setInviteForm((prev) => ({ ...prev, canSeePrices: e.target.checked }))}
+                                    />
+                                </label>
+
+                                <label className={`flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-800 ${inviteForm.canSeePrices ? '' : 'opacity-50'}`}>
+                                    <span>
+                                        <span className="block font-medium text-slate-700 dark:text-slate-200">{t('users.form.canSeeCompanyFinancials')}</span>
+                                        <span className="text-xs text-slate-500 dark:text-slate-400">{t('users.form.canSeeCompanyFinancialsHint')}</span>
+                                    </span>
+                                    <Checkbox
+                                        name="canSeeCompanyFinancials"
+                                        disabled={!inviteForm.canSeePrices}
+                                        checked={!!inviteForm.canSeePrices && !!inviteForm.canSeeCompanyFinancials}
+                                        onChange={(e) => setInviteForm((prev) => ({ ...prev, canSeeCompanyFinancials: e.target.checked }))}
                                     />
                                 </label>
 

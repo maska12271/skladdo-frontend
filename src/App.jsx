@@ -12,6 +12,9 @@ const LandingPage = lazy(() => import('./pages/LandingPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
+const CookiesPage = lazy(() => import('./pages/CookiesPage'))
+const TermsPage = lazy(() => import('./pages/TermsPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const JoinPage = lazy(() => import('./pages/JoinPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
@@ -141,6 +144,33 @@ export default function App() {
                 element={
                     <Suspense fallback={<div className="flex min-h-screen items-center justify-center p-6"><LoadingBlock /></div>}>
                         <ResetPasswordPage />
+                    </Suspense>
+                }
+            />
+            {/* The three legal documents. Public because the people they concern have not signed in:
+                Google's consent screen links to /privacy from the "Sign in with Google" dialog, and
+                /terms is what somebody agrees to by creating an account they do not have yet. */}
+            <Route
+                path="/privacy"
+                element={
+                    <Suspense fallback={<div className="flex min-h-screen items-center justify-center p-6"><LoadingBlock /></div>}>
+                        <PrivacyPage />
+                    </Suspense>
+                }
+            />
+            <Route
+                path="/cookies"
+                element={
+                    <Suspense fallback={<div className="flex min-h-screen items-center justify-center p-6"><LoadingBlock /></div>}>
+                        <CookiesPage />
+                    </Suspense>
+                }
+            />
+            <Route
+                path="/terms"
+                element={
+                    <Suspense fallback={<div className="flex min-h-screen items-center justify-center p-6"><LoadingBlock /></div>}>
+                        <TermsPage />
                     </Suspense>
                 }
             />

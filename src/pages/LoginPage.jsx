@@ -5,10 +5,12 @@ import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { FormField } from '../components/FormField.jsx'
+import GoogleSignInButton from '../components/GoogleSignInButton.jsx'
+import LegalLinks from '../components/LegalLinks.jsx'
 
 export default function LoginPage() {
     const { t } = useTranslation()
-    const { login, isAuthenticated } = useAuth()
+    const { login, loginWithGoogle, isAuthenticated } = useAuth()
     const navigate = useNavigate()
 
     const [email, setEmail] = useState('')
@@ -29,6 +31,21 @@ export default function LoginPage() {
             navigate('/dashboard', { replace: true })
         } catch (err) {
             setError(err.message || t('login.error'))
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // Signing in with Google never creates a company — the server has no name, account type or plan to
+    // create one with — so an unknown address is sent to signup rather than quietly charged for a plan.
+    const handleGoogle = async (idToken) => {
+        setError('')
+        setLoading(true)
+        try {
+            await loginWithGoogle(idToken)
+            navigate('/dashboard', { replace: true })
+        } catch (err) {
+            setError(err.message || t('login.googleError'))
         } finally {
             setLoading(false)
         }
@@ -97,6 +114,24 @@ export default function LoginPage() {
                     </button>
                 </form>
 
+                {/* Renders nothing when this build has no Google client id, taking the divider with it. */}
+                {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                    <>
+                        <div className="my-6 flex items-center gap-3">
+                            <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+                            <span className="text-xs font-medium tracking-wide text-slate-400 uppercase dark:text-slate-500">
+                                {t('login.or')}
+                            </span>
+                            <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+                        </div>
+                        <GoogleSignInButton
+                            onCredential={handleGoogle}
+                            onError={() => setError(t('login.googleError'))}
+                            text="signin_with"
+                        />
+                    </>
+                )}
+
                 <p className="mt-6 text-center text-sm">
                     <Link
                         to="/forgot-password"
@@ -115,6 +150,8 @@ export default function LoginPage() {
                         {t('login.signUp')}
                     </Link>
                 </p>
+
+                <LegalLinks className="mt-6" />
             </div>
         </div>
     )

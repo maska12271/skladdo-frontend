@@ -558,6 +558,10 @@ export default {
         error: 'Unable to sign in',
         noAccount: 'Don\'t have an account?',
         signUp: 'Sign up',
+        // Separates the password form from the Google button, on both the sign-in and signup pages.
+        or: 'or',
+        googleError: 'Google sign-in failed. Please try again.',
+        google: 'Sign in with Google',
     },
     forgotPassword: {
         title: 'Forgot password',
@@ -799,6 +803,309 @@ export default {
         tooShort: 'Password must be at least 8 characters.',
         mismatch: 'The two passwords do not match.',
         error: 'Could not create your account. Please try again.',
+        google: {
+            button: 'Sign up with Google',
+            connected: 'Connected to Google',
+            usePassword: 'Use a password instead',
+        },
+    },
+    privacy: {
+        title: 'Privacy Policy',
+        updated: 'Last updated {{date}}',
+        intro: 'Skladdo is warehouse and order management software for businesses. This policy explains what personal data the service collects, why, and what you can ask us to do about it.',
+        sections: {
+            controller: {
+                h: 'Who is responsible',
+                p: 'The company named above operates Skladdo and is the controller of the account data described below. You can write to us about any of it at support@skladdo.eu.',
+                note: 'The business data your company puts into Skladdo — your own clients, suppliers and the people who work for them — belongs to your company. Your company decides what is stored and for how long; we hold it on their instructions and do nothing else with it.',
+            },
+            collect: {
+                h: 'What we collect',
+                p: 'Three kinds of data, and no more than the service needs to work:',
+                items: [
+                    'Account data — your name, email address, interface language, a profile picture if you upload one, and your password stored only as a hash. This is what identifies you when you sign in.',
+                    'Business data your company enters — products, stock, warehouses, clients, suppliers and their contact people, orders, invoices, tenders and uploaded documents. Some of it is personal data about people at other companies.',
+                    'Technical data — when you last signed in, an activity log of which account changed what inside your company so an administrator can see who did what, and the IP address a failed sign-in came from. That address is held in memory only, for as long as the lockout window lasts, and is never written to the database.',
+                ],
+            },
+            google: {
+                h: 'Signing in with Google',
+                p: 'If you choose "Sign in with Google", Google tells us your name, email address and profile picture, and nothing else. We use the address to find your Skladdo account and the name to fill in your profile.',
+                note: 'We never see your Google password, and we ask for no access to Gmail, Drive, contacts or any other Google service. Signing in with Google is optional — an email address and a password work just as well.',
+            },
+            use: {
+                h: 'Why we use it',
+                items: [
+                    'To run the service: signing you in, showing your company its data, and producing its invoices and documents.',
+                    'To send the email the service depends on — invitations and password links, and any supplier email your company chooses to send.',
+                    'To show your company\'s administrators who did what in their account.',
+                    'To keep accounts secure, which is why repeated failed sign-ins are slowed down.',
+                ],
+                note: 'We do not sell your data, and we do not use it for advertising or profiling.',
+            },
+            legal: {
+                h: 'Our legal basis',
+                p: 'We process account and business data to provide the service your company has signed up for. Security measures such as limiting failed sign-in attempts rest on our legitimate interest in keeping accounts from being broken into. Where we ever ask for consent, you can withdraw it at any time.',
+            },
+            sharing: {
+                h: 'Who else handles it',
+                p: 'A short list, and none of them are given your data for purposes of their own:',
+                items: [
+                    'Contabo (Germany) — the server the application and its database run on.',
+                    'Amazon Web Services (Frankfurt) — storage for uploaded files such as product images and documents.',
+                    'Fastmail — sends invitations and password links.',
+                    'Google — only if you choose to sign in with Google.',
+                    'Mailgun — only if your company switches on reply tracking for supplier email.',
+                    'Photon, run by Komoot (Germany) — the address suggestions offered while you type. The partial address is sent there to be matched against OpenStreetMap data; your name, your account and your company do not go with it.',
+                ],
+            },
+            location: {
+                h: 'Where it is stored',
+                p: 'In the European Union. The application and its database run on a server in Germany, and uploaded files are stored in Amazon\'s Frankfurt region.',
+            },
+            retention: {
+                h: 'How long we keep it',
+                p: 'Your company\'s data is kept for as long as its account is open. Write to support@skladdo.eu to close an account and have its data deleted.',
+                note: 'One deliberate exception: when a colleague\'s user account is removed, a record of the account itself remains, so that orders and invoices they created years ago still show who created them. Their name stays visible for that reason; nothing else about them does.',
+            },
+            rights: {
+                h: 'Your rights',
+                p: 'Under the GDPR you can ask us to:',
+                items: [
+                    'give you a copy of the personal data we hold about you',
+                    'correct it where it is wrong',
+                    'delete it',
+                    'restrict or object to the way we use it',
+                    'hand it over in a portable form — the application can already export your company\'s data to Excel or CSV at any time',
+                ],
+                note: 'Write to support@skladdo.eu and we will answer within one month. If our answer does not satisfy you, you can complain to the Estonian Data Protection Inspectorate (Andmekaitse Inspektsioon, aki.ee).',
+            },
+            tracking: {
+                h: 'Knowing whether an email was opened',
+                p: 'When your company sends a supplier or client email from Skladdo, the message carries an invisible one-pixel image hosted by us. If the recipient\'s mail program loads it, we record that the message was opened and when, and show that to your company on its sent-mail page.',
+                note: 'Nothing else is recorded — no location, no device, no reading time — and most mail programs block these images by default, so an unopened marker often means only that. Recipients who would rather not be counted at all can turn off remote images in their mail program. Your company decides whether to send these emails; we provide the mechanism.',
+            },
+            storage: {
+                h: 'Cookies and browser storage',
+                p: 'Skladdo sets no cookies at all — none of its own, and none for advertising, analytics or profiling. It does keep a few things in your own browser\'s local storage: the token that keeps you signed in, your language and light or dark preference, and small interface choices such as the table columns you last used.',
+                note: 'Clearing your browser data removes all of it and signs you out. Our cookie policy lists every stored item by name and says what each one is for.',
+            },
+            security: {
+                h: 'How it is protected',
+                p: 'Passwords are stored only as a bcrypt hash, never in a form anyone here could read. Traffic runs over HTTPS. Each company\'s data is separated so that one company\'s account cannot reach another\'s, and any credentials your company saves for its own mail server are encrypted before they are stored.',
+            },
+            children: {
+                h: 'Children',
+                p: 'Skladdo is a tool for businesses and is not directed at children. We do not knowingly create accounts for anyone under 16. If you believe a child has an account here, write to us and we will remove it.',
+            },
+            changes: {
+                h: 'Changes to this policy',
+                p: 'If this policy changes, the date at the top changes with it, and we will say so in the application when the change is significant.',
+            },
+            contact: {
+                h: 'Getting in touch',
+                p: 'Questions about this policy, or about the data we hold, go to support@skladdo.eu.',
+            },
+        },
+    },
+    // Labels shared by all three legal documents. The values themselves come from `config/legal.js`.
+    legal: {
+        entity: {
+            pending: 'The registered details of the company operating Skladdo — its legal name, registry code and address — are not published here yet. Everything in this document is provided by the operator of skladdo.eu, who can be reached at support@skladdo.eu in the meantime.',
+            name: 'Company',
+            registryCode: 'Registry code',
+            vatNumber: 'VAT number',
+            address: 'Registered address',
+            country: 'Country',
+            email: 'Contact',
+        },
+        // Assembled around two links — see components/LegalConsentNotice.jsx.
+        consent: {
+            prefix: 'By creating an account you agree to the',
+            separator: 'and the',
+            suffix: '.',
+        },
+    },
+    cookies: {
+        title: 'Cookie Policy',
+        updated: 'Last updated {{date}}',
+        intro: 'This page explains what Skladdo stores on your device, and why there is no cookie banner in front of it. It is short, because there is not much to explain.',
+        sections: {
+            summary: {
+                h: 'The short version',
+                p: 'Skladdo sets no cookies. To keep you signed in and remember how you like the interface, it stores a handful of items in your browser\'s own local storage — listed one by one below. There is no analytics, no advertising, and no tracking of you across other websites.',
+            },
+            whatCookies: {
+                h: 'Cookies, and why this page covers more than cookies',
+                p: 'A cookie is a small file a website asks your browser to keep and send back on every later request. Local storage does a similar job — the site keeps something on your device — but the browser never sends it anywhere on its own; the page has to read it and decide to.',
+                note: 'European rules on this are about storing anything on your device, not about the word "cookie", so this page covers both. Skladdo happens to use only the second kind.',
+            },
+            noCookies: {
+                h: 'Skladdo sets no cookies',
+                p: 'Signing in gives your browser a signed token, kept in local storage, which the application attaches to each request it makes. The server keeps no session of its own, so there is no session cookie to set — and we set no other kind either.',
+                note: 'One exception is not ours: if you use "Sign in with Google", Google\'s own script may set cookies for its own account system. That is covered further down.',
+            },
+            stored: {
+                h: 'Everything Skladdo stores in your browser',
+                p: 'The complete list. Everything here is written by the application itself and read only by it:',
+                items: [
+                    'token — the signed token proving you are signed in. Sent to our server with each request; removed when you sign out.',
+                    'user — your name, email address, language, role and permissions, so the interface can draw itself correctly before the first response arrives. Removed when you sign out.',
+                    'lastClientCompanyId — for warehouse accounts only: which client company you had open, so the next sign-in resumes where you left off. Removed when you sign out.',
+                    'lang — the interface language you chose, so the app opens in it next time.',
+                    'theme — whether you picked the light or the dark interface.',
+                    'tableColumns:… and tableView:… — per list, the columns you hid and whether you last used the table or the card layout.',
+                    'dashboard-grid-v8:… and dashboard-rank-metrics-v1:… — how you arranged your dashboard widgets and how you chose to rank its top-ten lists. Kept per account, so colleagues sharing a computer do not overwrite each other.',
+                ],
+                note: 'Only the sign-in token ever leaves your browser, and only to our own server. None of these are shared with anyone else, and none of them are used to build a profile of you.',
+            },
+            google: {
+                h: 'Sign in with Google',
+                p: 'The sign-in, sign-up and invitation pages load Google\'s sign-in script from accounts.google.com — and only those three pages, and only when Google sign-in has been enabled for this installation. Google may set its own cookies when it does, under its own privacy policy and outside our control.',
+                note: 'No page you see after signing in loads anything from Google. If you would rather not involve Google at all, sign in with an email address and a password instead — everything works exactly the same.',
+            },
+            emailPixel: {
+                h: 'Emails your company sends',
+                p: 'When a company using Skladdo emails one of its suppliers or clients from inside the app, the message can include an invisible one-pixel image served from our server. If the recipient\'s mail program loads it, the sender sees that the message was opened, and when.',
+                note: 'This concerns the recipients of those emails, not visitors to this site, and it stores nothing on anybody\'s device. Most mail programs block remote images until asked; turning them off entirely stops the count.',
+            },
+            thirdParty: {
+                h: 'What we deliberately do not load',
+                p: 'No analytics or product-measurement scripts, no advertising or retargeting pixels, no social media buttons, no embedded video players, and no fonts fetched from another company\'s server. Nothing on the page reports your visit to anyone.',
+                note: 'Address suggestions are the one feature that consults an outside service, and the request is made by our server rather than by your browser — so that provider never sees your address, your browser or your visit.',
+            },
+            consent: {
+                h: 'Why there is no cookie banner',
+                p: 'Consent is required for storage that is not strictly necessary for a service you have actually asked for. The sign-in token is what makes a signed-in session possible, and everything else on the list is a preference you set yourself by using the interface. None of it is used for advertising, analytics or profiling.',
+                note: 'So there is nothing here to ask your permission for, and we would rather not put a pointless dialog in your way. If we ever add anything that does need consent, we will ask before it runs — not afterwards.',
+            },
+            control: {
+                h: 'Clearing it',
+                p: 'Signing out removes the token, your profile and the last-open company. Clearing this site\'s data in your browser removes all of it, including your language and theme, and signs you out.',
+                note: 'Blocking local storage for this site altogether will prevent you from signing in — the token has nowhere to live, so the session cannot survive the next page load.',
+            },
+            changes: {
+                h: 'Changes to this policy',
+                p: 'If what we store changes, this page and the date at the top change with it. Anything that would need your consent will be asked for at the time.',
+            },
+            contact: {
+                h: 'Getting in touch',
+                p: 'Questions about anything on this page go to support@skladdo.eu.',
+            },
+        },
+    },
+    terms: {
+        title: 'Terms of Service',
+        updated: 'Last updated {{date}}',
+        intro: 'These terms are the agreement between your company and us about the use of Skladdo. They apply from the moment an account is created. They are written to be read, so they are in plain language rather than in legal boilerplate.',
+        sections: {
+            acceptance: {
+                h: 'Agreeing to these terms',
+                p: 'Creating a Skladdo account accepts these terms. If you create one on behalf of a company, you confirm that you are allowed to agree to them for that company, and "you" below means the company.',
+                note: 'If you do not agree with them, do not create an account. If you already have one and no longer agree, you can close it at any time — see "Ending the agreement".',
+            },
+            service: {
+                h: 'What the service is',
+                p: 'Skladdo is web software for running a trading or distribution business: a product and service catalogue, stock across one or more warehouses, clients and suppliers with their contact people, sales and purchase orders, invoices and delivery documents, and a shared activity trail. Tenders and supplier emailing are optional extras a company switches on separately.',
+                note: 'It is provided as a service over the internet. There is nothing to install, and you are not being sold or licensed a copy of the software itself.',
+            },
+            accounts: {
+                h: 'Accounts and passwords',
+                p: 'Give accurate details when you sign up and keep them current. Keep your password to yourself, and tell us at once if you think somebody else has it. What is done through your account is treated as done by you.',
+                note: 'Everyone who works in Skladdo needs their own account. Sharing one defeats the activity log — which exists so a company can see who did what — and makes permissions meaningless. It is also how one departing colleague takes a whole company\'s access with them.',
+            },
+            roles: {
+                h: 'Who controls a company account',
+                p: 'The account that created the company owns it. Owners and administrators can invite and remove colleagues, grant and withdraw permissions per module, read the activity log, change company settings and export everything.',
+                note: 'This is worth being clear about: your company\'s administrators can see and change everything held in the company\'s account, including work entered by other colleagues. If you are an employee using an account your employer created, this agreement is with your employer, and it is your employer who decides what happens to that data.',
+            },
+            plans: {
+                h: 'Plans, seats and extras',
+                p: 'Business accounts sit on one of three plans — Starter, Business or Enterprise. A plan meters one thing only: how many user accounts the company may have. Products, clients, orders and documents are never capped, because a limit there would land in the middle of an import rather than where value is taken out of the product.',
+                items: [
+                    'Reaching the seat limit stops new colleagues being added. It never deletes anything and never blocks the people already there.',
+                    'Tenders and supplier emailing are bought separately from any plan. Without them those pages are absent rather than merely disabled.',
+                    'Warehouse accounts — the ones logistics providers use to work inside their clients\' companies — are free, own no catalogue of their own, and have no plan to choose.',
+                    'A plan can be changed at any time from Settings, and takes effect immediately.',
+                ],
+            },
+            billing: {
+                h: 'Payment',
+                p: 'Skladdo is currently provided free of charge. No payment provider is connected to the service, so no charge can be taken, and no payment method is collected or stored — the card step during signup is a preview of a future checkout and nothing typed into it is sent anywhere or kept.',
+                note: 'The prices shown on the pricing page and in Settings describe the paid service we intend to launch; until then they are indicative, not amounts due. We will give clear advance notice before any charging begins, and you will be able to decline and close the account rather than be charged. This section will be rewritten when that happens, and the date at the top of the page will change with it.',
+            },
+            yourData: {
+                h: 'Your data stays yours',
+                p: 'Everything your company puts into Skladdo belongs to your company. We claim no ownership of it and do not use it for anything except running the service for you. Where that data describes people, your company decides what is held and for how long, and we act on your instructions — the privacy policy sets out the detail.',
+                items: [
+                    'You can export at any time: every list saves to CSV or Excel, and Settings holds a full multi-sheet export of the whole company.',
+                    'You are responsible for being allowed to enter other people\'s details — your clients\' and suppliers\' staff especially — and for telling them, where the law requires it.',
+                    'We keep backups so that data can be restored after a failure; those follow the same retention as the account.',
+                ],
+                note: 'Export before you close an account. Once it is deleted we cannot bring it back.',
+            },
+            acceptableUse: {
+                h: 'What you must not do with it',
+                p: 'The obvious list, stated so that we can act on it:',
+                items: [
+                    'Break the law, or infringe somebody else\'s rights, using the service.',
+                    'Send unsolicited bulk email through the emailing feature.',
+                    'Try to reach another company\'s data, or any part of the service you have not been given access to.',
+                    'Attack, probe, overload or interfere with the service or the infrastructure it runs on.',
+                    'Upload malware, or content you have no right to upload.',
+                    'Resell the service as your own, or copy it.',
+                ],
+                note: 'Where an account is doing one of these we may suspend it, and will tell you why. Where it is dangerous or unlawful we may act first and explain immediately after.',
+            },
+            email: {
+                h: 'Sending email through Skladdo',
+                p: 'When your company emails a supplier or a client from Skladdo, your company is the sender. You choose the recipients and the content, and it is your responsibility to comply with the marketing and privacy rules that apply to you — including honouring anyone who asks not to be written to again.',
+                note: 'Sent messages can carry an invisible image that reports whether they were opened; that is described in the privacy and cookie policies. Because everybody\'s mail is delivered from shared infrastructure, misuse threatens delivery for every other customer, so we may suspend the feature for an account that abuses it. A company that would rather send through its own mail server can configure one in Settings.',
+            },
+            partners: {
+                h: 'Warehouse partners',
+                p: 'A company can connect a logistics provider so its staff can work inside the company\'s warehouses. The connection covers warehouse work and nothing else: partner staff never reach your tenders, supplier email, users or company settings, and one switch hides every price from them.',
+                note: 'Connecting a partner is your decision and you remain responsible for what you have given them access to. You can end a connection at any time, and their access ends with it.',
+            },
+            availability: {
+                h: 'Availability and changes to the service',
+                p: 'We work to keep Skladdo running and reachable, but we do not currently offer a guaranteed uptime figure, and none should be inferred. Maintenance, upgrades and failures can interrupt it.',
+                note: 'The service is developed continuously, so features are added, changed and occasionally withdrawn. Where something you rely on is being removed we will give notice in the application beforehand where we reasonably can. Keeping your own exports of anything critical is prudent regardless.',
+            },
+            thirdParty: {
+                h: 'Services we depend on',
+                p: 'Skladdo runs on infrastructure and services provided by others — hosting, file storage, outbound email, optional Google sign-in and address suggestions. The privacy policy names them. A failure at one of them can interrupt part or all of the service, and their own terms and policies govern what they do.',
+            },
+            ip: {
+                h: 'The software itself',
+                p: 'Skladdo — the application, its design, its name and its logo — belongs to us. These terms give you the right to use the service while your account is open. They do not transfer any ownership of the software, and do not permit copying, reselling or reverse engineering it.',
+                note: 'This says nothing about your data, which is dealt with above and is not ours.',
+            },
+            liability: {
+                h: 'Liability',
+                p: 'The service is provided as it is. To the extent the law allows, we are not liable for indirect or consequential loss, for lost profits or business, or for loss of data that you could have exported yourself, and our total liability is limited to the amount you have paid us for the service in the twelve months before the claim.',
+                note: 'While the service is provided free of charge that amount is nil, which is the trade you are making by using it at no cost — so keep your own exports. Nothing here limits liability that cannot be limited by law, including for death or personal injury caused by negligence, for fraud, or any rights you have as a consumer.',
+            },
+            termination: {
+                h: 'Ending the agreement',
+                p: 'You can stop using Skladdo whenever you like, and can have the account and its data deleted by writing to support@skladdo.eu. We may suspend or close an account that breaches these terms, giving notice and a chance to put it right where the circumstances allow.',
+                note: 'When an account is closed its data is deleted as described in the privacy policy. Export what you need first.',
+            },
+            changes: {
+                h: 'Changes to these terms',
+                p: 'These terms can change as the service does. The date at the top always says when they last did, and anything significant will be announced in the application before it takes effect.',
+                note: 'Continuing to use Skladdo after a change accepts it. If you would rather not, close the account instead.',
+            },
+            law: {
+                h: 'Governing law',
+                p: 'These terms are governed by the law of the country named at the top of this page, and disputes go to the courts there. We would much rather settle anything by writing to us first.',
+                note: 'If you use Skladdo as a consumer rather than for a business, the mandatory consumer-protection law of the country you live in still applies, and nothing here takes it away.',
+            },
+            contact: {
+                h: 'Getting in touch',
+                p: 'Questions about these terms, and requests to close an account, go to support@skladdo.eu.',
+            },
+        },
     },
     landing: {
         nav: {
@@ -1532,6 +1839,13 @@ export default {
         rank: {
             noSales: 'No sales this month.',
             units: 'units',
+            orders: 'orders',
+            // How each ranking widget is currently ordered — shown in its title and on its selector.
+            by: {
+                revenue: 'by revenue',
+                units: 'by units',
+                orders: 'by orders',
+            },
             noData: 'No data yet.',
         },
         chart: {
@@ -2480,6 +2794,8 @@ export default {
             selectRole: 'Select role',
             canSeePrices: 'Can see prices',
             canSeePricesHint: 'When off, this account never sees prices, totals or revenue anywhere in the app.',
+            canSeeCompanyFinancials: 'Can see company financials',
+            canSeeCompanyFinancialsHint: 'Off by default. Adds the revenue, spend, cash collected and outstanding invoice widgets to their dashboard, and lets them rank the top lists by turnover. Their own orders and prices are unaffected.',
             avatar: 'Picture',
             password: 'Password',
         },
@@ -2525,6 +2841,7 @@ export default {
         success: 'Your account is ready. Sign in to get started.',
         successWithCompany: 'Your account is ready — welcome to {{company}}. Sign in to get started.',
         goToLogin: 'Go to sign in',
+        google: 'Continue with Google',
     },
     userDetail: {
         back: 'Back to users',
@@ -2581,6 +2898,7 @@ export default {
             loadingPermissions: 'Loading permissions…',
             rightsIntro: 'Choose which areas this user can access. Granting Create, Edit or Delete automatically grants View.',
             canSeePrices: 'Can see prices',
+            canSeeCompanyFinancials: 'Can see company financials',
             warehouseTitle: 'About the Warehouse role',
             warehouseNote: 'Warehouse staff fulfil orders and keep stock. By default they can view and change the status of sales & purchase orders, view products, and adjust inventory (stock counts). They don\'t manage the catalogue (categories, manufacturers) or see clients and tenders, and their dashboard hides revenue. Use "Can see prices" to control whether they see prices and totals.',
             warehouseAssignment: 'Warehouse assignment',

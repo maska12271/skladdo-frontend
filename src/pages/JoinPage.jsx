@@ -7,6 +7,9 @@ import BackToHome from '../components/BackToHome'
 import { FormField } from '../components/FormField.jsx'
 import PasswordStrength from '../components/PasswordStrength.jsx'
 import AvatarCropModal from '../components/AvatarCropModal'
+import GoogleSignInButton from '../components/GoogleSignInButton.jsx'
+import LegalConsentNotice from '../components/LegalConsentNotice.jsx'
+import { readGoogleProfile } from '../utils/googleIdToken'
 import { ACCEPTED_LABEL } from '../hooks/useImageUpload'
 
 /**
@@ -40,6 +43,11 @@ export default function JoinPage() {
     // The raw file waits here while it is being framed; nothing is kept if the editor is cancelled.
     const [pendingPhoto, setPendingPhoto] = useState(null)
     const fileRef = useRef(null)
+
+    // Set once the invitee has signed with Google: `{ idToken, email, name }`. While it holds a token the
+    // account being created has no password at all — the name and address come from Google, which is why
+    // they are shown but not editable, and why the password fields are gone rather than merely disabled.
+    const [google, setGoogle] = useState(null)
 
     useEffect(() => {
         if (!token) {
@@ -85,32 +93,41 @@ export default function JoinPage() {
         reader.readAsDataURL(blob)
     }
 
+    /**
+     * Google has authenticated the invitee. Nothing is created yet — they may still want to add a photo or
+     * their date of birth — so this only records the token and swaps the form over.
+     */
+    const handleGoogleCredential = (idToken) => {
+        setError('')
+        setGoogle({ idToken, ...readGoogleProfile(idToken) })
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         setError('')
-        if (form.password.length < 8) {
-            setError(t('join.tooShort'))
-            return
-        }
-        if (form.password !== form.confirm) {
-            setError(t('join.mismatch'))
-            return
+        // A Google invitee has no password to check, and no password fields on screen to check it in.
+        if (!google) {
+            if (form.password.length < 8) {
+                setError(t('join.tooShort'))
+                return
+            }
+            if (form.password !== form.confirm) {
+                setError(t('join.mismatch'))
+                return
+            }
         }
         setSubmitting(true)
         try {
-            const res = await apiPost(
-                '/public/user-invite',
-                {
-                    token,
-                    fullName: form.fullName,
-                    email: form.email,
-                    // The field is optional, and an empty string is not a date the server can parse.
-                    birthDate: form.birthDate || null,
-                    password: form.password,
-                    avatarImage: avatar,
-                },
-                { suppressErrorToast: true, skipAuthRedirect: true },
-            )
+            // The field is optional, and an empty string is not a date the server can parse.
+            const shared = { token, birthDate: form.birthDate || null, avatarImage: avatar }
+            const res = google
+                // No name, address or password: the server takes the first two from the token it verifies,
+                // and there is no third. Sending them would only invite the question of which one won.
+                ? await apiPost('/public/user-invite/google', { ...shared, idToken: google.idToken },
+                    { suppressErrorToast: true, skipAuthRedirect: true })
+                : await apiPost('/public/user-invite',
+                    { ...shared, fullName: form.fullName, email: form.email, password: form.password },
+                    { suppressErrorToast: true, skipAuthRedirect: true })
             if (res?.companyName) setCompanyName(res.companyName)
             setState('done')
         } catch (err) {
@@ -237,28 +254,48 @@ export default function JoinPage() {
                                 />
                             </div>
 
-                            <FormField
-                                id="join-name"
-                                label={t('join.fullName')}
-                                name="fullName"
-                                value={form.fullName}
-                                onChange={handleChange}
-                                required
-                                placeholder={t('join.fullNamePlaceholder')}
-                                autoComplete="name"
-                            />
+                            {google ? (
+                                /* Signed with Google: the name and address are Google's answer, shown so it
+                                   is clear whose account this will be, and not editable because the server
+                                   reads them from the token rather than from anything sent here. */
+                                <>
+                                    <FormField
+                                        id="join-name" label={t('join.fullName')} name="fullName"
+                                        value={google.name} onChange={() => {}} readOnly disabled
+                                        inputClassName="bg-slate-100 text-slate-600 dark:bg-slate-950 dark:text-slate-300"
+                                    />
+                                    <FormField
+                                        id="join-email" label={t('join.email')} name="email" type="email"
+                                        value={google.email} onChange={() => {}} readOnly disabled
+                                        inputClassName="bg-slate-100 text-slate-600 dark:bg-slate-950 dark:text-slate-300"
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <FormField
+                                        id="join-name"
+                                        label={t('join.fullName')}
+                                        name="fullName"
+                                        value={form.fullName}
+                                        onChange={handleChange}
+                                        required
+                                        placeholder={t('join.fullNamePlaceholder')}
+                                        autoComplete="name"
+                                    />
 
-                            <FormField
-                                id="join-email"
-                                label={t('join.email')}
-                                name="email"
-                                type="email"
-                                value={form.email}
-                                onChange={handleChange}
-                                required
-                                placeholder="you@company.com"
-                                autoComplete="email"
-                            />
+                                    <FormField
+                                        id="join-email"
+                                        label={t('join.email')}
+                                        name="email"
+                                        type="email"
+                                        value={form.email}
+                                        onChange={handleChange}
+                                        required
+                                        placeholder="you@company.com"
+                                        autoComplete="email"
+                                    />
+                                </>
+                            )}
 
                             <FormField
                                 id="join-birth-date"
@@ -267,35 +304,73 @@ export default function JoinPage() {
                                 type="date"
                                 value={form.birthDate}
                                 onChange={handleChange}
+                                required
                                 max={today}
                             />
 
-                            <div className="space-y-2">
-                                <FormField
-                                    id="join-password"
-                                    label={t('join.password')}
-                                    name="password"
-                                    type="password"
-                                    value={form.password}
-                                    onChange={handleChange}
-                                    required
-                                    placeholder="••••••••"
-                                    autoComplete="new-password"
-                                />
-                                <PasswordStrength password={form.password} />
-                            </div>
+                            {google ? (
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                    <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
+                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                        {t('register.google.connected')}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setError(''); setGoogle(null) }}
+                                        className="cursor-pointer font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
+                                    >
+                                        {t('register.google.usePassword')}
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="space-y-2">
+                                        <FormField
+                                            id="join-password"
+                                            label={t('join.password')}
+                                            name="password"
+                                            type="password"
+                                            value={form.password}
+                                            onChange={handleChange}
+                                            required
+                                            placeholder="••••••••"
+                                            autoComplete="new-password"
+                                        />
+                                        <PasswordStrength password={form.password} />
+                                    </div>
 
-                            <FormField
-                                id="join-confirm"
-                                label={t('join.confirmPassword')}
-                                name="confirm"
-                                type="password"
-                                value={form.confirm}
-                                onChange={handleChange}
-                                required
-                                placeholder="••••••••"
-                                autoComplete="new-password"
-                            />
+                                    <FormField
+                                        id="join-confirm"
+                                        label={t('join.confirmPassword')}
+                                        name="confirm"
+                                        type="password"
+                                        value={form.confirm}
+                                        onChange={handleChange}
+                                        required
+                                        placeholder="••••••••"
+                                        autoComplete="new-password"
+                                    />
+
+                                    {/* Renders nothing when this build has no Google client id. */}
+                                    {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                                        <>
+                                            <div className="flex items-center gap-3">
+                                                <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+                                                <span className="text-xs font-medium tracking-wide text-slate-400 uppercase dark:text-slate-500">
+                                                    {t('login.or')}
+                                                </span>
+                                                <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+                                            </div>
+                                            <GoogleSignInButton
+                                                text="signup_with"
+                                                label={t('join.google')}
+                                                onCredential={handleGoogleCredential}
+                                                onError={() => setError(t('login.googleError'))}
+                                            />
+                                        </>
+                                    )}
+                                </>
+                            )}
 
                             <button
                                 type="submit"
@@ -305,6 +380,8 @@ export default function JoinPage() {
                                 {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                                 {submitting ? t('join.saving') : t('join.submit')}
                             </button>
+
+                            <LegalConsentNotice />
                         </form>
                     </>
                 )}

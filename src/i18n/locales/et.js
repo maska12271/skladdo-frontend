@@ -555,6 +555,9 @@ export default {
         error: 'Sisselogimine ebaõnnestus',
         noAccount: 'Kontot pole?',
         signUp: 'Registreeru',
+        or: 'või',
+        googleError: 'Google\'iga sisselogimine ebaõnnestus. Palun proovi uuesti.',
+        google: 'Logi sisse Google\'iga',
     },
     forgotPassword: {
         title: 'Unustasid parooli',
@@ -796,6 +799,309 @@ export default {
         tooShort: 'Parool peab olema vähemalt 8 tähemärki.',
         mismatch: 'Kaks parooli ei kattu.',
         error: 'Kontot ei õnnestunud luua. Palun proovi uuesti.',
+        google: {
+            button: 'Registreeru Google\'iga',
+            connected: 'Google\'iga ühendatud',
+            usePassword: 'Kasuta hoopis parooli',
+        },
+    },
+    privacy: {
+        title: 'Privaatsuspoliitika',
+        updated: 'Viimati uuendatud {{date}}',
+        intro: 'Skladdo on lao- ja tellimuste haldamise tarkvara ettevõtetele. See poliitika selgitab, milliseid isikuandmeid teenus kogub, milleks ning mida sa võid meilt nende kohta nõuda.',
+        sections: {
+            controller: {
+                h: 'Kes vastutab',
+                p: 'Ülal nimetatud ettevõte haldab Skladdot ja on allpool kirjeldatud kontoandmete vastutav töötleja. Kõigis neid puudutavates küsimustes kirjuta meile aadressil support@skladdo.eu.',
+                note: 'Äriandmed, mille sinu ettevõte Skladdosse sisestab — teie enda kliendid, tarnijad ja nende juures töötavad inimesed — kuuluvad sinu ettevõttele. Sinu ettevõte otsustab, mida ja kui kaua säilitatakse; meie hoiame neid tema juhiste järgi ega tee nendega midagi muud.',
+            },
+            collect: {
+                h: 'Mida me kogume',
+                p: 'Kolme liiki andmeid, mitte rohkem kui teenuse tööks vaja:',
+                items: [
+                    'Kontoandmed — sinu nimi, e-posti aadress, liidese keel, profiilipilt, kui selle üles laadid, ja parool, mida hoitakse ainult räsina. Just see tuvastab sind sisselogimisel.',
+                    'Äriandmed, mille sinu ettevõte sisestab — tooted, laoseis, laod, kliendid, tarnijad ja nende kontaktisikud, tellimused, arved, hanked ja üleslaaditud dokumendid. Osa sellest on teiste ettevõtete inimeste isikuandmed.',
+                    'Tehnilised andmed — millal sa viimati sisse logisid, tegevuslogi selle kohta, milline konto sinu ettevõttes mida muutis, et administraator näeks, kes mida tegi, ja ebaõnnestunud sisselogimise IP-aadress. Seda aadressi hoitakse ainult mälus, ainult nii kaua kui lukustusaken kestab, ja andmebaasi seda ei kirjutata.',
+                ],
+            },
+            google: {
+                h: 'Google\'iga sisselogimine',
+                p: 'Kui valid „Logi sisse Google\'iga", edastab Google meile sinu nime, e-posti aadressi ja profiilipildi ning mitte midagi muud. Aadressi järgi leiame sinu Skladdo konto ja nimega täidame profiili.',
+                note: 'Me ei näe kunagi sinu Google\'i parooli ega küsi ligipääsu Gmailile, Drive\'ile, kontaktidele ega ühelegi teisele Google\'i teenusele. Google\'iga sisselogimine on vabatahtlik — e-posti aadress ja parool töötavad täpselt sama hästi.',
+            },
+            use: {
+                h: 'Milleks me neid kasutame',
+                items: [
+                    'Teenuse toimimiseks: sisselogimiseks, ettevõtte andmete kuvamiseks ning arvete ja dokumentide koostamiseks.',
+                    'Teenuse jaoks vajalike kirjade saatmiseks — kutsed ja paroolilingid ning tarnijakirjad, mille saatmise sinu ettevõte ise valib.',
+                    'Selleks, et ettevõtte administraatorid näeksid, kes nende kontol mida tegi.',
+                    'Kontode turvalisuse hoidmiseks — just seetõttu aeglustatakse korduvaid ebaõnnestunud sisselogimisi.',
+                ],
+                note: 'Me ei müü sinu andmeid ega kasuta neid reklaamiks või profileerimiseks.',
+            },
+            legal: {
+                h: 'Õiguslik alus',
+                p: 'Töötleme konto- ja äriandmeid selleks, et osutada teenust, millega sinu ettevõte on liitunud. Turvameetmed, näiteks ebaõnnestunud sisselogimiskatsete piiramine, tuginevad meie õigustatud huvile hoida kontosid sissemurdmise eest. Kui me kunagi nõusolekut küsime, saad selle igal ajal tagasi võtta.',
+            },
+            sharing: {
+                h: 'Kes veel andmeid käitleb',
+                p: 'Lühike nimekiri, ja ükski neist ei saa sinu andmeid oma tarbeks:',
+                items: [
+                    'Contabo (Saksamaa) — server, kus rakendus ja selle andmebaas töötavad.',
+                    'Amazon Web Services (Frankfurt) — üleslaaditud failide, näiteks tootepiltide ja dokumentide hoidla.',
+                    'Fastmail — saadab kutsed ja paroolilingid.',
+                    'Google — ainult siis, kui valid Google\'iga sisselogimise.',
+                    'Mailgun — ainult siis, kui sinu ettevõte lülitab sisse tarnijakirjade vastuste jälgimise.',
+                    'Photon, mida haldab Komoot (Saksamaa) — aadressisoovitused, mida kirjutamise ajal pakutakse. Poolik aadress saadetakse sinna OpenStreetMapi andmetega sobitamiseks; sinu nimi, konto ega ettevõte sellega kaasa ei lähe.',
+                ],
+            },
+            location: {
+                h: 'Kus andmeid hoitakse',
+                p: 'Euroopa Liidus. Rakendus ja selle andmebaas töötavad Saksamaal asuvas serveris ning üleslaaditud failid on Amazoni Frankfurdi piirkonnas.',
+            },
+            retention: {
+                h: 'Kui kaua me neid säilitame',
+                p: 'Sinu ettevõtte andmeid hoitakse seni, kuni konto on avatud. Konto sulgemiseks ja andmete kustutamiseks kirjuta aadressil support@skladdo.eu.',
+                note: 'Üks teadlik erand: kolleegi kasutajakonto eemaldamisel jääb kirje kontost endast alles, et aastate eest koostatud tellimused ja arved näitaksid ikka, kes need tegi. Nimi jääb just sel põhjusel nähtavaks; muu tema kohta mitte.',
+            },
+            rights: {
+                h: 'Sinu õigused',
+                p: 'Isikuandmete kaitse üldmääruse alusel võid meilt nõuda, et:',
+                items: [
+                    'anname sulle koopia sinu kohta hoitavatest isikuandmetest',
+                    'parandame need, kui need on valed',
+                    'kustutame need',
+                    'piirame nende kasutamist või arvestame sinu vastuväitega',
+                    'anname need üle ülekantaval kujul — rakendus oskab juba praegu ettevõtte andmed igal hetkel Excelisse või CSV-sse eksportida',
+                ],
+                note: 'Kirjuta aadressil support@skladdo.eu ja me vastame ühe kuu jooksul. Kui meie vastus sind ei rahulda, saad pöörduda Andmekaitse Inspektsiooni poole (aki.ee).',
+            },
+            tracking: {
+                h: 'Kuidas me teame, kas kiri avati',
+                p: 'Kui sinu ettevõte saadab Skladdost tarnijale või kliendile kirja, kannab see kaasas nähtamatut ühe piksli suurust pilti, mida hoiame meie. Kui saaja postiprogramm selle laadib, märgime, et kiri avati ja millal, ning näitame seda sinu ettevõttele saadetud kirjade lehel.',
+                note: 'Rohkem ei salvestata midagi — ei asukohta, seadet ega lugemisaega — ja enamik postiprogramme blokib sellised pildid vaikimisi, nii et avamata märge tähendabki tihti ainult seda. Saaja, kes ei soovi, et teda üldse loetaks, saab oma postiprogrammis väliste piltide laadimise välja lülitada. Sinu ettevõte otsustab, kas selliseid kirju saata; meie pakume mehhanismi.',
+            },
+            storage: {
+                h: 'Küpsised ja brauserisalvestus',
+                p: 'Skladdo ei sea üldse küpsiseid — ei enda omi ega reklaami, analüütika või profileerimise omi. Sinu enda brauseri kohalikku salvestusse jääb siiski mõni asi: sisselogimist hoidev tunnus, sinu keele- ning hele/tume valik ja väikesed liidese eelistused, näiteks viimati kasutatud tabeliveerud.',
+                note: 'Brauseri andmete kustutamine eemaldab kõik selle ja logib sind välja. Meie küpsisepoliitika loetleb iga salvestatava asja nimepidi ja selgitab, milleks see on.',
+            },
+            security: {
+                h: 'Kuidas andmeid kaitstakse',
+                p: 'Paroole hoitakse ainult bcrypt-räsina, mitte kunagi kujul, mida keegi siin lugeda saaks. Liiklus käib üle HTTPS-i. Iga ettevõtte andmed on eraldatud, nii et ühe ettevõtte konto ei ulatu teise omani, ja tunnused, mille sinu ettevõte oma postiserveri jaoks salvestab, krüpteeritakse enne hoiule panemist.',
+            },
+            children: {
+                h: 'Lapsed',
+                p: 'Skladdo on tööriist ettevõtetele ega ole suunatud lastele. Me ei loo teadlikult kontosid alla 16-aastastele. Kui arvad, et lapsel on siin konto, kirjuta meile ja me eemaldame selle.',
+            },
+            changes: {
+                h: 'Poliitika muudatused',
+                p: 'Kui see poliitika muutub, muutub koos sellega ka ülal olev kuupäev, ja olulisest muudatusest anname rakenduses teada.',
+            },
+            contact: {
+                h: 'Võta ühendust',
+                p: 'Küsimused selle poliitika või meie hoitavate andmete kohta saada aadressile support@skladdo.eu.',
+            },
+        },
+    },
+    // Kõigi kolme õigusdokumendi ühised sildid. Väärtused ise tulevad failist `config/legal.js`.
+    legal: {
+        entity: {
+            pending: 'Skladdot haldava ettevõtte registriandmeid — ärinime, registrikoodi ja aadressi — ei ole siin veel avaldatud. Kõik selles dokumendis on esitatud skladdo.eu haldaja poolt, kellega saab seni ühendust aadressil support@skladdo.eu.',
+            name: 'Ettevõte',
+            registryCode: 'Registrikood',
+            vatNumber: 'KMKR number',
+            address: 'Registrijärgne aadress',
+            country: 'Riik',
+            email: 'Kontakt',
+        },
+        // Pannakse kokku kahe lingi ümber — vaata components/LegalConsentNotice.jsx.
+        consent: {
+            prefix: 'Konto loomisega nõustud sellega, mida ütlevad',
+            separator: 'ja',
+            suffix: '.',
+        },
+    },
+    cookies: {
+        title: 'Küpsisepoliitika',
+        updated: 'Viimati uuendatud {{date}}',
+        intro: 'See leht selgitab, mida Skladdo sinu seadmesse salvestab ja miks selle ees ei ole küpsiseteadet. Lühike, sest selgitada polegi palju.',
+        sections: {
+            summary: {
+                h: 'Lühidalt',
+                p: 'Skladdo ei sea küpsiseid. Et hoida sind sisselogituna ja meeles pidada, milline liides sulle meeldib, hoiab ta mõnda asja sinu enda brauseri kohalikus salvestuses — allpool on need ükshaaval kirjas. Analüütikat, reklaami ega sinu jälgimist teistel veebilehtedel ei ole.',
+            },
+            whatCookies: {
+                h: 'Küpsised, ja miks see leht räägib enamast kui küpsistest',
+                p: 'Küpsis on väike fail, mida veebileht palub brauseril alles hoida ja iga järgmise päringuga tagasi saata. Kohalik salvestus teeb sarnast tööd — leht hoiab midagi sinu seadmes — kuid brauser ei saada seda omal algatusel kuhugi; leht peab selle ise lugema ja saatmise otsustama.',
+                note: 'Euroopa reeglid räägivad millegi salvestamisest sinu seadmesse, mitte sõnast „küpsis", nii et see leht katab mõlemat. Skladdo kasutab neist ainult teist.',
+            },
+            noCookies: {
+                h: 'Skladdo ei sea küpsiseid',
+                p: 'Sisselogimine annab sinu brauserile allkirjastatud tunnuse, mida hoitakse kohalikus salvestuses ja mille rakendus lisab igale oma päringule. Server ei hoia enda poolel mingit seanssi, nii et seansiküpsist polegi vaja seada — ja muud liiki me samuti ei sea.',
+                note: 'Üks erand ei ole meie oma: kui kasutad „Logi sisse Google\'iga", võib Google\'i enda skript seada küpsiseid oma kontosüsteemi jaoks. Sellest räägime allpool.',
+            },
+            stored: {
+                h: 'Kõik, mida Skladdo sinu brauseris hoiab',
+                p: 'Täielik loend. Kõik selle kirjutab rakendus ise ja loeb ainult tema:',
+                items: [
+                    'token — allkirjastatud tunnus, mis tõendab, et oled sisse logitud. Saadetakse iga päringuga meie serverisse; välja logides eemaldatakse.',
+                    'user — sinu nimi, e-posti aadress, keel, roll ja õigused, et liides oskaks end õigesti joonistada juba enne esimese vastuse saabumist. Välja logides eemaldatakse.',
+                    'lastClientCompanyId — ainult laokontodel: milline kliendiettevõte oli lahti, et järgmine sisselogimine jätkaks samast kohast. Välja logides eemaldatakse.',
+                    'lang — liidese keel, mille valisid, et rakendus avaneks järgmine kord samas keeles.',
+                    'theme — kas valisid heleda või tumeda liidese.',
+                    'tableColumns:… ja tableView:… — iga nimekirja kohta see, millised veerud peitsid ja kas kasutasid viimati tabeli- või kaardivaadet.',
+                    'dashboard-grid-v8:… ja dashboard-rank-metrics-v1:… — kuidas seadsid töölaua vidinad ja mille järgi järjestasid selle edetabelid. Hoitakse konto kaupa, nii et sama arvutit jagavad kolleegid ei kirjuta üksteise oma üle.',
+                ],
+                note: 'Sinu brauserist lahkub ainult sisselogimistunnus, ja seegi ainult meie enda serverisse. Midagi sellest ei jagata kellegi teisega ega kasutata sinust profiili koostamiseks.',
+            },
+            google: {
+                h: 'Google\'iga sisselogimine',
+                p: 'Sisselogimise, registreerimise ja kutse leht laadivad Google\'i sisselogimisskripti aadressilt accounts.google.com — ainult need kolm lehte ja ainult siis, kui Google\'iga sisselogimine on selles paigalduses sisse lülitatud. Google võib seejuures seada oma küpsiseid, oma privaatsuspoliitika alusel ja väljaspool meie kontrolli.',
+                note: 'Ükski leht, mida pärast sisselogimist näed, ei laadi Google\'ist midagi. Kui eelistad Google\'it üldse mitte kaasata, logi sisse e-posti aadressi ja parooliga — kõik toimib täpselt samamoodi.',
+            },
+            emailPixel: {
+                h: 'Kirjad, mida sinu ettevõte saadab',
+                p: 'Kui Skladdot kasutav ettevõte saadab rakendusest kirja oma tarnijale või kliendile, võib see sisaldada nähtamatut ühe piksli suurust pilti meie serverist. Kui saaja postiprogramm selle laadib, näeb saatja, et kiri avati ja millal.',
+                note: 'See puudutab nende kirjade saajaid, mitte selle lehe külastajaid, ja kellegi seadmesse ei salvestata midagi. Enamik postiprogramme blokib väliseid pilte, kuni neid küsitakse; nende täielik väljalülitamine peatab loenduse.',
+            },
+            thirdParty: {
+                h: 'Mida me teadlikult ei laadi',
+                p: 'Ei analüütika- ega mõõtmisskripte, reklaami- ega taassihtimispiksleid, sotsiaalmeedianuppe, videopleiereid ega kirjatüüpe teise ettevõtte serverist. Miski lehel ei teata sinu külastusest kellelegi.',
+                note: 'Aadressisoovitused on ainus funktsioon, mis välist teenust küsib, ja päringu teeb meie server, mitte sinu brauser — nii et see teenusepakkuja ei näe kunagi sinu aadressi, brauserit ega külastust.',
+            },
+            consent: {
+                h: 'Miks küpsiseteadet ei ole',
+                p: 'Nõusolekut on vaja salvestuse jaoks, mis ei ole rangelt vajalik teenuse jaoks, mida sa ise küsisid. Sisselogimistunnus on see, mis üldse teeb sisselogitud seansi võimalikuks, ja kõik ülejäänu loendis on eelistus, mille sa ise liidest kasutades seadsid. Midagi sellest ei kasutata reklaamiks, analüütikaks ega profileerimiseks.',
+                note: 'Nii et siin ei ole midagi, milleks sinu luba küsida, ja me pigem ei paneks mõttetut akent sulle ette. Kui lisame kunagi midagi, mis nõusolekut nõuab, küsime enne selle käivitamist — mitte pärast.',
+            },
+            control: {
+                h: 'Kuidas seda kustutada',
+                p: 'Välja logimine eemaldab tunnuse, sinu profiili ja viimati avatud ettevõtte. Selle lehe andmete kustutamine brauseris eemaldab kõik, sealhulgas keele ja teema, ning logib sind välja.',
+                note: 'Kohaliku salvestuse täielik blokeerimine sellel lehel takistab sisselogimist — tunnusel pole kohta, kus elada, nii et seanss ei jää järgmist lehelaadimist üle elama.',
+            },
+            changes: {
+                h: 'Poliitika muudatused',
+                p: 'Kui see, mida hoiame, muutub, muutub koos sellega ka see leht ja ülal olev kuupäev. Kõike, mis nõuaks sinu nõusolekut, küsime siis eraldi.',
+            },
+            contact: {
+                h: 'Võta ühendust',
+                p: 'Küsimused kõige siin lehel oleva kohta saada aadressile support@skladdo.eu.',
+            },
+        },
+    },
+    terms: {
+        title: 'Kasutustingimused',
+        updated: 'Viimati uuendatud {{date}}',
+        intro: 'Need tingimused on sinu ettevõtte ja meie vaheline kokkulepe Skladdo kasutamise kohta. Need kehtivad hetkest, mil konto luuakse. Need on kirjutatud lugemiseks, seega tavakeeles, mitte juriidilise vormeliga.',
+        sections: {
+            acceptance: {
+                h: 'Tingimustega nõustumine',
+                p: 'Skladdo konto loomine tähendab nende tingimustega nõustumist. Kui lood konto ettevõtte nimel, kinnitad, et sul on õigus nendega selle ettevõtte eest nõustuda, ja „sina" allpool tähendab ettevõtet.',
+                note: 'Kui sa nendega ei nõustu, ära kontot loo. Kui konto on juba olemas ja sa enam ei nõustu, saad selle igal ajal sulgeda — vaata „Kokkuleppe lõpetamine".',
+            },
+            service: {
+                h: 'Mis teenus see on',
+                p: 'Skladdo on veebitarkvara kaubandus- ja hulgimüügiettevõtte juhtimiseks: toodete ja teenuste kataloog, laoseis ühes või mitmes laos, kliendid ja tarnijad koos kontaktisikutega, müügi- ja ostutellimused, arved ja saatedokumendid ning ühine tegevuslogi. Hanked ja tarnijakirjad on eraldi lisad, mille ettevõte ise sisse lülitab.',
+                note: 'Seda pakutakse teenusena üle interneti. Midagi ei ole vaja paigaldada ja sulle ei müüda ega litsentsita tarkvara koopiat.',
+            },
+            accounts: {
+                h: 'Kontod ja paroolid',
+                p: 'Anna registreerumisel õiged andmed ja hoia need ajakohasena. Hoia parool endale ja anna kohe teada, kui arvad, et see on kellegi teise käes. Mida sinu kontoga tehakse, loetakse sinu tehtuks.',
+                note: 'Igal Skladdos töötaval inimesel peab olema oma konto. Ühise konto jagamine muudab tegevuslogi mõttetuks — see on olemas selleks, et ettevõte näeks, kes mida tegi — ja teeb õigused sisutuks. Nii viib ka üks lahkuv kolleege terve ettevõtte ligipääsu endaga kaasa.',
+            },
+            roles: {
+                h: 'Kes ettevõtte kontot juhib',
+                p: 'Ettevõtte lõi konto, kellele see kuulub. Omanikud ja administraatorid saavad kolleege kutsuda ja eemaldada, anda ja ära võtta õigusi mooduli kaupa, lugeda tegevuslogi, muuta ettevõtte seadeid ja kõike eksportida.',
+                note: 'Seda tasub selgelt öelda: sinu ettevõtte administraatorid näevad ja saavad muuta kõike, mis ettevõtte kontol on, sealhulgas teiste kolleegide sisestatud tööd. Kui oled töötaja ja kasutad kontot, mille tööandja lõi, on see kokkulepe sinu tööandjaga ja tööandja otsustab, mis nende andmetega saab.',
+            },
+            plans: {
+                h: 'Paketid, kohad ja lisad',
+                p: 'Äriettevõtte kontod on ühel kolmest paketist — Starter, Business või Enterprise. Pakett mõõdab ainult üht asja: mitu kasutajakontot ettevõttel olla tohib. Tooteid, kliente, tellimusi ega dokumente ei piirata kunagi, sest selline piir tabaks keset importi, mitte seal, kus tootest väärtust saadakse.',
+                items: [
+                    'Kohtade piiri täitumine takistab uute kolleegide lisamist. See ei kustuta kunagi midagi ega takista juba olemasolevaid inimesi.',
+                    'Hanked ja tarnijakirjad ostetakse paketist eraldi. Ilma nendeta ei ole need lehed lihtsalt välja lülitatud, vaid puuduvad.',
+                    'Laokontod — need, mida logistikapartnerid kasutavad oma klientide ettevõtetes töötamiseks — on tasuta, neil ei ole oma kataloogi ja neil ei ole paketti valida.',
+                    'Paketti saab seadetes igal ajal vahetada ja see jõustub kohe.',
+                ],
+            },
+            billing: {
+                h: 'Tasumine',
+                p: 'Skladdot pakutakse praegu tasuta. Teenusega ei ole ühendatud ühtki makseteenuse pakkujat, seega tasu võtta ei saa ning maksevahendit ei koguta ega salvestata — registreerumise kaardisamm on tulevase kassa eelvaade ja sinna kirjutatut ei saadeta kuhugi ega hoita alles.',
+                note: 'Hinnalehel ja seadetes näidatud hinnad kirjeldavad tasulist teenust, mille kavatseme käivitada; seni on need suunavad, mitte tasumisele kuuluvad summad. Anname enne tasu võtmise algust selgelt ette teada ja sul on võimalik keelduda ja konto sulgeda, mitte tasu maksta. See punkt kirjutatakse siis ümber ja lehe ülaosas olev kuupäev muutub koos sellega.',
+            },
+            yourData: {
+                h: 'Sinu andmed jäävad sinu omaks',
+                p: 'Kõik, mille sinu ettevõte Skladdosse paneb, kuulub sinu ettevõttele. Me ei nõua sellele omandiõigust ega kasuta seda millekski muuks kui teenuse osutamiseks sulle. Kui need andmed kirjeldavad inimesi, otsustab sinu ettevõte, mida ja kui kaua hoitakse, ning meie tegutseme sinu juhiste järgi — üksikasjad on privaatsuspoliitikas.',
+                items: [
+                    'Sa saad igal ajal eksportida: iga nimekiri salvestub CSV-sse või Excelisse ja seadetes on kogu ettevõtte täielik mitme lehega eksport.',
+                    'Sinul on vastutus selle eest, et sul on õigus teiste inimeste andmeid sisestada — eriti klientide ja tarnijate töötajate omi — ja et oled neile sellest teatanud, kui seadus seda nõuab.',
+                    'Me hoiame varukoopiaid, et andmeid saaks pärast riket taastada; nende säilitamine järgib sama korda mis kontol.',
+                ],
+                note: 'Ekspordi enne konto sulgemist. Pärast kustutamist ei saa me seda tagasi tuua.',
+            },
+            acceptableUse: {
+                h: 'Mida sellega teha ei tohi',
+                p: 'Ilmne loend, kirja pandud selleks, et saaksime selle alusel tegutseda:',
+                items: [
+                    'Rikkuda teenust kasutades seadust või kellegi teise õigusi.',
+                    'Saata kirjade funktsiooni kaudu soovimatuid masskirju.',
+                    'Üritada pääseda teise ettevõtte andmeteni või teenuse osadeni, milleni sulle ligipääsu antud ei ole.',
+                    'Rünnata, kompida, üle koormata või häirida teenust või taristut, millel see töötab.',
+                    'Laadida üles pahavara või sisu, mille üleslaadimiseks sul õigust ei ole.',
+                    'Müüa teenust edasi enda omana või seda kopeerida.',
+                ],
+                note: 'Kui konto midagi sellist teeb, võime selle peatada ja ütleme, miks. Kui tegu on ohtliku või ebaseaduslikuga, võime tegutseda esimesena ja selgitada kohe pärast.',
+            },
+            email: {
+                h: 'Kirjade saatmine Skladdo kaudu',
+                p: 'Kui sinu ettevõte saadab Skladdost kirja tarnijale või kliendile, on saatja sinu ettevõte. Sina valid saajad ja sisu ning sinu vastutus on järgida sinu suhtes kehtivaid turundus- ja privaatsusreegleid, sealhulgas austada igaüht, kes palub talle enam mitte kirjutada.',
+                note: 'Saadetud kirjad võivad kanda nähtamatut pilti, mis annab teada, kas kiri avati; seda kirjeldavad privaatsus- ja küpsisepoliitika. Kuna kõigi kirjad saadetakse ühiselt taristult, ohustab väärkasutus kohaletoimetamist kõigi teiste klientide jaoks, seega võime selle funktsiooni kuritarvitava konto puhul peatada. Ettevõte, kes eelistab saata oma postiserveri kaudu, saab selle seadetes seadistada.',
+            },
+            partners: {
+                h: 'Laopartnerid',
+                p: 'Ettevõte saab ühendada logistikapartneri, et selle töötajad saaksid ettevõtte ladudes töötada. Ühendus katab laotöö ja ei midagi muud: partneri töötajad ei ulatu kunagi sinu hanke-, tarnijakirjade, kasutajate ega ettevõtte seadeteni ja üks lüliti peidab nende eest kõik hinnad.',
+                note: 'Partneri ühendamine on sinu otsus ja sina jääd vastutama selle eest, millele oled neile ligipääsu andnud. Sa võid ühenduse igal ajal lõpetada ja nende ligipääs lõpeb koos sellega.',
+            },
+            availability: {
+                h: 'Kättesaadavus ja teenuse muutumine',
+                p: 'Me töötame selle nimel, et Skladdo töötaks ja oleks kättesaadav, kuid me ei paku praegu garanteeritud töökindluse näitajat ja seda ei tohiks eeldada. Hooldus, uuendused ja rikked võivad tööd katkestada.',
+                note: 'Teenust arendatakse pidevalt, nii et funktsioone lisandub, muutub ja aeg-ajalt kaob. Kui midagi, millele sa toetud, eemaldatakse, anname rakenduses eelnevalt teada, kui see on mõistlikult võimalik. Kõigest olulisest oma ekspordi hoidmine on igal juhul mõistlik.',
+            },
+            thirdParty: {
+                h: 'Teenused, millest me sõltume',
+                p: 'Skladdo töötab teiste pakutaval taristul ja teenustel — majutus, failihoidla, väljuv post, valikuline Google\'iga sisselogimine ja aadressisoovitused. Privaatsuspoliitika nimetab need. Rike ühes neist võib katkestada osa teenusest või kogu teenuse ja nende endi tingimused ning poliitikad määravad, mida nad teevad.',
+            },
+            ip: {
+                h: 'Tarkvara ise',
+                p: 'Skladdo — rakendus, selle disain, nimi ja logo — kuulub meile. Need tingimused annavad sulle õiguse teenust kasutada seni, kuni sinu konto on avatud. Need ei anna üle tarkvara omandiõigust ega luba seda kopeerida, edasi müüa ega pöördprojekteerida.',
+                note: 'See ei ütle midagi sinu andmete kohta, mida käsitleti ülal ja mis ei ole meie omad.',
+            },
+            liability: {
+                h: 'Vastutus',
+                p: 'Teenust pakutakse sellisena, nagu see on. Seaduses lubatud ulatuses ei vastuta me kaudse ega tuleneva kahju, saamata jäänud kasumi või äri eest ega andmete kaotuse eest, mille sa oleksid ise saanud eksportida, ja meie kogu vastutus on piiratud summaga, mille oled meile teenuse eest nõude esitamisele eelnenud kaheteistkümne kuu jooksul tasunud.',
+                note: 'Seni kuni teenus on tasuta, on see summa null — see ongi vahetus, mille tasuta kasutamisel teed, nii et hoia oma eksporte alles. Miski siin ei piira vastutust, mida seaduse järgi piirata ei saa, sealhulgas hooletusest põhjustatud surma või kehavigastuse ega pettuse eest, ega sinu tarbijaõigusi.',
+            },
+            termination: {
+                h: 'Kokkuleppe lõpetamine',
+                p: 'Sa võid Skladdo kasutamise igal ajal lõpetada ja lasta konto ning selle andmed kustutada, kirjutades aadressil support@skladdo.eu. Meie võime peatada või sulgeda konto, mis neid tingimusi rikub, andes teada ja andes võimaluse asi korda teha, kui asjaolud seda lubavad.',
+                note: 'Konto sulgemisel kustutatakse selle andmed nii, nagu privaatsuspoliitikas kirjeldatud. Ekspordi enne see, mida vajad.',
+            },
+            changes: {
+                h: 'Tingimuste muudatused',
+                p: 'Need tingimused võivad koos teenusega muutuda. Ülal olev kuupäev näitab alati, millal seda viimati juhtus, ja kõigest olulisest anname rakenduses enne jõustumist teada.',
+                note: 'Skladdo edasine kasutamine pärast muudatust tähendab sellega nõustumist. Kui sa pigem ei nõustuks, sulge konto.',
+            },
+            law: {
+                h: 'Kohaldatav õigus',
+                p: 'Nendele tingimustele kohaldub selle riigi õigus, mis on lehe ülaosas nimetatud, ja vaidlused lahendatakse sealsetes kohtutes. Meile oleks palju meelepärasem, kui kirjutaksid enne meile.',
+                note: 'Kui kasutad Skladdot tarbijana, mitte ettevõtluses, kehtib endiselt sinu elukohariigi kohustuslik tarbijakaitseõigus ja miski siin seda ära ei võta.',
+            },
+            contact: {
+                h: 'Võta ühendust',
+                p: 'Küsimused nende tingimuste kohta ja konto sulgemise soovid saada aadressile support@skladdo.eu.',
+            },
+        },
     },
     landing: {
         nav: {
@@ -1524,6 +1830,12 @@ export default {
         rank: {
             noSales: 'Sel kuul müüke pole.',
             units: 'ühikut',
+            orders: 'tellimust',
+            by: {
+                revenue: 'tulu järgi',
+                units: 'ühikute järgi',
+                orders: 'tellimuste järgi',
+            },
             noData: 'Andmeid veel pole.',
         },
         chart: {
@@ -2472,6 +2784,8 @@ export default {
             selectRole: 'Vali roll',
             canSeePrices: 'Näeb hindu',
             canSeePricesHint: 'Väljas olles ei näe see konto kusagil rakenduses hindu, summasid ega tulu.',
+            canSeeCompanyFinancials: 'Näeb ettevõtte finantsnäitajaid',
+            canSeeCompanyFinancialsHint: 'Vaikimisi väljas. Lisab nende töölauale tulu, kulu, laekumiste ja maksmata arvete vidinad ning lubab edetabeleid käibe järgi järjestada. Nende endi tellimusi ja hindu see ei mõjuta.',
             avatar: 'Pilt',
             password: 'Parool',
         },
@@ -2517,6 +2831,7 @@ export default {
         success: 'Teie konto on valmis. Alustamiseks logige sisse.',
         successWithCompany: 'Teie konto on valmis — tere tulemast ettevõttesse {{company}}. Alustamiseks logige sisse.',
         goToLogin: 'Mine sisselogimisse',
+        google: 'Jätka Google\'iga',
     },
     userDetail: {
         back: 'Tagasi kasutajate juurde',
@@ -2573,6 +2888,7 @@ export default {
             loadingPermissions: 'Õiguste laadimine…',
             rightsIntro: 'Vali, millistele valdkondadele sellel kasutajal on juurdepääs. Loomise, muutmise või kustutamise andmine annab automaatselt vaatamisõiguse.',
             canSeePrices: 'Näeb hindu',
+            canSeeCompanyFinancials: 'Näeb ettevõtte finantsnäitajaid',
             warehouseTitle: 'Laotöötaja rollist',
             warehouseNote: 'Laotöötajad täidavad tellimusi ja hoiavad laoseisu. Vaikimisi saavad nad vaadata ja muuta müügi- ja ostutellimuste staatust, vaadata tooteid ning korrigeerida laoseisu. Nad ei halda kataloogi (kategooriad, tootjad) ega näe kliente ja hankeid, ning nende töölaud ei näita tulu. Kasuta valikut „Näeb hindu", et määrata, kas nad näevad hindu ja summasid.',
             warehouseAssignment: 'Laode määramine',

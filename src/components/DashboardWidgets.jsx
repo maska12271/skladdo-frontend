@@ -5,6 +5,7 @@ import StatusBadge from './StatusBadge'
 import { Donut } from './MicroCharts'
 import { formatMoney, formatDate } from '../utils/format'
 import { useFittingRows } from '../hooks/useFittingRows'
+import { RANK_VALUE, RANK_VOLUME } from '../hooks/useRankMetrics'
 
 // Day-thresholds offered by the expiring-lots widget's selector.
 const EXPIRY_THRESHOLDS = [7, 30, 60, 90]
@@ -85,7 +86,12 @@ export function ActivityFeed({ items = [], onNavigate, rowLimit = ACTIVITY_ROWS 
                                     <span className="block text-xs text-slate-400 dark:text-slate-500">{verb} · {formatDate(item.date)}</span>
                                 </span>
                                 <span className="shrink-0 text-right">
-                                    <span className="block text-sm font-semibold tabular-nums">{formatMoney(item.amount)}</span>
+                                    {/* Nulled by the server for an account that may not see prices, rather
+                                        than sent and hidden here - so an amount that is withheld reads as
+                                        absent instead of as a zero. */}
+                                    {item.amount != null && (
+                                        <span className="block text-sm font-semibold tabular-nums">{formatMoney(item.amount)}</span>
+                                    )}
                                     <span className="mt-0.5 block"><StatusBadge status={item.status} /></span>
                                 </span>
                             </button>
@@ -362,35 +368,84 @@ export function StockHealth({ products }) {
     )
 }
 
-// Top-N ranking list with a proportional bar. `unit` (e.g. "units") shows the secondary quantity.
-export function RankList({ rows = [], emptyText, unit }) {
+/**
+ * Top-N ranking list with a proportional bar, in one of two orderings.
+ *
+ * `metric` picks which: {@link RANK_VALUE} leads on turnover (with the quantity as an aside), while
+ * {@link RANK_VOLUME} leads on the count - units sold, or orders placed - and prints no money at all. The
+ * two are separate lists from the server rather than one list re-sorted here, because they hold different
+ * rows: the client who spent the most is rarely the one who ordered most often.
+ *
+ * `unit` labels the count ("units", "orders"). `onMetricChange` adds the selector; without it the widget
+ * shows whichever ordering it was handed, which is what an account with no access to the money table gets.
+ */
+export function RankList({ rows = [], emptyText, unit, metric = RANK_VALUE, onMetricChange, valueLabel, volumeLabel }) {
+    const byValue = metric === RANK_VALUE
+    const selector = onMetricChange ? (
+        <div className="mb-3 flex justify-end">
+            <div className="inline-flex gap-0.5 rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
+                {[[RANK_VALUE, valueLabel], [RANK_VOLUME, volumeLabel]].map(([key, label]) => (
+                    <button
+                        key={key}
+                        type="button"
+                        onClick={() => onMetricChange(key)}
+                        aria-pressed={metric === key}
+                        className={`inline-flex min-h-11 items-center justify-center rounded-md px-2 py-1 text-xs font-medium transition lg:min-h-0 ${
+                            metric === key
+                                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                        }`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+        </div>
+    ) : null
+
     if (rows.length === 0) {
-        return <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">{emptyText}</p>
+        return (
+            <div className="flex h-full flex-col">
+                {selector}
+                <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">{emptyText}</p>
+            </div>
+        )
     }
-    const max = Math.max(1, ...rows.map((r) => Number(r.amount) || 0))
+
+    // The bar is drawn against whatever the list is ranked by, so it always agrees with the order.
+    const valueOf = (r) => (byValue ? Number(r.amount) || 0 : Number(r.quantity) || 0)
+    const max = Math.max(1, ...rows.map(valueOf))
     return (
-        <ul className="space-y-3">
-            {rows.map((row, i) => {
-                const amount = Number(row.amount) || 0
-                const pct = Math.round((amount / max) * 100)
-                return (
-                    <li key={row.id ?? i}>
-                        <div className="flex items-baseline justify-between gap-3 text-sm">
-                            <span className="min-w-0 truncate font-medium text-slate-700 dark:text-slate-200">
-                                <span className="mr-2 text-slate-400">{i + 1}.</span>
-                                {row.name || '—'}
-                            </span>
-                            <span className="shrink-0 tabular-nums text-slate-600 dark:text-slate-300">
-                                {formatMoney(amount)}
-                                {unit ? <span className="ml-1 text-xs text-slate-400">· {row.quantity} {unit}</span> : null}
-                            </span>
-                        </div>
-                        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                            <div className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500" style={{ width: `${pct}%` }} />
-                        </div>
-                    </li>
-                )
-            })}
-        </ul>
+        <div className="flex h-full min-h-0 flex-col">
+            {selector}
+            <ul className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+                {rows.map((row, i) => {
+                    const pct = Math.round((valueOf(row) / max) * 100)
+                    return (
+                        <li key={row.id ?? i}>
+                            <div className="flex items-baseline justify-between gap-3 text-sm">
+                                <span className="min-w-0 truncate font-medium text-slate-700 dark:text-slate-200">
+                                    <span className="mr-2 text-slate-400">{i + 1}.</span>
+                                    {row.name || '—'}
+                                </span>
+                                <span className="shrink-0 tabular-nums text-slate-600 dark:text-slate-300">
+                                    {byValue ? (
+                                        <>
+                                            {formatMoney(row.amount)}
+                                            {unit ? <span className="ml-1 text-xs text-slate-400">· {row.quantity} {unit}</span> : null}
+                                        </>
+                                    ) : (
+                                        <>{row.quantity} {unit}</>
+                                    )}
+                                </span>
+                            </div>
+                            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                                <div className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500" style={{ width: `${pct}%` }} />
+                            </div>
+                        </li>
+                    )
+                })}
+            </ul>
+        </div>
     )
 }

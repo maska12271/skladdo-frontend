@@ -432,6 +432,18 @@ export default function UserDetailPage() {
                                     value={user.canSeePrices !== false ? t('common.yes') : t('common.no')}
                                 />
                             )}
+                            {isRestrictable && (
+                                <Fact
+                                    label={t('userDetail.settings.canSeeCompanyFinancials')}
+                                    value={
+                                        // Prices off makes this one moot whatever it is stored as, so the
+                                        // page reports the effective answer rather than the raw column.
+                                        user.canSeePrices !== false && user.canSeeCompanyFinancials === true
+                                            ? t('common.yes')
+                                            : t('common.no')
+                                    }
+                                />
+                            )}
                         </dl>
                         {isAdmin && !isOwner && !isSelf && (
                             <div className="mt-5 space-y-4 border-t border-slate-200 pt-4 dark:border-slate-800">
