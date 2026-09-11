@@ -202,6 +202,20 @@ export function AuthProvider({ children }) {
         return startSession(response)
     }, [startSession])
 
+    // As loginWithGoogle, for Microsoft. Same session shape, same startSession — see MicrosoftAuthService
+    // on the backend for the one thing that differs, which is invisible from here: it never falls back to
+    // matching an existing account by email, so an unlinked address gets the same "no account" rejection a
+    // Google login for a brand-new address does.
+    const loginWithMicrosoft = useCallback(async (idToken) => {
+        const response = await apiPost('/public/auth/microsoft/login', { idToken }, { suppressErrorToast: true, skipAuthRedirect: true })
+        return startSession(response)
+    }, [startSession])
+
+    const registerWithMicrosoft = useCallback(async (idToken, payload) => {
+        const response = await apiPost('/public/auth/microsoft/register', { idToken, ...payload }, { suppressErrorToast: true, skipAuthRedirect: true })
+        return startSession(response)
+    }, [startSession])
+
     const isAdmin = MANAGER_ROLES.includes(user?.role)
 
     // Standing in the account's *own* company, which `role` hides during a partner session. Governs the
@@ -284,6 +298,8 @@ export function AuthProvider({ children }) {
         register,
         loginWithGoogle,
         registerWithGoogle,
+        loginWithMicrosoft,
+        registerWithMicrosoft,
         logout,
         updateUser,
         refreshUser,
@@ -297,7 +313,7 @@ export function AuthProvider({ children }) {
         lastClientId,
         switchingRef,
     }), [token, user, isAdmin, isHomeAdmin, canSeePrices, canSeeFinancials, can, hasAddon, login, register, loginWithGoogle,
-        registerWithGoogle, logout, updateUser, refreshUser,
+        registerWithGoogle, loginWithMicrosoft, registerWithMicrosoft, logout, updateUser, refreshUser,
         companies, switchCompany, refreshCompanies, isPartnerSession, isWarehouseAccount, isPlatformAdmin,
         isPlatformCompany, lastClientId])
 

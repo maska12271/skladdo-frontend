@@ -150,19 +150,24 @@ jobs:
             # without anyone editing package.json.
             APP_BUILD_NUMBER=$(git -C frontend rev-list --count HEAD)
             APP_COMMIT=$(git -C frontend rev-parse --short HEAD)
-            # "Sign in with Google" needs the client id at BUILD time, because Vite bakes VITE_* into
-            # the bundle. Leaving it out does not merely hide the button: `if (!clientId) return null`
-            # becomes statically true, so the whole component is dead-code-eliminated and production
-            # ships a 92-byte stub with no way to tell from the outside. Read from deploy/.env, which
-            # is where the backend already gets the same value, so the two halves cannot disagree.
+            # "Sign in with Google"/"Sign in with Microsoft" need their client ids at BUILD time, because
+            # Vite bakes VITE_* into the bundle. Leaving one out does not merely hide its button: each
+            # component's `if (!clientId) return null` becomes statically true, so it is dead-code-
+            # eliminated and production ships with no way to tell from the outside. Read from deploy/.env,
+            # which is where the backend already gets the same values, so the halves cannot disagree.
             APP_GOOGLE_CLIENT_ID=$(sed -n 's/^APP_GOOGLE_CLIENT_ID=//p' deploy/.env)
+            APP_MICROSOFT_CLIENT_ID=$(sed -n 's/^APP_MICROSOFT_CLIENT_ID=//p' deploy/.env)
             echo "Building frontend $APP_BUILD_NUMBER ($APP_COMMIT)"
             if [ -z "$APP_GOOGLE_CLIENT_ID" ]; then
               echo "WARNING: APP_GOOGLE_CLIENT_ID is unset in deploy/.env - shipping without Google sign-in"
             fi
+            if [ -z "$APP_MICROSOFT_CLIENT_ID" ]; then
+              echo "WARNING: APP_MICROSOFT_CLIENT_ID is unset in deploy/.env - shipping without Microsoft sign-in"
+            fi
             docker run --rm -v "$(pwd)/frontend:/app" -w /app \
               -e VITE_API_BASE_URL=/api \
               -e VITE_GOOGLE_CLIENT_ID="$APP_GOOGLE_CLIENT_ID" \
+              -e VITE_MICROSOFT_CLIENT_ID="$APP_MICROSOFT_CLIENT_ID" \
               -e APP_BUILD_NUMBER="$APP_BUILD_NUMBER" \
               -e APP_COMMIT="$APP_COMMIT" \
               node:20-alpine sh -c "npm ci && npm run build"

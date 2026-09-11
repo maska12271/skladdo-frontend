@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, Clock, Receipt, Download, CheckCircle2, RotateCcw, FileText, Upload, X, Plus, Ban } from 'lucide-react'
+import { ChevronLeft, Clock, Receipt, Download, CheckCircle2, RotateCcw, FileText, FileCode2, Upload, X, Plus, Ban, Undo2, AlertTriangle } from 'lucide-react'
 import { apiGet, apiPost, apiPatch, apiPut, apiDelete, apiDownload, apiUpload } from '../api/client'
 import StatCard from '../components/StatCard'
 import StatusBadge from '../components/StatusBadge'
@@ -366,15 +366,25 @@ function InvoiceSection({ orderId, orderStatus, invoices, setInvoices, perms, ca
     const createModal = useModal()
     const paidModal = useModal()
     const voidModal = useModal()
+    const creditNoteModal = useModal()
+    const eInvoiceCheckModal = useModal()
     const [payingInvoice, setPayingInvoice] = useState(null)
     const [voidingInvoice, setVoidingInvoice] = useState(null)
+    const [creditingInvoice, setCreditingInvoice] = useState(null)
+    const [eInvoiceCheck, setEInvoiceCheck] = useState(null)
 
     // Prepayment reads before the final invoice.
     const active = invoices
         .filter((inv) => inv.status !== 'VOID')
         .sort((a, b) => Number(b.type === 'PREPAYMENT') - Number(a.type === 'PREPAYMENT'))
     const voided = invoices.filter((inv) => inv.status === 'VOID')
-    const activeTypes = new Set(active.map((inv) => inv.type || 'FINAL'))
+    // Only invoices that still stand decide whether another can be raised: a credited one, like a voided
+    // one, leaves the order needing an invoice again, and a credit note is never one of the two kinds.
+    const activeTypes = new Set(
+        active
+            .filter((inv) => inv.status !== 'CREDITED' && (inv.type || 'FINAL') !== 'CREDIT')
+            .map((inv) => inv.type || 'FINAL'),
+    )
     const canCreateMore = perms.canCreate && orderStatus !== 'CANCELLED' && activeTypes.size < 2
 
     const replace = (updated) => setInvoices((prev) => prev.map((inv) => (inv.id === updated.id ? updated : inv)))
@@ -387,6 +397,55 @@ function InvoiceSection({ orderId, orderStatus, invoices, setInvoices, perms, ca
         } finally {
             setBusy(false)
         }
+    }
+
+    // The machine-readable e-arve XML, for the buyer's accounting system rather than for reading.
+    const fetchEInvoice = async (inv) => {
+        setBusy(true)
+        try {
+            const blob = await apiDownload(`/invoices/${inv.id}/e-invoice`)
+            triggerDownload(blob, `e-arve-${inv.invoiceNumber}.xml`)
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    // Anything missing from the file is worth seeing before it reaches the buyer's accounting system,
+    // where the failure is silent and lands days later. Clean invoices download without interruption.
+    const downloadEInvoice = async (inv) => {
+        setBusy(true)
+        let issues = []
+        try {
+            issues = await apiGet(`/invoices/${inv.id}/e-invoice/readiness`)
+        } finally {
+            setBusy(false)
+        }
+        if (!issues || issues.length === 0) {
+            await fetchEInvoice(inv)
+            return
+        }
+        setEInvoiceCheck({ invoice: inv, issues })
+        eInvoiceCheckModal.open()
+    }
+
+    const downloadEInvoiceAnyway = async () => {
+        if (!eInvoiceCheck) return
+        await fetchEInvoice(eInvoiceCheck.invoice)
+        eInvoiceCheckModal.close()
+        setEInvoiceCheck(null)
+    }
+
+    const openCreditNote = (inv) => {
+        setCreditingInvoice(inv)
+        creditNoteModal.open()
+    }
+
+    const handleCreditNoteCreated = (creditNote, credited) => {
+        // The reversed invoice changed status server-side, so refresh both rather than just appending.
+        setInvoices((prev) => [creditNote, ...prev.map((inv) => (inv.id === credited.id ? { ...inv, status: 'CREDITED' } : inv))])
+        creditNoteModal.close()
+        setCreditingInvoice(null)
+        toast.success(t('invoices.creditNoteIssued'))
     }
 
     const markUnpaid = async (inv) => {
@@ -456,9 +515,11 @@ function InvoiceSection({ orderId, orderStatus, invoices, setInvoices, perms, ca
                             canSeePrices={canSeePrices}
                             busy={busy}
                             onDownload={() => download(inv)}
+                            onDownloadEInvoice={() => downloadEInvoice(inv)}
                             onMarkPaid={() => openPaid(inv)}
                             onMarkUnpaid={() => markUnpaid(inv)}
                             onVoid={() => confirmVoid(inv)}
+                            onCreditNote={() => openCreditNote(inv)}
                         />
                     ))}
                 </div>
@@ -482,6 +543,27 @@ function InvoiceSection({ orderId, orderStatus, invoices, setInvoices, perms, ca
                     createModal.close()
                     toast.success(t('invoices.generated'))
                 }}
+            />
+
+            <CreditNoteModal
+                isOpen={creditNoteModal.isOpen}
+                onClose={() => {
+                    creditNoteModal.close()
+                    setCreditingInvoice(null)
+                }}
+                invoice={creditingInvoice}
+                onCreated={handleCreditNoteCreated}
+            />
+
+            <EInvoiceCheckModal
+                isOpen={eInvoiceCheckModal.isOpen}
+                onClose={() => {
+                    eInvoiceCheckModal.close()
+                    setEInvoiceCheck(null)
+                }}
+                issues={eInvoiceCheck?.issues || []}
+                busy={busy}
+                onDownloadAnyway={downloadEInvoiceAnyway}
             />
 
             <MarkPaidModal
@@ -515,18 +597,31 @@ function InvoiceSection({ orderId, orderStatus, invoices, setInvoices, perms, ca
 }
 
 /** A single active invoice: its type, status, dates, amounts and per-invoice actions. */
-function InvoiceCard({ inv, perms, canSeePrices, busy, onDownload, onMarkPaid, onMarkUnpaid, onVoid }) {
+function InvoiceCard({ inv, perms, canSeePrices, busy, onDownload, onDownloadEInvoice, onMarkPaid, onMarkUnpaid, onVoid, onCreditNote }) {
     const { t } = useTranslation()
-    const isPrepayment = (inv.type || 'FINAL') === 'PREPAYMENT'
+    const type = inv.type || 'FINAL'
+    const isCredit = type === 'CREDIT'
+    const isCredited = inv.status === 'CREDITED'
+    // A credit note settles nothing and is owed by nobody, so the payment actions do not apply to it;
+    // a credited invoice has already been reversed and must be un-credited (by voiding the note) first.
+    const canCreditNote = perms.canCreate && !isCredit && !isCredited && inv.status !== 'VOID'
     return (
         <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold">{inv.invoiceNumber}</span>
-                    <StatusBadge status={invoiceDisplayStatus(inv)} />
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                        {isPrepayment ? t('invoices.type.PREPAYMENT') : t('invoices.type.FINAL')}
-                    </span>
+                    {/* A credit note is settled the day it is issued, so a payment badge on one says
+                        "Paid" about a document nobody ever pays. Its type is the only status it has. */}
+                    {isCredit ? (
+                        <StatusBadge status="CREDIT_NOTE" />
+                    ) : (
+                        <>
+                            <StatusBadge status={invoiceDisplayStatus(inv)} />
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                {t(`invoices.type.${type}`)}
+                            </span>
+                        </>
+                    )}
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
                     <button
@@ -535,6 +630,14 @@ function InvoiceCard({ inv, perms, canSeePrices, busy, onDownload, onMarkPaid, o
                         className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
                     >
                         <Download className="h-4 w-4" /> {t('invoices.download')}
+                    </button>
+                    <button
+                        onClick={onDownloadEInvoice}
+                        disabled={busy}
+                        title={t('invoices.downloadEInvoiceHint')}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                    >
+                        <FileCode2 className="h-4 w-4" /> {t('invoices.downloadEInvoice')}
                     </button>
                     {perms.canEdit && inv.status === 'UNPAID' && (
                         <button
@@ -545,7 +648,7 @@ function InvoiceCard({ inv, perms, canSeePrices, busy, onDownload, onMarkPaid, o
                             <CheckCircle2 className="h-4 w-4" /> {t('invoices.markPaid')}
                         </button>
                     )}
-                    {perms.canEdit && inv.status === 'PAID' && (
+                    {perms.canEdit && inv.status === 'PAID' && !isCredit && (
                         <button
                             onClick={onMarkUnpaid}
                             disabled={busy}
@@ -554,7 +657,17 @@ function InvoiceCard({ inv, perms, canSeePrices, busy, onDownload, onMarkPaid, o
                             <RotateCcw className="h-4 w-4" /> {t('invoices.markUnpaid')}
                         </button>
                     )}
-                    {perms.canEdit && (
+                    {canCreditNote && (
+                        <button
+                            onClick={onCreditNote}
+                            disabled={busy}
+                            title={t('invoices.creditNoteHint')}
+                            className="inline-flex items-center gap-2 rounded-xl border border-violet-200 px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-60 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/40"
+                        >
+                            <Undo2 className="h-4 w-4" /> {t('invoices.creditNote')}
+                        </button>
+                    )}
+                    {perms.canEdit && !isCredited && (
                         <button
                             onClick={onVoid}
                             disabled={busy}
@@ -583,9 +696,19 @@ function InvoiceCard({ inv, perms, canSeePrices, busy, onDownload, onMarkPaid, o
                 {canSeePrices && Number(inv.penaltyAmount) > 0 && (
                     <Fact label={t('invoices.penalty')} value={invoiceMoney(inv.penaltyAmount, inv.currency)} />
                 )}
+                {inv.creditedInvoiceNumber && (
+                    <Fact label={t('invoices.reverses')} value={inv.creditedInvoiceNumber} />
+                )}
+                {canSeePrices && Number(inv.creditedAmount) > 0 && !isCredited && (
+                    <Fact
+                        label={t('invoices.creditedPartially')}
+                        value={`-${invoiceMoney(inv.creditedAmount, inv.currency)}`}
+                    />
+                )}
             </dl>
 
             {inv.overdue && <p className="mt-3 text-sm font-medium text-rose-600 dark:text-rose-400">{t('invoices.overdueNote')}</p>}
+            {isCredited && <p className="mt-3 text-sm font-medium text-violet-600 dark:text-violet-400">{t('invoices.creditedNote')}</p>}
         </div>
     )
 }
@@ -770,6 +893,196 @@ function MarkPaidModal({ isOpen, onClose, invoice, onPaid }) {
                     </button>
                 </ModalActions>
             </form>
+        </Modal>
+    )
+}
+
+/**
+ * "Issue credit note" dialog. A credit note always reverses the whole invoice, so there is no amount to
+ * pick — only the date and the reason, which is required because the note stays in the books for good.
+ */
+function CreditNoteModal({ isOpen, onClose, invoice, onCreated }) {
+    const { t } = useTranslation()
+    const [date, setDate] = useState(invToday())
+    const [reason, setReason] = useState('')
+    // Quantity to credit per line id, pre-filled with the full quantity: reversing the whole invoice is
+    // the common case, and reducing a number is easier than filling several in.
+    const [quantities, setQuantities] = useState({})
+    const [creditDelivery, setCreditDelivery] = useState(true)
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        if (isOpen && invoice) {
+            setDate(invToday())
+            setReason('')
+            setCreditDelivery(true)
+            setQuantities(Object.fromEntries((invoice.items || []).map((l) => [l.id, l.quantity])))
+        }
+    }, [isOpen, invoice])
+
+    if (!isOpen || !invoice) return null
+
+    const lines = invoice.items || []
+    const hasDelivery = Number(invoice.deliveryPrice) > 0
+    const setQty = (id, value) => setQuantities((prev) => ({ ...prev, [id]: value }))
+
+    // Net of the selected quantities, shown live so the user can see what they are about to reverse.
+    const selectedNet = lines.reduce((sum, line) => {
+        const qty = Number(quantities[line.id] ?? 0)
+        if (!qty || !line.quantity) return sum
+        return sum + (Number(line.lineTotal) * qty) / line.quantity
+    }, 0)
+    const nothingSelected = selectedNet <= 0 && !(creditDelivery && hasDelivery)
+
+    const submit = async (e) => {
+        e.preventDefault()
+        setSaving(true)
+        try {
+            const created = await apiPost(`/invoices/${invoice.id}/credit-note`, {
+                issueDate: date || null,
+                reason: reason.trim(),
+                // Always explicit; the server decides whether this amounts to the whole invoice, so a
+                // full selection still reverses it to the cent rather than being recomputed.
+                lines: lines
+                    .filter((line) => Number(quantities[line.id] ?? 0) > 0)
+                    .map((line) => ({ invoiceItemId: line.id, quantity: Number(quantities[line.id]) })),
+                creditDelivery: hasDelivery ? creditDelivery : false,
+            })
+            onCreated(created, invoice)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={t('invoices.creditNoteTitle')} width="max-w-lg">
+            <form onSubmit={submit} className="space-y-5">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {t('invoices.creditNotePrompt', { number: invoice.invoiceNumber })}
+                </p>
+
+                {lines.length > 0 && (
+                    <div className="space-y-2">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                            {t('invoices.creditNoteLines')}
+                        </p>
+                        <div className="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                            {lines.map((line) => (
+                                <div key={line.id} className="flex items-center justify-between gap-3">
+                                    <span className="min-w-0 flex-1 truncate text-sm">{line.productName}</span>
+                                    <span className="text-xs text-slate-400">{t('invoices.creditNoteOf', { count: line.quantity })}</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={line.quantity}
+                                        value={quantities[line.id] ?? 0}
+                                        onChange={(e) => setQty(line.id, e.target.value)}
+                                        aria-label={t('invoices.creditNoteQuantityFor', { name: line.productName })}
+                                        className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-950"
+                                    />
+                                </div>
+                            ))}
+                            {hasDelivery && (
+                                <label className="flex items-center gap-2 border-t border-slate-200 pt-2 text-sm dark:border-slate-800">
+                                    <input
+                                        type="checkbox"
+                                        checked={creditDelivery}
+                                        onChange={(e) => setCreditDelivery(e.target.checked)}
+                                        className="h-4 w-4 rounded border-slate-300 dark:border-slate-700"
+                                    />
+                                    {t('invoices.creditNoteDelivery', {
+                                        amount: invoiceMoney(invoice.deliveryPrice, invoice.currency),
+                                    })}
+                                </label>
+                            )}
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t('invoices.creditNoteLinesHint')}</p>
+                    </div>
+                )}
+
+                <FormField
+                    id="credit-note-date"
+                    label={t('invoices.creditNoteDate')}
+                    type="date"
+                    name="issueDate"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    min={invoice.issueDate || undefined}
+                />
+                <TextareaField
+                    id="credit-note-reason"
+                    label={t('invoices.creditNoteReason')}
+                    name="reason"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    required
+                    rows={3}
+                    placeholder={t('invoices.creditNoteReasonPlaceholder')}
+                />
+                <ModalActions>
+                    <button type="button" onClick={onClose} className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700">
+                        {t('common.cancel')}
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={saving || !reason.trim() || nothingSelected}
+                        className="rounded-xl bg-violet-600 px-4 py-2.5 font-medium text-white hover:bg-violet-700 disabled:opacity-60"
+                    >
+                        {saving ? t('common.saving') : t('invoices.creditNoteConfirm')}
+                    </button>
+                </ModalActions>
+            </form>
+        </Modal>
+    )
+}
+
+/**
+ * Lists what an invoice is missing before its e-invoice XML is downloaded. Shown only when there is
+ * something to say — a clean invoice downloads straight away. Nothing here blocks the download: an
+ * incomplete file is often still worth sending, and the point is that the gap is known rather than
+ * discovered by the buyer's accounting system days later.
+ */
+function EInvoiceCheckModal({ isOpen, onClose, issues, busy, onDownloadAnyway }) {
+    const { t } = useTranslation()
+    if (!isOpen) return null
+
+    const blocking = issues.filter((i) => i.severity === 'BLOCKING')
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={t('invoices.eInvoiceCheck.title')} width="max-w-lg">
+            <div className="space-y-5">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {blocking.length > 0 ? t('invoices.eInvoiceCheck.introBlocking') : t('invoices.eInvoiceCheck.introWarning')}
+                </p>
+                <ul className="space-y-2">
+                    {issues.map((issue) => (
+                        <li
+                            key={issue.code}
+                            className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-sm ${
+                                issue.severity === 'BLOCKING'
+                                    ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200'
+                                    : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                            }`}
+                        >
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>{t(`invoices.eInvoiceCheck.issue.${issue.code}`)}</span>
+                        </li>
+                    ))}
+                </ul>
+                <ModalActions>
+                    <button type="button" onClick={onClose} className="rounded-xl border border-slate-300 px-4 py-2.5 dark:border-slate-700">
+                        {t('common.cancel')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onDownloadAnyway}
+                        disabled={busy}
+                        className="rounded-xl bg-slate-800 px-4 py-2.5 font-medium text-white hover:bg-slate-900 disabled:opacity-60 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white"
+                    >
+                        {t('invoices.eInvoiceCheck.downloadAnyway')}
+                    </button>
+                </ModalActions>
+            </div>
         </Modal>
     )
 }

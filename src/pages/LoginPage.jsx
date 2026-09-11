@@ -6,11 +6,14 @@ import { Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { FormField } from '../components/FormField.jsx'
 import GoogleSignInButton from '../components/GoogleSignInButton.jsx'
+import MicrosoftSignInButton from '../components/MicrosoftSignInButton.jsx'
 import LegalLinks from '../components/LegalLinks.jsx'
+
+const HAS_SSO = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_MICROSOFT_CLIENT_ID)
 
 export default function LoginPage() {
     const { t } = useTranslation()
-    const { login, loginWithGoogle, isAuthenticated } = useAuth()
+    const { login, loginWithGoogle, loginWithMicrosoft, isAuthenticated } = useAuth()
     const navigate = useNavigate()
 
     const [email, setEmail] = useState('')
@@ -36,20 +39,24 @@ export default function LoginPage() {
         }
     }
 
-    // Signing in with Google never creates a company — the server has no name, account type or plan to
-    // create one with — so an unknown address is sent to signup rather than quietly charged for a plan.
-    const handleGoogle = async (idToken) => {
+    // Signing in with an identity provider never creates a company — the server has no name, account type
+    // or plan to create one with — so an unknown address is sent to signup rather than quietly charged for
+    // a plan. Shared by both buttons below; only which `login*` function and which fallback error differ.
+    const handleProviderSignIn = (login, fallbackErrorKey) => async (idToken) => {
         setError('')
         setLoading(true)
         try {
-            await loginWithGoogle(idToken)
+            await login(idToken)
             navigate('/dashboard', { replace: true })
         } catch (err) {
-            setError(err.message || t('login.googleError'))
+            setError(err.message || t(fallbackErrorKey))
         } finally {
             setLoading(false)
         }
     }
+
+    const handleGoogle = handleProviderSignIn(loginWithGoogle, 'login.googleError')
+    const handleMicrosoft = handleProviderSignIn(loginWithMicrosoft, 'login.microsoftError')
 
     return (
         <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-100 p-4 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
@@ -114,8 +121,9 @@ export default function LoginPage() {
                     </button>
                 </form>
 
-                {/* Renders nothing when this build has no Google client id, taking the divider with it. */}
-                {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                {/* Renders nothing when this build has neither client id configured, taking the divider
+                    with it; each button below independently hides itself if only one is. */}
+                {HAS_SSO && (
                     <>
                         <div className="my-6 flex items-center gap-3">
                             <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
@@ -124,11 +132,17 @@ export default function LoginPage() {
                             </span>
                             <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
                         </div>
-                        <GoogleSignInButton
-                            onCredential={handleGoogle}
-                            onError={() => setError(t('login.googleError'))}
-                            text="signin_with"
-                        />
+                        <div className="space-y-3">
+                            <GoogleSignInButton
+                                onCredential={handleGoogle}
+                                onError={() => setError(t('login.googleError'))}
+                                text="signin_with"
+                            />
+                            <MicrosoftSignInButton
+                                onCredential={handleMicrosoft}
+                                onError={() => setError(t('login.microsoftError'))}
+                            />
+                        </div>
                     </>
                 )}
 

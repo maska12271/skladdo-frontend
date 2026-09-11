@@ -224,6 +224,17 @@ export default function SettingsPage() {
         setSettings((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
     }
 
+    // Fills the seller address from one typeahead pick; blanks in the suggestion leave what's there.
+    const applyCompanyAddressParts = ({ street, city, postalCode, country }) => {
+        setSettings((prev) => ({
+            ...prev,
+            companyAddressStreet: street,
+            companyAddressCity: city || prev.companyAddressCity,
+            companyAddressPostalCode: postalCode || prev.companyAddressPostalCode,
+            companyCountry: country || prev.companyCountry,
+        }))
+    }
+
     const logoInputRef = useRef(null)
     const [logoUploading, setLogoUploading] = useState(false)
     const logoUrl = usePresignedUrl(settings?.logoKey)
@@ -259,7 +270,10 @@ export default function SettingsPage() {
         latePaymentPenaltyPercent: Number(settings.latePaymentPenaltyPercent) || 0,
         penaltyPeriod: settings.penaltyPeriod || 'DAILY',
         defaultPrepaymentPercent: Number(settings.defaultPrepaymentPercent) || 0,
-        companyAddress: settings.companyAddress || null,
+        companyAddressStreet: settings.companyAddressStreet || null,
+        companyAddressPostalCode: settings.companyAddressPostalCode || null,
+        companyAddressCity: settings.companyAddressCity || null,
+        companyCountry: settings.companyCountry || null,
         companyEmail: settings.companyEmail || null,
         companyPhone: settings.companyPhone || null,
         vatNumber: settings.vatNumber || null,
@@ -361,7 +375,10 @@ export default function SettingsPage() {
               invoicePaymentTermDays: settings.invoicePaymentTermDays,
               latePaymentPenaltyPercent: settings.latePaymentPenaltyPercent,
               penaltyPeriod: settings.penaltyPeriod,
-              companyAddress: settings.companyAddress,
+              companyAddressStreet: settings.companyAddressStreet,
+              companyAddressPostalCode: settings.companyAddressPostalCode,
+              companyAddressCity: settings.companyAddressCity,
+              companyCountry: settings.companyCountry,
               companyEmail: settings.companyEmail,
               companyPhone: settings.companyPhone,
               vatNumber: settings.vatNumber,
@@ -1223,7 +1240,13 @@ export default function SettingsPage() {
                             </div>
 
                             <div className="grid gap-4 md:grid-cols-2">
-                                <AddressAutocompleteField id="company-address" label={t('settings.company.address')} name="companyAddress" value={settings.companyAddress || ''} onChange={handleSettingsChange} />
+                                {/* Address in parts — the e-invoice needs street and city separately. */}
+                                <AddressAutocompleteField id="company-address" label={t('common.addressStreet')} name="companyAddressStreet" value={settings.companyAddressStreet || ''} onChange={handleSettingsChange} onSelectParts={applyCompanyAddressParts} />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormField id="company-postal-code" label={t('common.postalCode')} name="companyAddressPostalCode" value={settings.companyAddressPostalCode || ''} onChange={handleSettingsChange} maxLength={10} />
+                                    <FormField id="company-city" label={t('common.city')} name="companyAddressCity" value={settings.companyAddressCity || ''} onChange={handleSettingsChange} />
+                                </div>
+                                <FormField id="company-country" label={t('common.country')} name="companyCountry" value={settings.companyCountry || ''} onChange={handleSettingsChange} />
                                 <FormField id="vat-number" label={t('settings.company.vatNumber')} name="vatNumber" value={settings.vatNumber || ''} onChange={handleSettingsChange} />
                                 <FormField id="company-email" label={t('settings.company.email')} type="email" name="companyEmail" value={settings.companyEmail || ''} onChange={handleSettingsChange} />
                                 <PhoneField id="company-phone" label={t('settings.company.phone')} name="companyPhone" value={settings.companyPhone || ''} onChange={handleSettingsChange} />

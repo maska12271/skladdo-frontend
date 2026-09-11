@@ -51,6 +51,10 @@ const STATUS_TONE = {
     PAID: 'emerald',
     VOID: 'slate',
     OVERDUE: 'rose',
+    // Reversed by a credit note: settled, but not by payment - violet keeps it distinct from both.
+    CREDITED: 'violet',
+    // The credit note itself, which carries no payment state of its own.
+    CREDIT_NOTE: 'violet',
     // Order payment statuses (derived from an order's invoices).
     NOT_INVOICED: 'slate',
     PREPAYMENT_PENDING: 'amber',
@@ -86,6 +90,8 @@ const STATUS_LABEL_KEY = {
     PAID: 'PAID',
     VOID: 'VOID',
     OVERDUE: 'OVERDUE',
+    CREDITED: 'CREDITED',
+    CREDIT_NOTE: 'CREDIT_NOTE',
     NOT_INVOICED: 'NOT_INVOICED',
     PREPAYMENT_PENDING: 'PREPAYMENT_PENDING',
     PREPAYMENT_OVERDUE: 'PREPAYMENT_OVERDUE',

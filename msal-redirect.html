@@ -1,0 +1,31 @@
+<!doctype html>
+<!--
+  Where "Sign in with Microsoft" sends its popup back to — a page of its own rather than the app's root,
+  and one Vite has to build as a proper page rather than copy verbatim: msal-browser v5 requires this
+  "redirect bridge" script to run here, using BroadcastChannel to hand the response back to the window
+  that opened the popup, which is what makes the popup close itself. Without it (or with the app's own
+  router loading here instead) the popup just sits on this page forever, showing whatever it rendered.
+
+  Lives at the project root, a sibling of index.html, not under public/: a public/ copy is served
+  byte-for-byte with no processing, so the bare `@azure/msal-browser/redirect-bridge` import below would
+  never resolve. vite.config.js's extra rollupOptions.input entry is what makes the production build emit
+  this as a second real page instead of dropping it; Vite's dev server serves any root-level .html file
+  automatically, so nothing extra is needed to reach it during `npm run dev`.
+
+  Must not be served behind a Cross-Origin-Opener-Policy header - COOP severs the very channel back to the
+  opener that this page exists to use. Nothing here does that today, but keep it in mind if COOP is ever
+  added for other pages.
+
+  Registered as a redirect URI on the Entra app's SPA platform (must match exactly, including this path) -
+  see MicrosoftSignInButton.jsx and DEPLOY.md section 7.
+-->
+<meta charset="UTF-8">
+<title>Signing in…</title>
+<p>Signing in…</p>
+<script type="module">
+    import { broadcastResponseToMainFrame } from '@azure/msal-browser/redirect-bridge'
+
+    broadcastResponseToMainFrame().catch((error) => {
+        console.error('Error broadcasting the Microsoft sign-in response:', error)
+    })
+</script>

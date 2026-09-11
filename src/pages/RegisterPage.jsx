@@ -10,10 +10,11 @@ import { useAuth } from '../context/AuthContext'
 import { apiGet } from '../api/client'
 import { FormField } from '../components/FormField.jsx'
 import GoogleSignInButton from '../components/GoogleSignInButton.jsx'
+import MicrosoftSignInButton from '../components/MicrosoftSignInButton.jsx'
 import PasswordStrength from '../components/PasswordStrength.jsx'
 import LegalConsentNotice from '../components/LegalConsentNotice.jsx'
 import { PLANS, PLAN_IDS, DEFAULT_PLAN, ADDONS, monthlyTotal } from '../config/plans'
-import { readGoogleProfile } from '../utils/googleIdToken'
+import { readIdTokenProfile } from '../utils/idTokenProfile'
 
 /** Mirrors the backend CompanyType. Chosen here and never editable again. */
 const ACCOUNT_TYPES = ['BUSINESS', 'WAREHOUSE']
@@ -50,7 +51,7 @@ const WAREHOUSE_STEPS = ['type', 'details']
  */
 export default function RegisterPage() {
     const { t, i18n } = useTranslation()
-    const { register, registerWithGoogle, isAuthenticated } = useAuth()
+    const { register, registerWithGoogle, registerWithMicrosoft, isAuthenticated } = useAuth()
     const navigate = useNavigate()
     const [searchParams] = useSearchParams()
 
@@ -79,10 +80,11 @@ export default function RegisterPage() {
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
     const [showPw, setShowPw] = useState(false)
-    // Set once the visitor has signed the details step with Google: `{ idToken, email, name }`. While it
-    // holds a token this signup has no password at all — the name and address come from Google, which is
-    // why they are shown but not editable, and why the password fields are not merely disabled but gone.
-    const [google, setGoogle] = useState(null)
+    // Set once the visitor has signed the details step with an identity provider: `{ provider, idToken,
+    // email, name }`, `provider` one of 'google' | 'microsoft'. While it holds a value this signup has no
+    // password at all — the name and address come from the provider, which is why they are shown but not
+    // editable, and why the password fields are not merely disabled but gone.
+    const [externalAuth, setExternalAuth] = useState(null)
     const [cardName, setCardName] = useState('')
     const [cardNumber, setCardNumber] = useState('')
     const [expiry, setExpiry] = useState('')
@@ -175,8 +177,8 @@ export default function RegisterPage() {
      */
     const stepError = () => {
         if (current === 'type' && !accountType) return t('register.pickAccountType')
-        // A Google signup has no password to check - and no password fields on screen to check it in.
-        if (current === 'details' && !google) {
+        // A provider signup has no password to check - and no password fields on screen to check it in.
+        if (current === 'details' && !externalAuth) {
             if (password.length < 8) return t('register.tooShort')
             if (password !== confirmPassword) return t('register.mismatch')
         }
@@ -210,10 +212,11 @@ export default function RegisterPage() {
                 ...(isWarehouse ? {} : { plan, addons }),
                 ...(validInvite ? { inviteCode } : {}),
             }
-            if (google) {
+            if (externalAuth) {
                 // No name, address or password: the server takes the first two from the token it verifies,
                 // and there is no third. Sending them would only invite the question of which one won.
-                await registerWithGoogle(google.idToken, common)
+                const registerWithProvider = externalAuth.provider === 'google' ? registerWithGoogle : registerWithMicrosoft
+                await registerWithProvider(externalAuth.idToken, common)
             } else {
                 await register({ ...common, fullName: fullName.trim(), email: email.trim(), password })
             }
@@ -244,13 +247,16 @@ export default function RegisterPage() {
     }
 
     /**
-     * Google has authenticated the visitor. Nothing is created yet - a business account still has a plan
-     * and a card preview to go - so this only records the token and moves the step on like any other.
+     * An identity provider has authenticated the visitor. Nothing is created yet - a business account
+     * still has a plan and a card preview to go - so this only records the token and moves the step on
+     * like any other.
      */
-    const handleGoogleCredential = (idToken) => {
+    const handleExternalCredential = (provider) => (idToken) => {
         setError('')
-        setGoogle({ idToken, ...readGoogleProfile(idToken) })
+        setExternalAuth({ provider, idToken, ...readIdTokenProfile(idToken) })
     }
+    const handleGoogleCredential = handleExternalCredential('google')
+    const handleMicrosoftCredential = handleExternalCredential('microsoft')
 
     const boxClass = 'space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-950/30'
     const sectionHeading = 'flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400'
@@ -385,26 +391,28 @@ export default function RegisterPage() {
                                 <FormField id="register-company" label={t('register.company')} name="companyName" value={companyName}
                                     onChange={(e) => setCompanyName(e.target.value)} required placeholder="Acme Trading OÜ" autoComplete="organization" autoFocus />
 
-                                {google ? (
-                                    /* Signed with Google: the name and address are Google's answer, shown so it is
-                                       clear whose account this will be, and not editable because the server reads
-                                       them from the token rather than from anything sent here. Both are changeable
-                                       afterwards under My Account. */
+                                {externalAuth ? (
+                                    /* Signed with an identity provider: the name and address are its answer, shown
+                                       so it is clear whose account this will be, and not editable because the server
+                                       reads them from the token rather than from anything sent here. Both are
+                                       changeable afterwards under My Account. */
                                     <div className="space-y-2.5">
                                         <FormField id="register-name" label={t('register.fullName')} name="fullName"
-                                            value={google.name} onChange={() => {}} readOnly disabled
+                                            value={externalAuth.name} onChange={() => {}} readOnly disabled
                                             inputClassName="bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300" />
                                         <FormField id="register-email" label={t('register.email')} name="email" type="email"
-                                            value={google.email} onChange={() => {}} readOnly disabled
+                                            value={externalAuth.email} onChange={() => {}} readOnly disabled
                                             inputClassName="bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300" />
                                         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                                             <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
                                                 <CheckCircle2 className="h-3.5 w-3.5" />
-                                                {t('register.google.connected')}
+                                                {externalAuth.provider === 'google'
+                                                    ? t('register.google.connected')
+                                                    : t('register.microsoft.connected')}
                                             </span>
                                             <button
                                                 type="button"
-                                                onClick={() => { setError(''); setGoogle(null) }}
+                                                onClick={() => { setError(''); setExternalAuth(null) }}
                                                 className="cursor-pointer font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
                                             >
                                                 {t('register.google.usePassword')}
@@ -438,8 +446,9 @@ export default function RegisterPage() {
                                             </button>
                                         </div>
 
-                                        {/* Renders nothing when this build has no Google client id. */}
-                                        {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                                        {/* Renders nothing when this build has neither client id configured;
+                                            each button below independently hides itself if only one is. */}
+                                        {(import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_MICROSOFT_CLIENT_ID) && (
                                             <>
                                                 <div className="flex items-center gap-3 pt-1">
                                                     <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
@@ -448,12 +457,19 @@ export default function RegisterPage() {
                                                     </span>
                                                     <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
                                                 </div>
-                                                <GoogleSignInButton
-                                                    text="signup_with"
-                                                    label={t('register.google.button')}
-                                                    onCredential={handleGoogleCredential}
-                                                    onError={() => setError(t('login.googleError'))}
-                                                />
+                                                <div className="space-y-2">
+                                                    <GoogleSignInButton
+                                                        text="signup_with"
+                                                        label={t('register.google.button')}
+                                                        onCredential={handleGoogleCredential}
+                                                        onError={() => setError(t('login.googleError'))}
+                                                    />
+                                                    <MicrosoftSignInButton
+                                                        label={t('register.microsoft.button')}
+                                                        onCredential={handleMicrosoftCredential}
+                                                        onError={() => setError(t('login.microsoftError'))}
+                                                    />
+                                                </div>
                                             </>
                                         )}
                                     </>

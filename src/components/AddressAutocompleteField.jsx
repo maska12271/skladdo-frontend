@@ -20,6 +20,11 @@ function FieldLabel({ id, label, required }) {
  * the full address. The user can always keep typing a free-form address. The `onChange` is shaped like
  * a native event (`{ target: { name, value } }`) so it's a drop-in for the existing FormField usage.
  *
+ * Pass `onSelectParts` where the address is stored in pieces (client, company settings): picking a
+ * suggestion then reports `{ street, city, postalCode, country }` so the sibling inputs fill themselves.
+ * Without it the field behaves exactly as before and emits the whole line — which is what the fields
+ * that still store an address as free text (manufacturers, warehouses, delivery) want.
+ *
  * The dropdown is rendered in a portal with fixed positioning so it is never clipped by a scrolling
  * modal body (mirrors CustomSelect).
  */
@@ -29,6 +34,7 @@ export default function AddressAutocompleteField({
     name,
     value,
     onChange,
+    onSelectParts,
     placeholder = '',
     required = false,
     className = '',
@@ -80,7 +86,19 @@ export default function AddressAutocompleteField({
     }
 
     const handleSelect = (s) => {
-        emit(s.address)
+        // In structured mode the parts drive the form and the street is this input's own value; the
+        // caller fills city/postal code/country from the same pick.
+        if (onSelectParts) {
+            emit(s.street || s.address)
+            onSelectParts({
+                street: s.street || s.address || '',
+                city: s.city || '',
+                postalCode: s.postalCode || '',
+                country: s.country || '',
+            })
+        } else {
+            emit(s.address)
+        }
         setSuggestions([])
         setOpen(false)
         requestRef.current++ // ignore any in-flight response

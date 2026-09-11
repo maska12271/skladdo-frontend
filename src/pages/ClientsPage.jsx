@@ -33,10 +33,14 @@ const CLIENT_FIELDS = [
     { key: 'id', labelKey: 'common.id', importable: false, value: (r) => r.id },
     { key: 'name', labelKey: 'common.name', required: true, example: 'City Hospital', value: (r) => r.name },
     { key: 'registrationCode', labelKey: 'clients.registrationCode', aliasKeys: ['clients.regCode'], example: '12345678', value: (r) => r.registrationCode },
+    { key: 'vatNumber', labelKey: 'clients.vatNumber', example: 'EE101234567', value: (r) => r.vatNumber },
+    { key: 'invoiceDepartmentId', labelKey: 'clients.invoiceDepartmentId', example: 'Procurement dept.', value: (r) => r.invoiceDepartmentId },
     { key: 'email', labelKey: 'common.email', example: 'procurement@hospital.gov', value: (r) => r.email },
     { key: 'phone', labelKey: 'common.phone', example: '+372 555 1234', value: (r) => r.phone },
     { key: 'country', labelKey: 'common.country', example: 'Estonia', value: (r) => r.country },
-    { key: 'address', labelKey: 'common.address', value: (r) => r.address },
+    { key: 'addressStreet', labelKey: 'common.addressStreet', aliasKeys: ['common.address'], example: 'Ravi 18', value: (r) => r.addressStreet },
+    { key: 'addressPostalCode', labelKey: 'common.postalCode', example: '10138', value: (r) => r.addressPostalCode },
+    { key: 'addressCity', labelKey: 'common.city', example: 'Tallinn', value: (r) => r.addressCity },
     { key: 'notes', labelKey: 'common.notes', value: (r) => r.notes },
     { key: 'status', labelKey: 'common.status', aliasKeys: ['common.active'], example: 'Active', value: (r) => (r.archived ? 'Archived' : 'Active') },
 ]
@@ -48,10 +52,14 @@ const emptyContactRow = { name: '', position: '', email: '' }
 const emptyForm = {
     name: '',
     registrationCode: '',
+    vatNumber: '',
+    invoiceDepartmentId: '',
     email: '',
     phone: '',
     country: '',
-    address: '',
+    addressStreet: '',
+    addressPostalCode: '',
+    addressCity: '',
     notes: '',
     active: true,
 }
@@ -74,10 +82,14 @@ export default function ClientsPage() {
             payload: {
                 name,
                 registrationCode: r.registrationCode || '',
+                vatNumber: r.vatNumber || '',
+                invoiceDepartmentId: r.invoiceDepartmentId || '',
                 email: r.email || '',
                 phone: r.phone || '',
                 country: r.country || '',
-                address: r.address || '',
+                addressStreet: r.addressStreet || '',
+                addressPostalCode: r.addressPostalCode || '',
+                addressCity: r.addressCity || '',
                 notes: r.notes || '',
                 active: parseBool(r.status, true),
             },
@@ -157,10 +169,14 @@ export default function ClientsPage() {
         setForm({
             name: item.name || '',
             registrationCode: item.registrationCode || '',
+            vatNumber: item.vatNumber || '',
+            invoiceDepartmentId: item.invoiceDepartmentId || '',
             email: item.email || '',
             phone: item.phone || '',
             country: item.country || '',
-            address: item.address || '',
+            addressStreet: item.addressStreet || '',
+            addressPostalCode: item.addressPostalCode || '',
+            addressCity: item.addressCity || '',
             notes: item.notes || '',
             active: !!item.active,
         })
@@ -175,6 +191,18 @@ export default function ClientsPage() {
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target
         setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
+    }
+
+    // Fills the whole address from one typeahead pick. The country is only taken when the suggestion has
+    // one, so a manual choice already made is never overwritten by a blank.
+    const applyAddressParts = ({ street, city, postalCode, country }) => {
+        setForm((prev) => ({
+            ...prev,
+            addressStreet: street,
+            addressCity: city || prev.addressCity,
+            addressPostalCode: postalCode || prev.addressPostalCode,
+            country: country || prev.country,
+        }))
     }
 
     const changeContact = (index, field, value) => {
@@ -423,6 +451,35 @@ export default function ClientsPage() {
                         className="md:col-span-2"
                     />
 
+                    {/* E-invoicing — only meaningful for buyers who receive e-arve XML */}
+                    <FormField
+                        id="client-vat-number"
+                        label={t('clients.vatNumber')}
+                        name="vatNumber"
+                        value={form.vatNumber}
+                        onChange={handleChange}
+                        placeholder="EE101234567"
+                        className="md:col-span-2"
+                    />
+
+                    <FormField
+                        id="client-invoice-department-id"
+                        label={
+                            <span className="inline-flex items-center gap-2">
+                                {t('clients.invoiceDepartmentId')}
+                                <InfoHint
+                                    label={t('clients.invoiceDepartmentIdTooltipAria')}
+                                    text={t('clients.invoiceDepartmentIdTooltip')}
+                                />
+                            </span>
+                        }
+                        name="invoiceDepartmentId"
+                        value={form.invoiceDepartmentId}
+                        onChange={handleChange}
+                        placeholder={t('clients.invoiceDepartmentIdPlaceholder')}
+                        className="md:col-span-2"
+                    />
+
                     {/* Location — country and address kept side by side */}
                     <CountrySelectField
                         id="client-country"
@@ -435,14 +492,38 @@ export default function ClientsPage() {
                         className="md:col-span-2"
                     />
 
+                    {/* Address in parts — the e-invoice needs street and city separately. Picking a
+                        typeahead suggestion fills the city and postal code alongside the street. */}
                     <AddressAutocompleteField
-                        id="client-address"
-                        label={t('common.address')}
-                        name="address"
-                        value={form.address}
+                        id="client-address-street"
+                        label={t('common.addressStreet')}
+                        name="addressStreet"
+                        value={form.addressStreet}
                         onChange={handleChange}
-                        placeholder={t('common.address')}
+                        onSelectParts={applyAddressParts}
+                        placeholder={t('common.addressStreetPlaceholder')}
                         className="md:col-span-2"
+                    />
+
+                    <FormField
+                        id="client-address-postal-code"
+                        label={t('common.postalCode')}
+                        name="addressPostalCode"
+                        value={form.addressPostalCode}
+                        onChange={handleChange}
+                        maxLength={10}
+                        placeholder="10138"
+                        className="md:col-span-1"
+                    />
+
+                    <FormField
+                        id="client-address-city"
+                        label={t('common.city')}
+                        name="addressCity"
+                        value={form.addressCity}
+                        onChange={handleChange}
+                        placeholder={t('common.city')}
+                        className="md:col-span-1"
                     />
 
                     {/* Contact */}
