@@ -13,6 +13,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.21.0",
     "@react-oauth/google": "^0.13.5",
     "exceljs": "^4.4.0",
     "i18next": "^26.3.1",

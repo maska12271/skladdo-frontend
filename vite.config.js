@@ -3,6 +3,11 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// `__dirname` does not exist in ESM (this file runs as one - see package.json's "type": "module").
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf8'))
 
@@ -38,6 +43,19 @@ const version = `${pkg.version.split('.').slice(0, 2).join('.')}.${build}`
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    rollupOptions: {
+      input: {
+        // Both listed explicitly: an `input` map replaces Vite's single-page default entirely, so leaving
+        // the app's own entry off this list would drop it from the production build.
+        main: resolve(__dirname, 'index.html'),
+        // "Sign in with Microsoft"'s popup redirect target - see the comment atop msal-redirect.html for
+        // why it has to be a real Rollup entry (bundled, minified, cache-busted) rather than a public/
+        // file copied as-is. The dev server needs no equivalent entry; it serves any root .html file as-is.
+        msalRedirect: resolve(__dirname, 'msal-redirect.html'),
+      },
+    },
+  },
   // Baked in at build time so a deployed bundle can say which one it is - the whole point being that
   // "did my deploy actually land?" is answerable by looking at the app rather than at the server.
   define: {

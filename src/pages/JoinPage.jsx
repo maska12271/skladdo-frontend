@@ -8,8 +8,9 @@ import { FormField } from '../components/FormField.jsx'
 import PasswordStrength from '../components/PasswordStrength.jsx'
 import AvatarCropModal from '../components/AvatarCropModal'
 import GoogleSignInButton from '../components/GoogleSignInButton.jsx'
+import MicrosoftSignInButton from '../components/MicrosoftSignInButton.jsx'
 import LegalConsentNotice from '../components/LegalConsentNotice.jsx'
-import { readGoogleProfile } from '../utils/googleIdToken'
+import { readIdTokenProfile } from '../utils/idTokenProfile'
 import { ACCEPTED_LABEL } from '../hooks/useImageUpload'
 
 /**
@@ -44,10 +45,11 @@ export default function JoinPage() {
     const [pendingPhoto, setPendingPhoto] = useState(null)
     const fileRef = useRef(null)
 
-    // Set once the invitee has signed with Google: `{ idToken, email, name }`. While it holds a token the
-    // account being created has no password at all — the name and address come from Google, which is why
-    // they are shown but not editable, and why the password fields are gone rather than merely disabled.
-    const [google, setGoogle] = useState(null)
+    // Set once the invitee has signed with an identity provider: `{ provider, idToken, email, name }`,
+    // `provider` one of 'google' | 'microsoft'. While it holds a value the account being created has no
+    // password at all — the name and address come from the provider, which is why they are shown but not
+    // editable, and why the password fields are gone rather than merely disabled.
+    const [externalAuth, setExternalAuth] = useState(null)
 
     useEffect(() => {
         if (!token) {
@@ -94,19 +96,22 @@ export default function JoinPage() {
     }
 
     /**
-     * Google has authenticated the invitee. Nothing is created yet — they may still want to add a photo or
-     * their date of birth — so this only records the token and swaps the form over.
+     * An identity provider has authenticated the invitee. Nothing is created yet — they may still want to
+     * add a photo or their date of birth — so this only records the token and swaps the form over.
      */
-    const handleGoogleCredential = (idToken) => {
+    const handleExternalCredential = (provider) => (idToken) => {
         setError('')
-        setGoogle({ idToken, ...readGoogleProfile(idToken) })
+        setExternalAuth({ provider, idToken, ...readIdTokenProfile(idToken) })
     }
+    const handleGoogleCredential = handleExternalCredential('google')
+    const handleMicrosoftCredential = handleExternalCredential('microsoft')
 
     const handleSubmit = async (e) => {
         e.preventDefault()
         setError('')
-        // A Google invitee has no password to check, and no password fields on screen to check it in.
-        if (!google) {
+        // A provider-authenticated invitee has no password to check, and no password fields on screen to
+        // check it in.
+        if (!externalAuth) {
             if (form.password.length < 8) {
                 setError(t('join.tooShort'))
                 return
@@ -120,10 +125,11 @@ export default function JoinPage() {
         try {
             // The field is optional, and an empty string is not a date the server can parse.
             const shared = { token, birthDate: form.birthDate || null, avatarImage: avatar }
-            const res = google
+            const res = externalAuth
                 // No name, address or password: the server takes the first two from the token it verifies,
                 // and there is no third. Sending them would only invite the question of which one won.
-                ? await apiPost('/public/user-invite/google', { ...shared, idToken: google.idToken },
+                ? await apiPost(`/public/user-invite/${externalAuth.provider}`,
+                    { ...shared, idToken: externalAuth.idToken },
                     { suppressErrorToast: true, skipAuthRedirect: true })
                 : await apiPost('/public/user-invite',
                     { ...shared, fullName: form.fullName, email: form.email, password: form.password },
@@ -254,19 +260,19 @@ export default function JoinPage() {
                                 />
                             </div>
 
-                            {google ? (
-                                /* Signed with Google: the name and address are Google's answer, shown so it
-                                   is clear whose account this will be, and not editable because the server
+                            {externalAuth ? (
+                                /* Signed with an identity provider: the name and address are its answer, shown
+                                   so it is clear whose account this will be, and not editable because the server
                                    reads them from the token rather than from anything sent here. */
                                 <>
                                     <FormField
                                         id="join-name" label={t('join.fullName')} name="fullName"
-                                        value={google.name} onChange={() => {}} readOnly disabled
+                                        value={externalAuth.name} onChange={() => {}} readOnly disabled
                                         inputClassName="bg-slate-100 text-slate-600 dark:bg-slate-950 dark:text-slate-300"
                                     />
                                     <FormField
                                         id="join-email" label={t('join.email')} name="email" type="email"
-                                        value={google.email} onChange={() => {}} readOnly disabled
+                                        value={externalAuth.email} onChange={() => {}} readOnly disabled
                                         inputClassName="bg-slate-100 text-slate-600 dark:bg-slate-950 dark:text-slate-300"
                                     />
                                 </>
@@ -308,15 +314,17 @@ export default function JoinPage() {
                                 max={today}
                             />
 
-                            {google ? (
+                            {externalAuth ? (
                                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                                     <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
                                         <CheckCircle2 className="h-3.5 w-3.5" />
-                                        {t('register.google.connected')}
+                                        {externalAuth.provider === 'google'
+                                            ? t('register.google.connected')
+                                            : t('register.microsoft.connected')}
                                     </span>
                                     <button
                                         type="button"
-                                        onClick={() => { setError(''); setGoogle(null) }}
+                                        onClick={() => { setError(''); setExternalAuth(null) }}
                                         className="cursor-pointer font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
                                     >
                                         {t('register.google.usePassword')}
@@ -351,8 +359,9 @@ export default function JoinPage() {
                                         autoComplete="new-password"
                                     />
 
-                                    {/* Renders nothing when this build has no Google client id. */}
-                                    {import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                                    {/* Renders nothing when this build has neither client id configured;
+                                        each button below independently hides itself if only one is. */}
+                                    {(import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_MICROSOFT_CLIENT_ID) && (
                                         <>
                                             <div className="flex items-center gap-3">
                                                 <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
@@ -361,12 +370,19 @@ export default function JoinPage() {
                                                 </span>
                                                 <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
                                             </div>
-                                            <GoogleSignInButton
-                                                text="signup_with"
-                                                label={t('join.google')}
-                                                onCredential={handleGoogleCredential}
-                                                onError={() => setError(t('login.googleError'))}
-                                            />
+                                            <div className="space-y-2">
+                                                <GoogleSignInButton
+                                                    text="signup_with"
+                                                    label={t('join.google')}
+                                                    onCredential={handleGoogleCredential}
+                                                    onError={() => setError(t('login.googleError'))}
+                                                />
+                                                <MicrosoftSignInButton
+                                                    label={t('join.microsoft')}
+                                                    onCredential={handleMicrosoftCredential}
+                                                    onError={() => setError(t('login.microsoftError'))}
+                                                />
+                                            </div>
                                         </>
                                     )}
                                 </>
